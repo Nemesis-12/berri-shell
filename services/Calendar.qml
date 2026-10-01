@@ -49,6 +49,7 @@ Singleton {
     /** An installation error shown in the Calendar source view. */
     property string parserError: ""
     readonly property string parserMissingText: "Calendar parser is missing. Build tools/feed-to-records"
+    readonly property string convertErrorText: "Could not read the saved calendar file"
     readonly property string recordsErrorText: "Could not read subscription records"
     /** How many items of the last importFile were already in other calendars (0 after a failed import). */
     property int lastImportDuplicates: 0
@@ -433,7 +434,7 @@ Singleton {
     function _newMeta(id: string, kind: string, name: string, file: string, color): var {
         return { id: id, kind: kind, name: name, color: kind === "local" ? "accent" : Ics.newCalendarColor(color, _usedColors()),
             hidden: false, url: "", file: file, updatedAt: 0, colorOverrides: ({}),
-            path: dir + "/" + file, document: null, records: null, text: "", signature: "", error: "", refreshing: false, loaded: false };
+            path: dir + "/" + file, document: null, records: null, text: "", signature: "", error: "", convertError: "", refreshing: false, loaded: false };
     }
 
     function _addCalendar(id: string, kind: string, name: string, file: string, url: string, color): var {
@@ -489,7 +490,7 @@ Singleton {
         if (!id) return;
         var calendar = _calendars[id];
         var signature = text.length + ":" + Ics.shortHash(text);
-        if (failed && calendar.kind === "link") { _recordsFailed(calendar, parserError || recordsErrorText); return; }
+        if (failed && calendar.kind === "link") { _recordsFailed(calendar, calendar.convertError || parserError || recordsErrorText); return; }
         if ((!calendar.document && !calendar.records) || !failed && calendar.signature !== signature) {
             var unnamed = !calendar.name;
             if (calendar.kind === "link") {
@@ -498,7 +499,8 @@ Singleton {
                 calendar.records = parsed.records;
                 calendar.signature = signature;
                 if (unnamed) calendar.name = parsed.name || calendar.file.replace(/\.ics$/i, "");
-                calendar.error = "";
+                // Old records stay on screen as a fallback while a failed conversion shows its error.
+                calendar.error = calendar.convertError || "";
             } else {
                 calendar.document = Ics.readCalendar(text, _localZone);
                 calendar.text = text;
@@ -600,6 +602,7 @@ Singleton {
                 meta.signature = json.length + ":" + Ics.shortHash(json);
                 meta.loaded = true;
                 meta.error = "";
+                meta.convertError = "";
                 meta.colorOverrides = Ics.pruneRecordColorOverrides(meta.colorOverrides, doc.records);
                 meta.updatedAt = Date.now();
                 _saveState();
@@ -641,7 +644,7 @@ Singleton {
             meta[s.id] = { id: s.id, kind: s.kind, name: String(s.name || ""), color: Ics.cleanColor(s.color) || "accent",
                 hidden: !!s.hidden, url: s.kind === "link" ? String(s.url || "") : "", file: s.file, updatedAt: +s.updatedAt || 0,
                 colorOverrides: s.kind === "link" ? Ics.pruneColorOverrides(s.colorOverrides, null) : ({}),
-                path: dir + "/" + s.file, document: null, records: null, text: "", signature: "", error: "", refreshing: false, loaded: false };
+                path: dir + "/" + s.file, document: null, records: null, text: "", signature: "", error: "", convertError: "", refreshing: false, loaded: false };
             order.push(s.id);
         }
         meta.berri = local;
@@ -678,6 +681,12 @@ Singleton {
         onRead: (path, text, failed) => root._ingest(path, text, failed)
         onDownloaded: (request, code, text) => root._downloaded(request.purpose, request.shownUrl,
             request.url, request.calendarId, code, text, request.color, request.requestId)
+        onConvertFailed: jsonPath => {
+            var id = root._idOfPath(jsonPath);
+            if (!id) return;
+            root._calendars[id].convertError = root.convertErrorText;
+            console.error("Calendar: " + root.convertErrorText + " for " + root._calendars[id].name);
+        }
         onParserMissing: {
             root.parserError = root.parserMissingText;
             console.error("Calendar: " + root.parserError);

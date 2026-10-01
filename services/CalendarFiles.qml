@@ -23,6 +23,8 @@ Scope {
     signal read(string path, string text, bool failed)
     signal downloaded(var request, int code, string jsonPath)
     signal parserMissing()
+    /** The parser ran on a saved subscription and failed. The old records file may still be read. */
+    signal convertFailed(string jsonPath)
 
     /** Reads a file once and releases the reader. Null means the read failed. */
     function readNow(path: string): var {
@@ -161,6 +163,7 @@ Scope {
             onExited: (code, status) => {
                 delete root.freshening[jsonPath];
                 if (code === root.exitParserMissing) root.parserMissing();
+                else if (code !== 0) root.convertFailed(jsonPath);
                 if (root.paths.indexOf(jsonPath) >= 0) calendarPaths.append({ filePath: jsonPath });
                 destroy();
             }
@@ -224,15 +227,10 @@ Scope {
             id: download
             required property var request
             running: true
-            command: ["sh", "-c",
-                'if [ ! -x "$2" ]; then exit ' +
-                root.exitParserMissing + '; fi; d=$(mktemp -d "$4/.feed.XXXXXX") || exit 1; ' +
-                'curl -fsSL --max-time 15 --max-filesize 10485760 -o "$d/feed.ics" "$1" || { c=$?; rm -f "$d/feed.ics"; rmdir "$d"; exit $c; }; ' +
-                '[ "$(wc -c <"$d/feed.ics")" -gt 10485760 ] && { rm -f "$d/feed.ics"; rmdir "$d"; exit 63; }; ' +
-                '"$2" "$d/feed.ics" "$d/feed.json" || { rm -f "$d/feed.ics" "$d/feed.json"; rmdir "$d"; exit ' + root.exitNotCalendar + '; }; ' +
-                'if [ -n "$3" ]; then mv "$d/feed.ics" "$3.ics" && mv "$d/feed.json" "$3.json" || { rm -f "$d/feed.ics" "$d/feed.json"; rmdir "$d"; exit ' + root.exitSaveFailed + '; }; rmdir "$d"; printf "%s\\n" "$3.json"; ' +
-                'else printf "%s\\n" "$d/feed.json"; fi',
-                "sh", request.url, root.parser, request.purpose === "check" ? "" : root.folder + "/subscriptions/" + request.calendarId, root.folder + "/subscriptions"]
+            command: ["sh", Quickshell.shellPath("scripts/feed-download.sh"), request.url, root.parser,
+                request.purpose === "check" ? "" : root.folder + "/subscriptions/" + request.calendarId,
+                root.folder + "/subscriptions",
+                String(root.exitParserMissing), String(root.exitNotCalendar), String(root.exitSaveFailed)]
             stdout: StdioCollector { id: outputPath }
             onExited: (code, status) => {
                 root.downloaded(download.request, code, outputPath.text.trim());

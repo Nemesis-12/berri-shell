@@ -2,6 +2,11 @@ use std::{fs, process::Command};
 
 // Runs the program on one input path. Returns the exit success and the JSON, if any.
 fn run(input: &str) -> (bool, Option<String>) {
+    run_in_zone(input, "UTC")
+}
+
+// Runs the program with the system zone set to `zone`.
+fn run_in_zone(input: &str, zone: &str) -> (bool, Option<String>) {
     let output = std::env::temp_dir().join(format!(
         "berri-records-{}-{}.json",
         std::process::id(),
@@ -9,7 +14,7 @@ fn run(input: &str) -> (bool, Option<String>) {
     ));
     let status = Command::new(env!("CARGO_BIN_EXE_feed-to-records"))
         .args([input, output.to_str().unwrap()])
-        .env("TZ", "UTC")
+        .env("TZ", zone)
         .status()
         .unwrap();
     let json = fs::read_to_string(&output).ok();
@@ -174,4 +179,29 @@ fn first_simple_alarm_wins() {
     assert_eq!(alarm_field("alarm-two", &[first, second]), "10");
     let email = "BEGIN:VALARM\r\nACTION:EMAIL\r\nTRIGGER:-PT10M\r\nEND:VALARM\r\n";
     assert_eq!(alarm_field("alarm-skip", &[email, second]), "5");
+}
+
+// A zone name that is not in the zone database keeps the clock as written, like the old parser.
+// The system zone is America/Chicago here, so a wrong conversion would show 05:00.
+#[test]
+fn unknown_zone_keeps_the_written_clock() {
+    let event = |uid: &str, zone: &str| {
+        format!("BEGIN:VEVENT\r\nUID:{uid}\r\nDTSTART;TZID={zone}:20261005T100000\r\nDTEND;TZID={zone}:20261005T113000\r\nSUMMARY:{uid}\r\nEND:VEVENT\r\n")
+    };
+    let text = format!(
+        "BEGIN:VCALENDAR\r\n{}{}{}END:VCALENDAR\r\n",
+        event("windows", "Eastern Standard Time"),
+        event("escape", "../../etc/passwd"),
+        event("berlin", "Europe/Berlin"),
+    );
+    let input = std::env::temp_dir().join(format!("berri-feed-{}-unknown-zone.ics", std::process::id()));
+    fs::write(&input, text).unwrap();
+    let (success, json) = run_in_zone(input.to_str().unwrap(), "America/Chicago");
+    fs::remove_file(input).unwrap();
+    assert!(success);
+    let json = json.unwrap();
+    for uid in ["windows", "escape"] {
+        assert!(json.contains(&format!("\"uid\":\"{uid}\",\"kind\":\"event\",\"title\":\"{uid}\",\"location\":\"\",\"date\":\"2026-10-05\",\"time\":\"10:00\",\"end\":\"11:30\"")), "{uid}: {json}");
+    }
+    assert!(json.contains("\"uid\":\"berlin\",\"kind\":\"event\",\"title\":\"berlin\",\"location\":\"\",\"date\":\"2026-10-05\",\"time\":\"03:00\""));
 }

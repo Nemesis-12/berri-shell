@@ -454,7 +454,21 @@ impl Drop for ZoneGuard {
     }
 }
 
+// True when the zone name is a file in the time-zone database. Other names
+// (for example "Eastern Standard Time") are unknown, as they are for the old
+// JavaScript reader, and must not reach TZ, where mktime would treat them as UTC.
+fn zone_known(name: &str) -> bool {
+    if name.is_empty() || name.starts_with('/') || name.split('/').any(|part| part == "..") {
+        return false;
+    }
+    let root = env::var_os("TZDIR")
+        .filter(|dir| !dir.is_empty())
+        .unwrap_or_else(|| "/usr/share/zoneinfo".into());
+    Path::new(&root).join(name).is_file()
+}
+
 // Converts a source clock through the Linux time-zone database to local time.
+// A clock in an unknown zone stays as written, like the old JavaScript reader.
 fn local_clock(date: &CalendarDate) -> Option<(String, Option<String>)> {
     let (value, zone, utc) = match date {
         CalendarDate::Date(value) => {
@@ -465,6 +479,12 @@ fn local_clock(date: &CalendarDate) -> Option<(String, Option<String>)> {
         }
         CalendarDate::DateTime { value, zone, utc } => (value, zone, utc),
     };
+    if zone.as_deref().is_some_and(|name| !zone_known(name)) {
+        return Some((
+            format!("{}-{}-{}", &value[..4], &value[4..6], &value[6..8]),
+            Some(format!("{}:{}", &value[9..11], &value[11..13])),
+        ));
+    }
     let mut clock = Clock {
         year: value[..4].parse::<i32>().ok()? - 1900,
         month: value[4..6].parse::<i32>().ok()? - 1,
