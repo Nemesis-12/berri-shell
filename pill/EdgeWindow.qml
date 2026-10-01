@@ -18,7 +18,7 @@ import qs.services
  * hidden and only a thin strip on its screen edge takes input (see EdgeStrip).
  *
  * The panels go inside this window as children, bottom one first. The parent
- * sets the panel shapes (topX..bottomHeight) and the state flags.
+ * sets the panel shapes (topPanel, bottomPanel) and the state flags.
  */
 PanelWindow {
     id: root
@@ -29,15 +29,9 @@ PanelWindow {
     property real restWidth: 640
 
     /** Input shape of the top panel at rest, in window coordinates. */
-    property real topX: 0
-    property real topY: 0
-    property real topWidth: 0
-    property real topHeight: 0
+    property rect topPanel: Qt.rect(0, 0, 0, 0)
     /** Input shape of the bottom panel at rest, in window coordinates. */
-    property real bottomX: 0
-    property real bottomY: 0
-    property real bottomWidth: 0
-    property real bottomHeight: 0
+    property rect bottomPanel: Qt.rect(0, 0, 0, 0)
     /** A panel is open: the whole monitor takes input. */
     property bool panelOpen: false
     /** The top panel is open, closing or pointed at: its reveal must not end now. */
@@ -99,6 +93,11 @@ PanelWindow {
         }
     }
 
+    // A panel shape for the input mask: the shape while the panel takes input at rest, else an empty one.
+    function maskShape(panel: rect, hidden: bool): rect {
+        return root.panelOpen || hidden ? Qt.rect(panel.x, panel.y, 0, 0) : panel;
+    }
+
     // Input, by state: a panel open = the whole monitor; otherwise each panel
     // shape that is not hidden, plus each strip in fullscreen so the cursor can
     // travel from the edge to the panel. The pop-up card is written once.
@@ -109,16 +108,18 @@ PanelWindow {
         height: root.panelOpen ? root.height : 0
 
         Region {
-            x: root.topX
-            y: root.topY
-            width: root.panelOpen || root.topHidden ? 0 : root.topWidth
-            height: root.panelOpen || root.topHidden ? 0 : root.topHeight
+            readonly property rect area: root.maskShape(root.topPanel, root.topHidden)
+            x: area.x
+            y: area.y
+            width: area.width
+            height: area.height
         }
         Region {
-            x: root.bottomX
-            y: root.bottomY
-            width: root.panelOpen || root.bottomHidden ? 0 : root.bottomWidth
-            height: root.panelOpen || root.bottomHidden ? 0 : root.bottomHeight
+            readonly property rect area: root.maskShape(root.bottomPanel, root.bottomHidden)
+            x: area.x
+            y: area.y
+            width: area.width
+            height: area.height
         }
         Region {
             x: topEdge.x
@@ -142,8 +143,8 @@ PanelWindow {
 
     EdgeStrip {
         id: topEdge
-        monitorWidth: root.width
-        monitorHeight: root.height
+        windowWidth: root.width
+        windowHeight: root.height
         covered: root.screenHasFullscreenWindow
         keepShown: root.topKeepShown
     }
@@ -151,8 +152,8 @@ PanelWindow {
     EdgeStrip {
         id: bottomEdge
         atBottom: true
-        monitorWidth: root.width
-        monitorHeight: root.height
+        windowWidth: root.width
+        windowHeight: root.height
         covered: root.screenHasFullscreenWindow
         keepShown: root.bottomKeepShown
     }
@@ -167,12 +168,12 @@ PanelWindow {
         visible: opacity > 0.001
 
         Behavior on opacity {
+            // The fade is off only while both panels are hidden.
             enabled: !root.topHidden || !root.bottomHidden
             NumberAnimation {
                 id: dimFade
-                duration: 450
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: Theme.springCurve
+                duration: Theme.stateMs
+                easing.type: Easing.OutCubic
             }
         }
 

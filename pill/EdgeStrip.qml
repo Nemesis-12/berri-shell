@@ -6,7 +6,7 @@ import QtQuick
  * only this thin strip takes input. The cursor on the strip reveals the panel;
  * it hides again 600 ms after the cursor left, never while `keepShown` holds.
  *
- * Place it in the window with the monitor size set; it sits centered on its
+ * Place it in the window with the window size set; it sits centered on its
  * edge. EdgeWindow uses one strip per edge.
  */
 Item {
@@ -14,9 +14,9 @@ Item {
 
     /** The strip is on the bottom edge instead of the top edge. */
     property bool atBottom: false
-    /** Size of the window (the monitor while a panel is open). */
-    property real monitorWidth: 0
-    property real monitorHeight: 0
+    /** Size of the window (the whole monitor only while a panel is open). */
+    property real windowWidth: 0
+    property real windowHeight: 0
     /** A fullscreen or maximized window covers the monitor. */
     property bool covered: false
     /** The panel is open, closing or pointed at: the reveal must not end now. */
@@ -30,8 +30,8 @@ Item {
     readonly property int stripWidth: 400
     readonly property int stripHeight: 2
 
-    x: Math.round((monitorWidth - stripWidth) / 2)
-    y: atBottom ? monitorHeight - stripHeight : 0
+    x: Math.round((windowWidth - stripWidth) / 2)
+    y: atBottom ? windowHeight - stripHeight : 0
     width: stripWidth
     height: stripHeight
     z: 10 // above the panel, which would otherwise take the hover

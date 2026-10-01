@@ -80,14 +80,8 @@ ShellRoot {
             layerName: "berri-shell"
             // Wide enough for the hovered pill, its shadow and the 380 px card; an even width keeps the center on a whole pixel.
             restWidth: 2 * Math.ceil((Math.max(pill.hoverWidth, popup.cardMaxWidth) + 128) / 2)
-            topX: pill.x + pill.maskX
-            topY: pill.y + pill.maskY
-            topWidth: pill.maskWidth
-            topHeight: pill.maskHeight
-            bottomX: notch.x + notch.maskX
-            bottomY: notch.y + notch.maskY
-            bottomWidth: notch.maskWidth
-            bottomHeight: notch.maskHeight
+            topPanel: Qt.rect(pill.x + pill.maskX, pill.y + pill.maskY, pill.maskWidth, pill.maskHeight)
+            bottomPanel: Qt.rect(notch.x + notch.maskX, notch.y + notch.maskY, notch.maskWidth, notch.maskHeight)
             panelOpen: pill.panelOpen || pill.trayLayerOpen || notch.pickerOpen
             topKeepShown: pill.panelOpen || pill.hovered
             bottomKeepShown: notch.pickerOpen || notch.hovered
@@ -109,7 +103,9 @@ ShellRoot {
                 id: notch
                 screenName: modelData.name
                 opacity: overlay.bottomHidden ? 0 : 1
-                Behavior on opacity { NumberAnimation { duration: 200 } }
+                Behavior on opacity {
+                    NumberAnimation { duration: Theme.stateMs; easing.type: Easing.OutCubic }
+                }
                 // Slides in from the bottom edge with the fade (same progress: opacity).
                 transform: Translate { y: PixelGrid.snap((1 - notch.opacity) * 8, notch.dpr) }
                 anchors.horizontalCenter: parent.horizontalCenter

@@ -611,7 +611,7 @@ Item {
     // layer opens. The rects are outside pillRect's clip.
     PillTrayLayers {
         id: trayLayers
-        x: (root.parent ? root.parent.width : 0) / 2 - width / 2 - root.x
+        x: PixelGrid.snap((root.parent ? root.parent.width : 0) / 2 - width / 2 - root.x, root.dpr)
         y: -root.y
         width: Screen.width
         height: Screen.height
