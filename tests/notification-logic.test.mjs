@@ -96,6 +96,12 @@ test("critical bypasses do not disturb", () => {
   assert.equal(lib.shouldAlert("normal", false), true);
 });
 
+test("pop-up queue keeps the newest waiting items", () => {
+  const old = [item("a", "X", 1), item("b", "X", 2)];
+  assert.deepEqual(ids(plain(lib.queuePopup(old, item("c", "X", 3), 2))), ["b", "c"]);
+  assert.deepEqual(ids(old), ["a", "b"]);
+});
+
 test("readSaved: defaults on bad input (null, text), drops bad items, clears actions", () => {
   assert.deepEqual(plain(lib.readSaved(null)), { serverEnabled: false, dnd: false, items: [] });
   assert.deepEqual(plain(lib.readSaved("not an object")), { serverEnabled: false, dnd: false, items: [] });

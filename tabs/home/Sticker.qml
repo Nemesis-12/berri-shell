@@ -178,13 +178,12 @@ Item {
     // Only one image item loads the file: a plain Image for PNG/JPEG, an
     // AnimatedImage for GIF/WebP. Both decode at the fixed `decodeSize`, so
     // the cell resizing while the panel opens never restarts the decode. The
-    // source does not depend on `visible`: the image stays loaded while the
-    // panel opens and closes, so it fades with the rest of the content
-    // instead of popping in or out. A large file can finish decoding after
-    // the panel has faded in: it fades in then, no pop.
+    // The image stays loaded through the close fade, then unloads when the
+    // tab is hidden. A large file can finish decoding after the panel has
+    // faded in: it fades in then, no pop.
     Loader {
         anchors.fill: parent
-        active: root.stickerSource.length > 0
+        active: root.visible && root.stickerSource.length > 0
         sourceComponent: root.useAnimatedImage ? animatedPicture : stillPicture
     }
 

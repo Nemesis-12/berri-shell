@@ -8,7 +8,7 @@ import qs.common
  * Claude and Codex rate-limit usage: 5-hour and weekly (7-day) percentages
  * and reset times, fetched by scripts/agent-usage.py (stdlib-only; talks to
  * Claude's OAuth usage endpoint and to `codex app-server` directly). One
- * refresh on start, then every 5 minutes. The script caches the last good
+ * refresh when the first view appears, then every 5 minutes. The script caches the last good
  * reading on disk and falls back to it on a failed or rate-limited call, so
  * a percent of -1 only shows up when there is no usable cache either (not
  * logged in, expired token, or reset time already passed); AgentsRings
@@ -104,8 +104,6 @@ Singleton {
             }
         }
     }
-
-    Component.onCompleted: refresh()
 
     onViewersChanged: {
         if (viewers !== 1) return;

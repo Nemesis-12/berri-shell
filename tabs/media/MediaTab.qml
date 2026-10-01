@@ -45,6 +45,24 @@ Item {
         return parts.join(" · ").toUpperCase();
     }
     readonly property string artUrl: hasPlayer ? activePlayer.trackArtUrl : ""
+
+    function loadArt() {
+        if (!root.visible || !root.artUrl) {
+            artBack.source = "";
+            artFront.source = "";
+            artFront.opacity = 0;
+            return;
+        }
+        if (artFront.source === root.artUrl) return;
+        artBack.source = artFront.status === Image.Ready ? artFront.source : "";
+        artFront.opacity = 0;
+        artFront.source = root.artUrl;
+        if (artFront.status === Image.Ready) artFront.opacity = 1;
+    }
+
+    onArtUrlChanged: loadArt()
+    onVisibleChanged: loadArt()
+    Component.onCompleted: loadArt()
     readonly property real length: hasPlayer ? activePlayer.length : 0
     readonly property bool canSeek: hasPlayer && activePlayer.canSeek && activePlayer.positionSupported
 
@@ -95,7 +113,7 @@ Item {
             visible: root.artUrl === ""
         }
 
-        // artBack keeps the previous art while artFront fades in over it.
+        // Keep the previous art only until the new art has faded in.
         Image {
             id: artBack
             anchors.fill: parent
@@ -104,6 +122,7 @@ Item {
             smooth: true
             mipmap: true
             asynchronous: true
+            cache: false
             visible: artFront.opacity < 1
         }
 
@@ -115,19 +134,16 @@ Item {
             smooth: true
             mipmap: true
             asynchronous: true
-            opacity: root.artUrl === "" ? 0 : 1
-            visible: root.artUrl !== ""
+            cache: false
+            opacity: 0
+            visible: source !== ""
+
+            onStatusChanged: if (status === Image.Ready) opacity = 1
+            onOpacityChanged: if (opacity >= 1) artBack.source = ""
 
             Fade on opacity { duration: Theme.stateMs }
         }
 
-        Connections {
-            target: root
-            function onArtUrlChanged() {
-                artBack.source = artFront.source;
-                artFront.source = root.artUrl;
-            }
-        }
     }
 
     Row {

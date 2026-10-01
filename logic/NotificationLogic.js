@@ -145,6 +145,11 @@ function shouldAlert(urgency, dnd) {
     return !dnd || urgency === "critical";
 }
 
+/** Keep only the newest waiting pop-ups. All items remain in notification history. */
+function queuePopup(queue, item, max) {
+    return queue.concat([item]).slice(-max);
+}
+
 /** Reads the saved object. Bad or partial data gives safe defaults. */
 function readSaved(values) {
     var out = { serverEnabled: false, dnd: false, items: [] };

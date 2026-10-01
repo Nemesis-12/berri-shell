@@ -30,6 +30,24 @@ Item {
     readonly property string artUrl: activePlayer ? activePlayer.trackArtUrl : ""
     readonly property real length: activePlayer ? activePlayer.length : 0
 
+    function loadArt() {
+        if (!root.visible || !root.artUrl) {
+            artBack.source = "";
+            artFront.source = "";
+            artFront.opacity = 0;
+            return;
+        }
+        if (artFront.source === root.artUrl) return;
+        artBack.source = artFront.status === Image.Ready ? artFront.source : "";
+        artFront.opacity = 0;
+        artFront.source = root.artUrl;
+        if (artFront.status === Image.Ready) artFront.opacity = 1;
+    }
+
+    onArtUrlChanged: loadArt()
+    onVisibleChanged: loadArt()
+    Component.onCompleted: loadArt()
+
     // --- Album art, flush and square at the top. ---
     Item {
         id: artArea
@@ -52,8 +70,7 @@ Item {
             visible: root.artUrl === ""
         }
 
-        // Two stacked images: artBack holds the previous art so artFront
-        // can fade in over it, producing a crossfade on track change.
+        // Keep the previous art only until the new art has faded in.
         Image {
             id: artBack
             anchors.fill: parent
@@ -62,6 +79,7 @@ Item {
             smooth: true
             mipmap: true
             asynchronous: true
+            cache: false
             visible: artFront.opacity < 1
         }
 
@@ -73,19 +91,16 @@ Item {
             smooth: true
             mipmap: true
             asynchronous: true
-            opacity: root.artUrl === "" ? 0 : 1
-            visible: root.artUrl !== ""
+            cache: false
+            opacity: 0
+            visible: source !== ""
+
+            onStatusChanged: if (status === Image.Ready) opacity = 1
+            onOpacityChanged: if (opacity >= 1) artBack.source = ""
 
             Fade on opacity { duration: Theme.stateMs }
         }
 
-        Connections {
-            target: root
-            function onArtUrlChanged() {
-                artBack.source = artFront.source;
-                artFront.source = root.artUrl;
-            }
-        }
     }
 
     // --- Title, progress and transport, below the art. ---
