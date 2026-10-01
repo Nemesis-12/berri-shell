@@ -9,7 +9,8 @@ import "../logic/SystemReadings.js" as Readings
 /**
  * Live numbers for the System tab. Nothing runs until a SystemTab is
  * visible (`viewers` > 0): FileViews read /proc and /sys each second,
- * `ps` reads processes every 5 s, and `df` reads disks every 30 s.
+ * `ps` lists processes and /proc supplies their CPU time every 5 s;
+ * `df` reads disks every 30 s.
  * The dGPU is asked only when its runtime power state is "active", so this
  * never wakes it. When it sleeps, the iGPU temperature stands in.
  */
@@ -66,6 +67,7 @@ Singleton {
 
     // Previous network counters for rate calculation.
     property var prevNet: null
+    property var prevProcessSample: null
 
     onActiveChanged: {
         if (active) {
@@ -73,6 +75,8 @@ Singleton {
             else kickAll();
         } else {
             prevNet = null;
+            prevProcessSample = null;
+            processes = [];
         }
     }
 
@@ -182,10 +186,19 @@ Singleton {
 
     Process {
         id: processReader
-        command: ["ps", "-eo", "pcpu,pmem,comm", "--sort=-pcpu"]
+        command: ["sh", "-c",
+            "IFS= read -r cpu < /proc/stat; printf '%s\n' \"$cpu\"; "
+            + "ps -eo pid=,pmem=,comm= | while read -r pid mem name; do "
+            + "IFS= read -r stat 2>/dev/null < \"/proc/$pid/stat\" || continue; "
+            + "printf '%s\t%s\t%s\t%s\n' \"$pid\" \"$mem\" \"$name\" \"$stat\"; done"]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: root.processes = Readings.readProcesses(text, root.threadCount)
+            onStreamFinished: {
+                if (!root.active) return;
+                var result = Readings.readProcesses(text, root.prevProcessSample);
+                root.prevProcessSample = result.sample;
+                root.processes = result.rows;
+            }
         }
     }
 
@@ -194,7 +207,7 @@ Singleton {
         command: ["df", "-P", "-x", "tmpfs", "-x", "devtmpfs", "-x", "efivarfs", "-x", "squashfs"]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: root.readDisks(text)
+            onStreamFinished: root.disks = Readings.readDisks(text)
         }
     }
 
@@ -290,22 +303,6 @@ Singleton {
             var file = frequencyFiles.objectAt(i);
             if (file) file.reload();
         }
-    }
-
-    function readDisks(text) {
-        var lines = text.trim().split("\n");
-        var seen = {};
-        var found = [];
-        for (var i = 1; i < lines.length && found.length < 2; i++) {
-            var fields = lines[i].trim().split(/\s+/);
-            if (fields.length < 6 || seen[fields[0]]) continue;
-            var total = Number(fields[1]) / 1048576;
-            if (total < 20) continue;
-            seen[fields[0]] = true;
-            found.push({ mount: fields[5], device: fields[0].split("/").pop(),
-                usedGb: Number(fields[2]) / 1048576, totalGb: total });
-        }
-        disks = found;
     }
 
     function readGpuState(text) {

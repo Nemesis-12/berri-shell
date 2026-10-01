@@ -52,9 +52,53 @@ test("frequency and sensor values reject invalid input", () => {
   assert.equal(readings.readUptime("1234.56 999.00\n"), 1234.56);
 });
 
-test("process rows combine names and use whole CPU share", () => {
-  const data = "%CPU %MEM COMMAND\n30.0 1.0 firefox\n20.0 2.0 firefox\n10.0 0.5 code\n";
-  const rows = Array.from(readings.readProcesses(data, 2));
-  assert.deepEqual(rows.map(row => [row.name, row.cpu, row.mem]),
-    [["firefox", 25, 3], ["code", 5, 0.5]]);
+function procLine(pid, name, user, system, started) {
+  const fields = Array(23).fill("0");
+  fields[1] = String(pid);
+  fields[2] = `(${name})`;
+  fields[3] = "S";
+  fields[14] = String(user);
+  fields[15] = String(system);
+  fields[22] = String(started);
+  return fields.slice(1).join(" ");
+}
+
+test("process rows use CPU ticks from the last sample and sort by them", () => {
+  const first = "cpu 100 0 0 900\n"
+    + `101\t1.0\tfirefox\t${procLine(101, "firefox", 100, 0, 1000)}\n`
+    + `102\t2.0\tfirefox\t${procLine(102, "firefox", 50, 0, 1000)}\n`
+    + `201\t0.5\tcode\t${procLine(201, "code", 20, 0, 1000)}\n`
+    + `301\t0.2\tbackup\t${procLine(301, "backup", 0, 0, 1000)}\n`;
+  const second = "cpu 500 0 0 1500\n"
+    + `101\t1.0\tfirefox\t${procLine(101, "firefox", 200, 0, 1000)}\n`
+    + `102\t2.0\tfirefox\t${procLine(102, "firefox", 150, 0, 1000)}\n`
+    + `201\t0.5\tcode\t${procLine(201, "code", 320, 0, 1000)}\n`
+    + `301\t0.2\tbackup\t${procLine(301, "backup", 5, 0, 1000)}\n`;
+  const before = readings.readProcesses(first, null);
+  assert.deepEqual(Array.from(before.rows), []);
+  const after = readings.readProcesses(second, before.sample);
+  assert.deepEqual(Array.from(after.rows, row => [row.name, row.cpu, row.mem]),
+    [["code", 30, 0.5], ["firefox", 20, 3], ["backup", 0.5, 0.2]]);
+});
+
+test("process rows ignore new and restarted PIDs until the next sample", () => {
+  const first = "cpu 100 0 0 900\n"
+    + `101\t1.0\tfirefox\t${procLine(101, "firefox", 100, 0, 1000)}\n`;
+  const second = "cpu 500 0 0 1500\n"
+    + `101\t1.0\tfirefox\t${procLine(101, "firefox", 200, 0, 2000)}\n`
+    + `202\t2.0\tcode\t${procLine(202, "code", 300, 0, 1500)}\n`;
+  const before = readings.readProcesses(first, null);
+  const after = readings.readProcesses(second, before.sample);
+  assert.deepEqual(Array.from(after.rows, row => [row.name, row.cpu]), []);
+});
+
+test("disk rows keep two large unique devices", () => {
+  const data = "Filesystem 1024-blocks Used Available Capacity Mounted on\n"
+    + "/dev/nvme0n1p2 104857600 52428800 52428800 50% /\n"
+    + "/dev/nvme0n1p2 104857600 52428800 52428800 50% /home\n"
+    + "tmpfs 1024 512 512 50% /run\n"
+    + "/dev/sda1 41943040 10485760 31457280 25% /data\n"
+    + "/dev/sdb1 31457280 1048576 30408704 3% /extra\n";
+  assert.deepEqual(Array.from(readings.readDisks(data), row => [row.mount, row.device, row.usedGb, row.totalGb]),
+    [["/", "nvme0n1p2", 50, 100], ["/data", "sda1", 10, 40]]);
 });

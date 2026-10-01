@@ -93,20 +93,60 @@ function readUptime(text) {
     return isFinite(value) && value >= 0 ? value : null;
 }
 
-/** Combine process names and report each process's share of the whole CPU. */
-function readProcesses(text, threadCount) {
-    var combined = {};
-    var lines = text.trim().split("\n");
+/** Read CPU ticks and process start time from one /proc/PID/stat line. */
+function processCounters(text, pid) {
+    var open = text.indexOf(" (");
+    var close = text.lastIndexOf(")");
+    if (open < 0 || close <= open || text.slice(0, open) !== pid) return null;
+    var fields = text.slice(close + 1).trim().split(/\s+/);
+    if (fields.length < 20) return null;
+    var user = Number(fields[11]), system = Number(fields[12]), started = Number(fields[19]);
+    if (!isFinite(user) || !isFinite(system) || !isFinite(started)
+            || user < 0 || system < 0 || started < 0) return null;
+    return { ticks: user + system, started: started };
+}
+
+/** Compare /proc CPU ticks for each process found by ps. */
+function readProcesses(text, previous) {
+    var lines = text.split("\n");
+    var totals = cpuCounters(lines[0]);
+    if (!totals) return { sample: null, rows: [] };
+    var current = { total: totals[0].total, processes: Object.create(null) };
+    var combined = Object.create(null);
+    var elapsed = previous ? current.total - previous.total : 0;
     for (var i = 1; i < lines.length; i++) {
-        var fields = lines[i].trim().split(/\s+/, 3);
-        if (fields.length < 3 || fields[2] === "ps") continue;
-        var cpu = Number(fields[0]), mem = Number(fields[1]);
-        if (!isFinite(cpu) || !isFinite(mem) || cpu < 0 || mem < 0) continue;
-        var row = combined[fields[2]] || { name: fields[2], cpu: 0, mem: 0 };
-        row.cpu += cpu / Math.max(1, threadCount);
+        var fields = /^(\d+)\t([^\t]+)\t([^\t]+)\t(.+)$/.exec(lines[i]);
+        if (!fields) continue;
+        var pid = fields[1], mem = Number(fields[2]);
+        var name = fields[3], counters = processCounters(fields[4], pid);
+        if (!counters || !isFinite(mem) || mem < 0) continue;
+        current.processes[pid] = { name: name, ticks: counters.ticks, started: counters.started };
+        var before = previous && previous.processes[pid];
+        if (!before || before.name !== name || before.started !== counters.started
+                || elapsed <= 0 || counters.ticks < before.ticks) continue;
+        var row = combined[name] || { name: name, cpu: 0, mem: 0 };
+        row.cpu += 100 * (counters.ticks - before.ticks) / elapsed;
         row.mem += mem;
-        combined[fields[2]] = row;
+        combined[name] = row;
     }
-    return Object.keys(combined).map(function (name) { return combined[name]; })
-        .sort(function (a, b) { return b.cpu - a.cpu; }).slice(0, 8);
+    return { sample: current, rows: Object.keys(combined).map(function (name) { return combined[name]; })
+        .sort(function (a, b) { return b.cpu - a.cpu; }).slice(0, 8) };
+}
+
+/** Keep the first two large, distinct disks from df output. */
+function readDisks(text) {
+    var lines = text.trim().split("\n");
+    var seen = Object.create(null);
+    var found = [];
+    for (var i = 1; i < lines.length && found.length < 2; i++) {
+        var fields = lines[i].trim().split(/\s+/);
+        if (fields.length < 6 || seen[fields[0]]) continue;
+        var total = Number(fields[1]) / 1048576;
+        var used = Number(fields[2]) / 1048576;
+        if (!isFinite(total) || !isFinite(used) || total < 20 || used < 0) continue;
+        seen[fields[0]] = true;
+        found.push({ mount: fields[5], device: fields[0].split("/").pop(),
+            usedGb: used, totalGb: total });
+    }
+    return found;
 }
