@@ -238,10 +238,11 @@ Item {
         }
         if (!root.canSave) return;
         var fields = CalendarDraft.toStoredFields(root.draft, root.original);
-        if (root.isEdit) Calendar.update(root.uid, fields);
-        else Calendar.add(fields);
-        CalendarColors.lastColor = root.color;
-        root.saved(root.date);
+        var ok = root.isEdit ? Calendar.update(root.uid, fields) : Calendar.add(fields) !== "";
+        if (ok) {
+            CalendarColors.lastColor = root.color;
+            root.saved(root.date);
+        }
         root.close();
     }
 

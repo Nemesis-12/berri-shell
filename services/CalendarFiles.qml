@@ -11,7 +11,6 @@ Scope {
     property bool active: false
     property var paths: []
     property bool folderReady: false
-    property var readers: ({})
     property var removedPaths: ({})
     property bool listingAgain: false
 
@@ -28,13 +27,19 @@ Scope {
         return text;
     }
 
-    /** Writes through the watched reader, or through a temporary atomic writer. */
-    function write(path: string, text: string): void {
-        var reader = readers[path];
-        if (reader) { reader.setText(text); return; }
-        var writer = calendarWriter.createObject(root, { path: path });
+    /** Reports the result of each atomic write before returning. */
+    function write(path: string, text: string, report: var): void {
+        var writer = calendarWriter.createObject(root, { path: path, report: report });
+        if (!writer) { report(false, "File writer could not start"); return; }
         writer.setText(text);
         writer.destroy();
+    }
+
+    function writeError(error: var): string {
+        if (error === FileViewError.PermissionDenied) return "Permission denied";
+        if (error === FileViewError.NotAFile) return "Path is not a file";
+        if (error === FileViewError.FileNotFound) return "File not found";
+        return "File write failed";
     }
 
     /** Keeps a removed file out of listings until its deletion has finished. */
@@ -74,13 +79,22 @@ Scope {
     }
 
     Component { id: importReader; FileView { blockLoading: true; printErrors: false } }
-    Component { id: calendarWriter; FileView { blockWrites: true; atomicWrites: true; printErrors: false } }
+    Component {
+        id: calendarWriter
+        FileView {
+            required property var report
+            blockWrites: true
+            atomicWrites: true
+            printErrors: false
+            onSaved: report(true, "")
+            onSaveFailed: error => report(false, root.writeError(error))
+        }
+    }
 
     ListModel { id: calendarPaths }
     Instantiator {
         model: calendarPaths
         delegate: FileView {
-            id: reader
             required property string filePath
             path: filePath
             watchChanges: true
@@ -90,8 +104,6 @@ Scope {
             onLoaded: root.read(filePath, text(), false)
             onLoadFailed: root.read(filePath, "", true)
             onFileChanged: reload()
-            Component.onCompleted: root.readers[filePath] = reader
-            Component.onDestruction: if (root.readers[filePath] === reader) delete root.readers[filePath]
         }
     }
 
