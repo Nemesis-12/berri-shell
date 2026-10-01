@@ -28,6 +28,7 @@ Singleton {
 
     // Sensors. gpuTempC is the dGPU when awake, else the iGPU.
     property real gpuTempC: 0
+    property real igpuTempC: 0
     property int fanRpm: 0
 
     // Memory in GiB.
@@ -76,9 +77,9 @@ Singleton {
     }
 
     function kickAll() {
-        reloadFast();
         if (!processReader.running) processReader.running = true;
         if (!diskReader.running) diskReader.running = true;
+        reloadFast();
         runtimeStatus.reload();
     }
 
@@ -269,8 +270,10 @@ Singleton {
 
     function readFrequency() {
         var values = [];
-        for (var i = 0; i < frequencyFiles.instances.length; i++)
-            values.push(frequencyFiles.instances[i].text());
+        for (var i = 0; i < frequencyFiles.count; i++) {
+            var file = frequencyFiles.objectAt(i);
+            if (file) values.push(file.text());
+        }
         var ghz = Readings.readFrequency(values);
         if (ghz !== null) cpuGhz = ghz;
     }
@@ -283,8 +286,10 @@ Singleton {
         if (cpuTempPath) cpuTempFile.reload();
         if (igpuTempPath) igpuTempFile.reload();
         if (fanPath) fanFile.reload();
-        for (var i = 0; i < frequencyFiles.instances.length; i++)
-            frequencyFiles.instances[i].reload();
+        for (var i = 0; i < frequencyFiles.count; i++) {
+            var file = frequencyFiles.objectAt(i);
+            if (file) file.reload();
+        }
     }
 
     function readDisks(text) {
