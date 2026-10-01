@@ -110,6 +110,7 @@ Item {
 
     // tone: mute | dim | error | accent
     readonly property var hint: {
+        if (Calendar.parserError !== "") return { text: Calendar.parserError, tone: "error" };
         if (root.message !== "") return { text: root.message, tone: root.messageIsError ? "error" : "dim" };
         if (root.importNote !== "") return { text: root.importNote, tone: "dim" };
         if (root.link === "") return { text: "paste an .ics or webcal:// link", tone: "mute" };

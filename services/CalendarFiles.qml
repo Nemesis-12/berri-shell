@@ -8,6 +8,7 @@ Scope {
     id: root
 
     required property string folder
+    readonly property string parser: Quickshell.shellPath("tools/feed-to-records/feed-to-records")
     property bool active: false
     property var paths: []
     property bool folderReady: false
@@ -16,7 +17,8 @@ Scope {
 
     signal listed(var paths)
     signal read(string path, string text, bool failed)
-    signal downloaded(var request, int code, string text)
+    signal downloaded(var request, int code, string jsonPath)
+    signal parserMissing()
 
     /** Reads a file once and releases the reader. Null means the read failed. */
     function readNow(path: string): var {
@@ -46,12 +48,32 @@ Scope {
     /** Keeps a removed file out of listings until its deletion has finished. */
     function removeFile(path: string): void {
         removedPaths[path] = true;
-        Quickshell.execDetached(["rm", "-f", path]);
+        if (path.indexOf(root.folder + "/subscriptions/") === 0)
+            Quickshell.execDetached(["rm", "-f", path, path.replace(/\.ics$/, ".json")]);
+        else Quickshell.execDetached(["rm", "-f", path]);
     }
 
     /** Starts one bounded download. The request stays with its result. */
     function download(request: var): void {
         feedDownload.createObject(root, { request: request });
+    }
+
+    property var freshening: ({})
+
+    /** True when a path is the compact record file of a subscription. */
+    function isRecordFile(path: string): bool {
+        return path.indexOf(root.folder + "/subscriptions/") === 0;
+    }
+
+    /**
+     * Starts reading one calendar file. A subscription first gets its records
+     * made again when the record file is missing or older than its .ics file.
+     */
+    function openReader(path: string): void {
+        if (!isRecordFile(path)) { calendarPaths.append({ filePath: path }); return; }
+        if (freshening[path]) return;
+        freshening[path] = true;
+        recordFreshener.createObject(root, { jsonPath: path });
     }
 
     /** Rechecks the folder after a watch change or the slow safety check. */
@@ -76,7 +98,7 @@ Scope {
             if (!wanted[calendarPaths.get(row).filePath]) calendarPaths.remove(row);
         var present = {};
         for (var p = 0; p < calendarPaths.count; p++) present[calendarPaths.get(p).filePath] = true;
-        for (var path in wanted) if (!present[path]) calendarPaths.append({ filePath: path });
+        for (var path in wanted) if (!present[path]) openReader(path);
     }
 
     Component { id: importReader; FileView { blockLoading: true; printErrors: false } }
@@ -97,7 +119,7 @@ Scope {
         model: calendarPaths
         delegate: FileView {
             required property string filePath
-            readonly property bool isLink: filePath.indexOf(root.folder + "/subscriptions/") === 0
+            readonly property bool isLink: root.isRecordFile(filePath)
             path: filePath
             watchChanges: true
             preload: !isLink
@@ -107,13 +129,35 @@ Scope {
             Component.onCompleted: if (isLink) readLink()
             function readLink(): void {
                 var content = root.readNow(filePath);
-                root.read(filePath, content === null ? "" : content, content === null);
+                root.read(filePath, content === null ? "" : content, content === null || content === "");
             }
             onLoaded: root.read(filePath, text(), false)
             onLoadFailed: root.read(filePath, "", true)
             onFileChanged: {
                 if (isLink) readLink();
                 else reload();
+            }
+        }
+    }
+
+    Process {
+        running: root.active
+        command: ["test", "-x", root.parser]
+        onExited: (code, status) => { if (code !== 0) root.parserMissing(); }
+    }
+
+    Component {
+        id: recordFreshener
+        Process {
+            required property string jsonPath
+            running: true
+            command: ["sh", "-c",
+                'if [ -f "$2" ] && { [ ! -s "$3" ] || [ "$2" -nt "$3" ]; }; then "$1" "$2" "$3"; fi',
+                "sh", root.parser, jsonPath.replace(/\.json$/, ".ics"), jsonPath]
+            onExited: (code, status) => {
+                delete root.freshening[jsonPath];
+                if (root.paths.indexOf(jsonPath) >= 0) calendarPaths.append({ filePath: jsonPath });
+                destroy();
             }
         }
     }
@@ -168,7 +212,7 @@ Scope {
         onTriggered: root.checkFolder()
     }
 
-    // One curl per request. Exit code 63 means the feed exceeds 10 MB.
+    // Download and convert in a child process. No ICS text enters QML.
     Component {
         id: feedDownload
         Process {
@@ -176,12 +220,16 @@ Scope {
             required property var request
             running: true
             command: ["sh", "-c",
-                't=$(mktemp) || exit 1; curl -fsSL --max-time 15 --max-filesize 10485760 -o "$t" "$1" || { c=$?; rm -f "$t"; exit $c; }; ' +
-                '[ "$(wc -c <"$t")" -gt 10485760 ] && { rm -f "$t"; exit 63; }; cat "$t"; rm -f "$t"',
-                "sh", request.url]
-            stdout: StdioCollector { id: downloadedText }
+                'if [ ! -x "$2" ]; then exit 127; fi; d=$(mktemp -d "$4/.feed.XXXXXX") || exit 1; ' +
+                'curl -fsSL --max-time 15 --max-filesize 10485760 -o "$d/feed.ics" "$1" || { c=$?; rm -f "$d/feed.ics"; rmdir "$d"; exit $c; }; ' +
+                '[ "$(wc -c <"$d/feed.ics")" -gt 10485760 ] && { rm -f "$d/feed.ics"; rmdir "$d"; exit 63; }; ' +
+                '"$2" "$d/feed.ics" "$d/feed.json" || { rm -f "$d/feed.ics" "$d/feed.json"; rmdir "$d"; exit 70; }; ' +
+                'if [ -n "$3" ]; then mv "$d/feed.ics" "$3.ics" && mv "$d/feed.json" "$3.json" || { rm -f "$d/feed.ics" "$d/feed.json"; rmdir "$d"; exit 71; }; rmdir "$d"; printf "%s\\n" "$3.json"; ' +
+                'else printf "%s\\n" "$d/feed.json"; fi',
+                "sh", request.url, root.parser, request.purpose === "check" ? "" : root.folder + "/subscriptions/" + request.calendarId, root.folder + "/subscriptions"]
+            stdout: StdioCollector { id: outputPath }
             onExited: (code, status) => {
-                root.downloaded(download.request, code, downloadedText.text);
+                root.downloaded(download.request, code, outputPath.text.trim());
                 download.destroy();
             }
         }
