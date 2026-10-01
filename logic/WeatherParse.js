@@ -147,6 +147,11 @@ function hoursFor(model, index) {
     return out;
 }
 
+// Hours for the hour strip of day `index`: for today the next 24 hours (they cross midnight), else that day's hours.
+function stripHours(model, index) {
+    return index === 0 ? nextHours(model) : hoursFor(model, index);
+}
+
 // Picks "City, CC" from Open-Meteo geocoding results: the hit nearest to the coordinates.
 function placeFromGeocoding(results, lat, lon) {
     var best = null;
