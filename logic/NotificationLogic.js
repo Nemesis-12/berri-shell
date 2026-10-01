@@ -145,6 +145,20 @@ function shouldAlert(urgency, dnd) {
     return !dnd || urgency === "critical";
 }
 
+/** Keep all waiting critical pop-ups and the newest other ones. Transient items are not in history. */
+function queuePopup(queue, item, max) {
+    var next = queue.concat([item]);
+    var excess = next.filter(function (n) { return n.urgency !== "critical"; }).length - max;
+    return next.filter(function (n) {
+        if (n.urgency === "critical") return true;
+        if (excess > 0) {
+            excess--;
+            return false;
+        }
+        return true;
+    });
+}
+
 /** Reads the saved object. Bad or partial data gives safe defaults. */
 function readSaved(values) {
     var out = { serverEnabled: false, dnd: false, items: [] };

@@ -68,6 +68,14 @@ Singleton {
             statsTimer.stop();
             githubTimer.stop();
             commitsTimer.stop();
+            // The tab is closed. Keep small summaries, but release the year grid and history.
+            root.calendar = [];
+            root.calendarYears = [];
+            root.commits = [];
+            root.githubCheckedAt = 0;
+            root.commitsCheckedAt = 0;
+            root.githubVersion = "";
+            root.commitsVersion = 0;
         }
     }
 
@@ -168,8 +176,10 @@ Singleton {
             onStreamFinished: {
                 try {
                     var data = JSON.parse(text);
-                    root.githubCheckedAt = root.cacheAgeStart(Date.parse(data.fetchedAt), root.githubAge);
-                    if (data.fetchedAt !== root.githubVersion) {
+                    if (root.watchers > 0) {
+                        root.githubCheckedAt = root.cacheAgeStart(Date.parse(data.fetchedAt), root.githubAge);
+                    }
+                    if (root.watchers > 0 && data.fetchedAt !== root.githubVersion) {
                         root.githubVersion = data.fetchedAt;
                         root.calendar = data.days;
                         root.calendarTotal = data.total;
@@ -190,8 +200,10 @@ Singleton {
             onStreamFinished: {
                 try {
                     var data = JSON.parse(text);
-                    root.commitsCheckedAt = root.cacheAgeStart(data.version, root.localAge);
-                    if (data.version !== root.commitsVersion) {
+                    if (root.watchers > 0) {
+                        root.commitsCheckedAt = root.cacheAgeStart(data.version, root.localAge);
+                    }
+                    if (root.watchers > 0 && data.version !== root.commitsVersion) {
                         root.commitsVersion = data.version;
                         root.commits = data.commits;
                     }

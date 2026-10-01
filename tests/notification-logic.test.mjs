@@ -96,6 +96,21 @@ test("critical bypasses do not disturb", () => {
   assert.equal(lib.shouldAlert("normal", false), true);
 });
 
+test("pop-up queue keeps the newest waiting items", () => {
+  const old = [item("a", "X", 1), item("b", "X", 2)];
+  assert.deepEqual(ids(plain(lib.queuePopup(old, item("c", "X", 3), 2))), ["b", "c"]);
+  assert.deepEqual(ids(old), ["a", "b"]);
+});
+
+test("waiting critical pop-ups survive the limit on other items", () => {
+  let queue = [item("critical", "X", 0, { urgency: "critical" })];
+  for (let i = 1; i <= 21; i++)
+    queue = plain(lib.queuePopup(queue, item(`normal-${i}`, "X", i), 20));
+  assert.deepEqual(ids(queue), ["critical", ...Array.from({ length: 20 }, (_, i) => `normal-${i + 2}`)]);
+  assert.deepEqual(ids(plain(lib.queuePopup(queue, item("critical-2", "X", 22, { urgency: "critical" }), 20))),
+    ["critical", ...Array.from({ length: 20 }, (_, i) => `normal-${i + 2}`), "critical-2"]);
+});
+
 test("readSaved: defaults on bad input (null, text), drops bad items, clears actions", () => {
   assert.deepEqual(plain(lib.readSaved(null)), { serverEnabled: false, dnd: false, items: [] });
   assert.deepEqual(plain(lib.readSaved("not an object")), { serverEnabled: false, dnd: false, items: [] });

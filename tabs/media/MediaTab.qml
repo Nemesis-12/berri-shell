@@ -95,39 +95,12 @@ Item {
             visible: root.artUrl === ""
         }
 
-        // artBack keeps the previous art while artFront fades in over it.
-        Image {
-            id: artBack
+        AlbumArt {
             anchors.fill: parent
-            fillMode: Image.PreserveAspectCrop
-            sourceSize: Qt.size(width * root.dpr, height * root.dpr)
-            smooth: true
-            mipmap: true
-            asynchronous: true
-            visible: artFront.opacity < 1
+            artUrl: root.artUrl
+            dpr: root.dpr
         }
 
-        Image {
-            id: artFront
-            anchors.fill: parent
-            fillMode: Image.PreserveAspectCrop
-            sourceSize: Qt.size(width * root.dpr, height * root.dpr)
-            smooth: true
-            mipmap: true
-            asynchronous: true
-            opacity: root.artUrl === "" ? 0 : 1
-            visible: root.artUrl !== ""
-
-            Fade on opacity { duration: Theme.stateMs }
-        }
-
-        Connections {
-            target: root
-            function onArtUrlChanged() {
-                artBack.source = artFront.source;
-                artFront.source = root.artUrl;
-            }
-        }
     }
 
     Row {

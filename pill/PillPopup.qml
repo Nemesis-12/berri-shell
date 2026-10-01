@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell.Hyprland
 import "../logic/Times.js" as Times
 import "../logic/PixelGrid.js" as PixelGrid
+import "../logic/NotificationLogic.js" as NotificationLogic
 import qs.common
 import qs.notifications
 import qs.services
@@ -49,6 +50,7 @@ Item {
     property bool hovered: false
     /** Items that wait, newest last. */
     property var queue: []
+    readonly property int maxQueued: 20
     /** Width of the pill when the card started to grow; the card shrinks back to it. */
     property real startWidth: 124
     property real progress: 0
@@ -81,10 +83,10 @@ Item {
         if (root.current === null) {
             root.showNow(item);
         } else if (root.open) {
-            root.queue = root.queue.concat([root.current]);
+            root.queue = NotificationLogic.queuePopup(root.queue, root.current, root.maxQueued);
             root.showNow(item);
         } else {
-            root.queue = root.queue.concat([item]);
+            root.queue = NotificationLogic.queuePopup(root.queue, item, root.maxQueued);
         }
     }
 
