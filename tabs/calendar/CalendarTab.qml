@@ -39,6 +39,8 @@ Item {
     property bool showCalendars: false
     property string saveError: ""
 
+    Binding { target: Calendar; property: "saveErrorShown"; value: root.visible && root.panelOpen }
+
     Connections {
         target: Calendar
         function onSaveFailed(message) { root.saveError = message; }

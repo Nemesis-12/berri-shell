@@ -57,6 +57,8 @@ Singleton {
     signal subscribed(string url, string id, string error, int requestId)
     /** A calendar edit could not be saved and was undone. */
     signal saveFailed(string message)
+    /** True while a Calendar tab shows `saveFailed` messages. The tab sets it. When false, the notifier shows them as a desktop notification. */
+    property bool saveErrorShown: false
 
     // ---- queries
 

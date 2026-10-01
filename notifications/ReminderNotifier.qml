@@ -94,6 +94,25 @@ Singleton {
         }
     }
 
+    // A failed calendar save (for example from a reminder action) with no Calendar tab open: tell the person.
+    Connections {
+        target: Calendar
+        function onSaveFailed(message) {
+            if (!Calendar.saveErrorShown) saveErrorComponent.createObject(root, { message: message });
+        }
+    }
+
+    Component {
+        id: saveErrorComponent
+        Process {
+            id: errorProc
+            required property string message
+            running: true
+            command: ["notify-send", "-a", "berri", "-i", "dialog-error", "-u", "normal", "Calendar not saved", message]
+            onExited: errorProc.destroy()
+        }
+    }
+
     function _notify(reminder: var): void {
         notifierComponent.createObject(root, { reminder: reminder });
     }
