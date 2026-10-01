@@ -6,7 +6,8 @@ import qs.services
  * stays still, and so does any title while nothing plays. A longer title of a
  * playing track scrolls one pass, holds for `holdMs`, then scrolls again, behind
  * a soft edge fade. Scrolling runs only while the item is visible. When playing
- * stops, the pass in progress ends first, so the text never jumps mid-title.
+ * stops, the pass stops at once and the title slides back to its start with a
+ * short eased move, so the text never moves in one step in the middle of the title.
  */
 Item {
     id: root
@@ -26,17 +27,30 @@ Item {
     // True while the hold between two passes runs; the title rests at its start then.
     property bool holding: false
 
-    onWantsScrollChanged: {
+    // The one place that decides to start or stop the scroll. Every change of
+    // wantsScroll, every new title and every end of a pass calls it.
+    function updateScroll() {
         if (root.wantsScroll) {
+            settle.stop()
             if (!scroll.running)
                 scroll.start()
-        } else if (!root.visible || root.holding) {
+        } else if (scroll.running) {
+            // The stop ends in onStopped, which calls this function again.
             scroll.stop()
+        } else if (loop.x !== root.bleed) {
+            // Move back to the start; the still title shows when this ends.
+            settle.start()
         }
-        // Otherwise the pass in progress ends first, then the title rests.
     }
-    // A new title starts a new pass.
-    onTextChanged: if (scroll.running) scroll.stop()
+
+    onWantsScrollChanged: root.updateScroll()
+    // A new title starts at its start, with no move back.
+    onTextChanged: {
+        scroll.stop()
+        settle.stop()
+        loop.x = root.bleed
+        root.updateScroll()
+    }
 
     height: 60
     clip: true
@@ -53,7 +67,7 @@ Item {
 
     // Still title.
     Text {
-        visible: !scroll.running
+        visible: !scroll.running && !settle.running
         x: root.bleed
         width: root.textWidth
         height: 60
@@ -66,10 +80,10 @@ Item {
         elide: Text.ElideRight
     }
 
-    // Looping title: two copies, shifted by one copy plus the gap.
+    // Scrolling title: two copies, shifted by one copy plus the gap.
     Row {
         id: loop
-        visible: scroll.running
+        visible: scroll.running || settle.running
         x: root.bleed
         height: 60
         spacing: root.gap
@@ -89,8 +103,9 @@ Item {
         }
 
         // One pass moves the second copy onto the start spot, so the reset to the
-        // start is not visible. The hold follows the pass. Every end (also a stop)
-        // resets the position, then a new run starts if scrolling is still wanted.
+        // start is not visible. The hold follows the pass. A stop in the middle of
+        // a pass leaves the text where it is; `settle` then moves it back. A stop
+        // in the hold needs no move: the second copy is on the start spot already.
         SequentialAnimation {
             id: scroll
             NumberAnimation {
@@ -103,11 +118,21 @@ Item {
             ScriptAction { script: root.holding = true }
             PauseAnimation { duration: root.holdMs }
             onStopped: {
+                if (root.holding)
+                    loop.x = root.bleed
                 root.holding = false
-                loop.x = root.bleed
-                if (root.wantsScroll)
-                    scroll.start()
+                root.updateScroll()
             }
+        }
+
+        // Eased move back to the start after a stop in the middle of a pass.
+        NumberAnimation {
+            id: settle
+            target: loop
+            property: "x"
+            to: root.bleed
+            duration: Theme.stateMs
+            easing.type: Easing.OutCubic
         }
     }
 
