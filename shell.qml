@@ -12,8 +12,8 @@ import qs.tabs.system
 import qs.notifications
 
 /**
- * berri-shell entry: one minimal pill per monitor, top-centered, with a
- * hover reveal for date and weather. Step 1 only; no dashboard yet.
+ * berri-shell entry: one pill and dashboard per monitor, with the theme
+ * picker, wallpaper, tray, and notification views.
  */
 ShellRoot {
     id: root

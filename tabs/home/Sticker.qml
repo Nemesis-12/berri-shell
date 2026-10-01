@@ -54,11 +54,6 @@ Item {
         return "file://" + path + "?" + Date.now();
     }
 
-    function displayCopyScript() {
-        var url = String(Qt.resolvedUrl("../../scripts/sticker-display-copy.sh"));
-        return decodeURIComponent(url.replace(/^file:\/\//, ""));
-    }
-
     function makeDisplayCopy() {
         if (!stickerPath || useAnimatedImage) return;
         var width = Math.round(restSize.width * 2);
@@ -68,7 +63,7 @@ Item {
         copySourcePath = stickerPath;
         copyWidth = width;
         copyHeight = height;
-        displayCopy.command = ["sh", displayCopyScript(), stickerPath,
+        displayCopy.command = ["sh", Quickshell.shellPath("scripts/sticker-display-copy.sh"), stickerPath,
             configDirPath + "/sticker-display.png", String(width), String(height)];
         displayCopy.running = true;
     }
@@ -115,9 +110,8 @@ Item {
         function copyFrom(path) {
             var ext = path.substring(path.lastIndexOf(".") + 1).toLowerCase();
             setSticker.command = ["sh", "-c",
-                "mkdir -p '" + root.configDirPath + "' && " +
-                "rm -f '" + root.configDirPath + "'/sticker.* && " +
-                "cp -f '" + path + "' '" + root.configDirPath + "/sticker." + ext + "'"];
+                'mkdir -p -- "$1" && find "$1" -maxdepth 1 -name "sticker.*" ! -type d -delete && cp -f -- "$2" "$1/sticker.$3"',
+                "sh", root.configDirPath, path, ext];
             setSticker.running = true;
         }
 
@@ -135,7 +129,8 @@ Item {
 
     Process {
         id: findStickerProc
-        command: ["sh", "-c", "ls '" + root.configDirPath + "'/sticker.* 2>/dev/null | head -n1"]
+        command: ["sh", "-c", 'ls "$1"/sticker.* 2>/dev/null | head -n1',
+            "sh", root.configDirPath]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {

@@ -36,14 +36,7 @@ Singleton {
     /** Ticks every minute purely to re-evaluate the countdown labels below. */
     property date now: new Date()
 
-    readonly property string scriptPath: {
-        var s = String(Qt.resolvedUrl("../scripts/agent-usage.py"));
-        if (s.indexOf("file://") === 0) {
-            s = s.substring(7);
-            try { s = decodeURIComponent(s); } catch (e) {}
-        }
-        return s;
-    }
+    readonly property string scriptPath: Quickshell.shellPath("scripts/agent-usage.py")
 
     readonly property string claudeSessionLabel: sessionCountdown(claudeSessionResetAt)
     readonly property string codexSessionLabel: sessionCountdown(codexSessionResetAt)
