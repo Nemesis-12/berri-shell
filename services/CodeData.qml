@@ -42,12 +42,7 @@ Singleton {
     property int watchers: 0
 
     function scriptPath(name) {
-        var s = String(Qt.resolvedUrl("../scripts/" + name));
-        if (s.indexOf("file://") === 0) {
-            s = s.substring(7);
-            try { s = decodeURIComponent(s); } catch (e) {}
-        }
-        return s;
+        return Quickshell.shellPath("scripts/" + name);
     }
 
     /** A tab calls this with true when it shows and with false when it hides. */
