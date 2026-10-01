@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Effects
+import qs.services
 
 /**
  * The soft shadow under a panel. It reads only the size and radius of
@@ -15,7 +16,7 @@ Item {
     required property Rectangle target
     property bool hovered: false
     property real openProgress: 0
-    property int hoverMs: 400
+    property int hoverMs: Theme.hoverMs
 
     property real restOffset: 0
     property real restStrength: 0
@@ -30,20 +31,26 @@ Item {
     property real openBlur: restBlur
 
     // The rest look, moved to the hover look when the pointer is over.
-    property real offsetNow: hovered ? hoverOffset : restOffset
-    property real strengthNow: hovered ? hoverStrength : restStrength
-    property real blurNow: hovered ? hoverBlur : restBlur
-    Behavior on offsetNow { NumberAnimation { duration: root.hoverMs } }
-    Behavior on strengthNow { NumberAnimation { duration: root.hoverMs } }
-    Behavior on blurNow { NumberAnimation { duration: root.hoverMs } }
+    // Written only by their own binding and Behavior (QML cannot animate readonly).
+    property real hoverBlendOffset: hovered ? hoverOffset : restOffset
+    property real hoverBlendStrength: hovered ? hoverStrength : restStrength
+    property real hoverBlendBlur: hovered ? hoverBlur : restBlur
+    Behavior on hoverBlendOffset { NumberAnimation { duration: root.hoverMs; easing.type: Easing.OutCubic } }
+    Behavior on hoverBlendStrength { NumberAnimation { duration: root.hoverMs; easing.type: Easing.OutCubic } }
+    Behavior on hoverBlendBlur { NumberAnimation { duration: root.hoverMs; easing.type: Easing.OutCubic } }
+
+    // The value `openProgress` of the way from `from` to `to`.
+    function towardOpen(from: real, to: real): real {
+        return from + (to - from) * openProgress
+    }
 
     anchors.fill: target
 
     RectangularShadow {
         anchors.fill: parent
         radius: root.target.radius
-        color: Qt.rgba(0, 0, 0, root.strengthNow + (root.openStrength - root.strengthNow) * root.openProgress)
-        blur: root.blurNow + (root.openBlur - root.blurNow) * root.openProgress
-        offset: Qt.vector2d(0, root.offsetNow + (root.openOffset - root.offsetNow) * root.openProgress)
+        color: Qt.rgba(0, 0, 0, root.towardOpen(root.hoverBlendStrength, root.openStrength))
+        blur: root.towardOpen(root.hoverBlendBlur, root.openBlur)
+        offset: Qt.vector2d(0, root.towardOpen(root.hoverBlendOffset, root.openOffset))
     }
 }
