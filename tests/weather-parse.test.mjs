@@ -62,6 +62,17 @@ test("hours start at the current hour", () => {
   assert.equal(lib.hoursFor(model, 1).length, 24);
 });
 
+test("hours strip for today keeps going after midnight", () => {
+  const late = { ...sample, current: { ...sample.current, time: "2026-09-30T23:15" } };
+  const model = lib.parse(late);
+  const strip = lib.stripHours(model, 0);
+  assert.equal(strip.length, 24);
+  assert.deepEqual(Array.from(strip.slice(0, 6), (h) => h.time.getHours()), [23, 0, 1, 2, 3, 4]);
+  const tomorrow = lib.stripHours(model, 1);
+  assert.equal(tomorrow.length, 24); // other days: whole day
+  assert.ok(tomorrow.every((h) => h.time.getDate() === 1));
+});
+
 test("day detail", () => {
   const model = lib.parse(sample);
   assert.equal(lib.dayDetail(model, 0), model.current);
