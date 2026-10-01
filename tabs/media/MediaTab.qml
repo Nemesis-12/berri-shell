@@ -230,6 +230,7 @@ Item {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 16 + 10 + 10
             text: root.titleText
+            playing: MediaPlayer.isPlaying
         }
 
         MonoText {
