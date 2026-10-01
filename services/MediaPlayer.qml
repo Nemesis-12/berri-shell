@@ -3,8 +3,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Services.Mpris
 import qs.common
-import qs.tabs.home
-import qs.tabs.media
 
 /**
  * The media player the shell shows: the one that is playing, else the last

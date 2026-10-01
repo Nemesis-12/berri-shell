@@ -8,7 +8,6 @@ import qs.common
 import qs.picker
 import qs.pill
 import qs.services
-import qs.tabs.system
 import qs.notifications
 
 /**

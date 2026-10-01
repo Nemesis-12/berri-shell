@@ -2,7 +2,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../../logic/MemoryUse.js" as MemoryUse
+import "../logic/MemoryUse.js" as MemoryUse
 import qs.common
 import qs.services
 

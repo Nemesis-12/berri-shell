@@ -6,7 +6,6 @@ import "../logic/PixelGrid.js" as PixelGrid
 import qs.common
 import qs.notifications
 import qs.services
-import qs.tabs.alerts
 
 /**
  * Notification pop-up of one monitor (ticket 52, Spine style). The pill's own

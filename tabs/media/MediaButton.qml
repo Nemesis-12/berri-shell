@@ -1,7 +1,6 @@
 import QtQuick
 import qs.common
 import qs.services
-import qs.tabs.home
 
 /**
  * One 28x28 media-transport button (prev/play-pause/next) for Media.qml.
