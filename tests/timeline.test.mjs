@@ -140,3 +140,22 @@ test("columnSpread keeps the open path and levels the row early while closing", 
   // The spring close is at flight 0.1 for a long time; the row must be level there (under 1 px).
   assert.ok(6 * 48 * lib.columnSpread(0.1, true) < 1);
 });
+
+test("an open from rest runs the whole motion; an interrupted open runs only the rest of it", () => {
+  assert.equal(lib.slideDurationMs(1000, 0, 1), 1000);
+  assert.equal(lib.slideDurationMs(1000, 0.25, 1), 750);
+  assert.equal(lib.slideDurationMs(1000, 1, 1), 0);
+});
+
+test("a close from fully open stops at the rest time; an interrupted close goes straight back to 0", () => {
+  assert.equal(lib.closeTarget(1, 600, 1000), 0.6);
+  assert.equal(lib.closeTarget(0.99, 600, 1000), 0);
+  assert.equal(lib.closeTarget(0.3, 600, 1000), 0);
+  // The close from full open takes closeEnd's share of the motion, not the whole of it.
+  assert.equal(lib.slideDurationMs(1000, 1, lib.closeTarget(1, 600, 1000)), 400);
+});
+
+test("a step starts to close when the step after it has closed the given share", () => {
+  assert.equal(lib.overlapEnd(1000, 500, 0.76), 620);
+  assert.equal(lib.overlapEnd(700, 420, 0.6), 448);
+});

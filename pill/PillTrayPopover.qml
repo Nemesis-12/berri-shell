@@ -22,7 +22,7 @@ Item {
 
     visible: opacity > 0.001
     opacity: open ? 1 : 0
-    Behavior on opacity { NumberAnimation { duration: 220 } }
+    Behavior on opacity { NumberAnimation { duration: Theme.listMs } }
 
     // 0 = closed pose (6px up, 97% size), 1 = open pose.
     property real progress: open ? 1 : 0

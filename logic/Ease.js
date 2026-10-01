@@ -3,6 +3,8 @@
 // BezierSpline control points shared by the QML animations.
 var springCurve = [0.32, 0.72, 0, 1, 1, 1];
 var standardCurve = [0.4, 0, 0.2, 1, 1, 1];
+/** Fast start, long soft stop: cubic-bezier(.2, 0, 0, 1). */
+var emphasizedCurve = [0.2, 0, 0, 1, 1, 1];
 
 /** Evaluates springCurve for a straight-line phase from 0 to 1. */
 function spring(phase) {

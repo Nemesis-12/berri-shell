@@ -104,7 +104,7 @@ Item {
             id: labelSwap
             NumberAnimation { target: labelText; property: "opacity"; to: 0; duration: 120 }
             ScriptAction { script: labelArea.shownText = labelArea.wantedText }
-            NumberAnimation { target: labelText; property: "opacity"; to: 1; duration: 180 }
+            NumberAnimation { target: labelText; property: "opacity"; to: 1; duration: Theme.hoverMs }
         }
 
         MonoText {

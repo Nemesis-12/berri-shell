@@ -53,9 +53,9 @@ Item {
     /** The dashboard fades and slides out, the shadow and the height start to fall, 60 ms after the close starts. */
     readonly property int growCloseAtMs: totalMs - 60
     /** The pill narrows when the height has fallen 3/4. */
-    readonly property int widenCloseAtMs: growCloseAtMs - Math.round(growMs * 0.76)
+    readonly property int widenCloseAtMs: Timeline.overlapEnd(growCloseAtMs, growMs, 0.76)
     /** The clock returns when the pill has narrowed 3/5. */
-    readonly property int clockCloseAtMs: widenCloseAtMs - Math.round(widenMs * 0.6)
+    readonly property int clockCloseAtMs: Timeline.overlapEnd(widenCloseAtMs, widenMs, 0.6)
     /** The time at which every step of the close is at rest. */
     readonly property int closeEndMs: Math.min(Timeline.closeEnd(widenCloseAtMs, widenMs), Timeline.closeEnd(clockCloseAtMs, clockFadeMs), iconFlight.closeEndMs)
 
@@ -171,7 +171,7 @@ Item {
     function slideTo(to: real): void {
         slide.stop();
         slide.to = to;
-        slide.duration = Math.round(root.totalMs * Math.abs(to - root.progress));
+        slide.duration = Timeline.slideDurationMs(root.totalMs, root.progress, to);
         slide.start();
     }
 
@@ -189,7 +189,7 @@ Item {
         root.closeFromOpen = root.progress >= 1;
         root.open = false;
         // A smooth close is at rest when `closeEndMs` is reached; the rest of the way is cut.
-        root.slideTo(root.closeFromOpen ? root.closeEndMs / root.totalMs : 0);
+        root.slideTo(Timeline.closeTarget(root.progress, root.closeEndMs, root.totalMs));
     }
 
     /** Stops the dashboard motion and closes at once when fullscreen starts. */

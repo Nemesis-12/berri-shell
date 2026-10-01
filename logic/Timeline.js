@@ -85,3 +85,31 @@ function fadeSlice(elapsedMs, startMs, durationMs, closing, closeAtMs) {
 function columnSpread(flight, closing) {
     return closing ? flight * flight * flight : flight;
 }
+
+/**
+ * How long (ms) the straight-line progress takes to go from `from` to `to`
+ * (both 0..1), at the speed of the full motion of `totalMs`. An open that
+ * interrupts a close starts from where the progress is now.
+ */
+function slideDurationMs(totalMs, from, to) {
+    return Math.round(totalMs * Math.abs(to - from));
+}
+
+/**
+ * The progress (0..1) a close runs to. A close that starts from fully open
+ * (`progress` 1) ends where every step is at rest (`restMs`, see closeEnd) and
+ * cuts the slow tail. A close that starts mid-way plays the open back in a
+ * straight line to 0, so nothing jumps.
+ */
+function closeTarget(progress, restMs, totalMs) {
+    return progress >= 1 ? restMs / totalMs : 0;
+}
+
+/**
+ * The close time at which a step ends, so that the step before it starts to
+ * close when this one has closed `doneShare` (0..1) of its `durationMs`. The
+ * steps overlap, so the close does not stop between two of them.
+ */
+function overlapEnd(closeAtMs, durationMs, doneShare) {
+    return closeAtMs - Math.round(durationMs * doneShare);
+}

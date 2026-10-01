@@ -60,7 +60,7 @@ Item {
     /** The strip returns and the header fades out at once; the wide picker narrows 40 ms later. */
     readonly property int wideCloseAtMs: totalMs - 40
     /** The notch shrinks to its bar when the wide picker has narrowed 3/4. */
-    readonly property int narrowCloseAtMs: wideCloseAtMs - Math.round(wideMs * 0.76)
+    readonly property int narrowCloseAtMs: Timeline.overlapEnd(wideCloseAtMs, wideMs, 0.76)
     /** The bars of the strip return with the shrinking. */
     readonly property int stripCloseAtMs: narrowCloseAtMs + (paletteStrip.spanMs - narrowMs)
     /** The time at which every step of the close is at rest. */
@@ -169,7 +169,7 @@ Item {
     function slideTo(to: real): void {
         slide.stop();
         slide.to = to;
-        slide.duration = Math.round(root.totalMs * Math.abs(to - root.progress));
+        slide.duration = Timeline.slideDurationMs(root.totalMs, root.progress, to);
         slide.start();
     }
 
@@ -194,7 +194,7 @@ Item {
         root.motionTab = root.pickerTab;
         root.closeFromOpen = root.progress >= 1;
         root.open = false;
-        root.slideTo(root.closeFromOpen ? root.closeEndMs / root.totalMs : 0);
+        root.slideTo(Timeline.closeTarget(root.progress, root.closeEndMs, root.totalMs));
     }
 
     /** Stops the picker motion and closes at once when fullscreen starts. */

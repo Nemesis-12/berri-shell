@@ -11,7 +11,7 @@ QtObject {
     id: root
 
     property bool on: false
-    property int duration: 180
+    property int duration: Theme.hoverMs
 
     /** Straight-line progress 0..1. */
     property real phase: root.on ? 1 : 0
