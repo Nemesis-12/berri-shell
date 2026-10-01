@@ -27,8 +27,29 @@ class LocalCommitsOutputTests(unittest.TestCase):
 
             self.assertEqual(run(), commits)
             first = run("--with-version")
-            self.assertEqual(first, {"version": cache.stat().st_mtime_ns, "commits": commits})
+            self.assertEqual(first, {"version": cache.stat().st_mtime_ns // 1_000_000, "commits": commits})
             self.assertEqual(run("--with-version"), first)
+
+    def test_fresh_commits_keep_the_same_version_on_the_next_run(self):
+        with tempfile.TemporaryDirectory() as folder:
+            cache = Path(folder) / "berri-shell" / "commits.json"
+            empty_root = Path(folder) / "repos"
+            empty_root.mkdir()
+            for name in ("git", "gh"):
+                command = Path(folder) / name
+                command.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+                command.chmod(0o755)
+            env = {**os.environ, "XDG_CACHE_HOME": folder,
+                   "BERRI_PROGRAMMING_ROOT": str(empty_root), "PATH": folder}
+
+            def run():
+                result = subprocess.run([sys.executable, str(SCRIPT), "--with-version"],
+                                        capture_output=True, text=True, check=True, env=env)
+                return json.loads(result.stdout)
+
+            first = run()
+            self.assertEqual(first, {"version": cache.stat().st_mtime_ns // 1_000_000, "commits": []})
+            self.assertEqual(run(), first)
 
 
 if __name__ == "__main__":
