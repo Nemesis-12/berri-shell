@@ -167,7 +167,7 @@ PanelWindow {
         visible: opacity > 0.001
 
         Behavior on opacity {
-            enabled: !root.topHidden && !root.bottomHidden
+            enabled: !root.topHidden || !root.bottomHidden
             NumberAnimation {
                 id: dimFade
                 duration: 450
