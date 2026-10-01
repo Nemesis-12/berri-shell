@@ -66,7 +66,7 @@ Singleton {
     readonly property int hoverMs: 180
     /** Selection and state fades (ms): active tab, selected item, on/off, enabled/disabled, checked. */
     readonly property int stateMs: 300
-    /** List rows that enter, leave or move (ms). */
+    /** Short fades, and list rows that enter, leave or move (ms). */
     readonly property int listMs: 220
 
     // --- Shared motion curves (BezierSpline control points) ---
@@ -74,7 +74,7 @@ Singleton {
     readonly property var springCurve: Ease.springCurve
     /** The mock's standard curve, cubic-bezier(.4, 0, .2, 1). */
     readonly property var standardCurve: Ease.standardCurve
-    /** Fast start and long soft stop, cubic-bezier(.2, 0, 0, 1): small moves such as a switch knob. */
+    /** Fast start and long soft stop, cubic-bezier(.2, 0, 0, 1): the Do not disturb switch knob. */
     readonly property var emphasizedCurve: Ease.emphasizedCurve
 
     /**

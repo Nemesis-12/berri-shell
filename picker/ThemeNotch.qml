@@ -60,7 +60,7 @@ Item {
     /** The strip returns and the header fades out at once; the wide picker narrows 40 ms later. */
     readonly property int wideCloseAtMs: totalMs - 40
     /** The notch shrinks to its bar when the wide picker has narrowed 3/4. */
-    readonly property int narrowCloseAtMs: Timeline.overlapEnd(wideCloseAtMs, wideMs, 0.76)
+    readonly property int narrowCloseAtMs: Timeline.overlapEnd(wideCloseAtMs, wideMs, Timeline.bigStepHandover)
     /** The bars of the strip return with the shrinking. */
     readonly property int stripCloseAtMs: narrowCloseAtMs + (paletteStrip.spanMs - narrowMs)
     /** The time at which every step of the close is at rest. */
@@ -192,9 +192,10 @@ Item {
         wallBarsReturn.stop();
         if (root.pickerTab === "walls") root.wallRestOpacity = 0;
         root.motionTab = root.pickerTab;
-        root.closeFromOpen = root.progress >= 1;
+        const close = Timeline.startClose(root.progress, root.closeEndMs, root.totalMs);
+        root.closeFromOpen = close.fromOpen;
         root.open = false;
-        root.slideTo(Timeline.closeTarget(root.progress, root.closeEndMs, root.totalMs));
+        root.slideTo(close.target);
     }
 
     /** Stops the picker motion and closes at once when fullscreen starts. */

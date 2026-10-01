@@ -96,14 +96,23 @@ function slideDurationMs(totalMs, from, to) {
 }
 
 /**
- * The progress (0..1) a close runs to. A close that starts from fully open
- * (`progress` 1) ends where every step is at rest (`restMs`, see closeEnd) and
- * cuts the slow tail. A close that starts mid-way plays the open back in a
- * straight line to 0, so nothing jumps.
+ * The decision at the start of a close, made once: `fromOpen` tells the
+ * views to ease each step into rest (the closing form of springSlice and
+ * fadeSlice), and `target` is the progress (0..1) the close runs to. A close
+ * from fully open (`progress` 1) ends where every step is at rest (`restMs`,
+ * see closeEnd) and cuts the slow tail. A close that starts mid-way plays the
+ * open back in a straight line to 0, so nothing jumps.
  */
-function closeTarget(progress, restMs, totalMs) {
-    return progress >= 1 ? restMs / totalMs : 0;
+function startClose(progress, restMs, totalMs) {
+    var fromOpen = progress >= 1;
+    return { fromOpen: fromOpen, target: fromOpen ? restMs / totalMs : 0 };
 }
+
+/** Share of a big step (the pill or notch growing tall, the picker widening) that has closed when the step before it starts to close. */
+var bigStepHandover = 0.76;
+
+/** Share of a small step (the pill narrowing) that has closed when the clock fades back. */
+var smallStepHandover = 0.6;
 
 /**
  * The close time at which a step ends, so that the step before it starts to

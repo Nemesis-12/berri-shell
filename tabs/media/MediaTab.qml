@@ -548,7 +548,7 @@ Item {
 
         Behavior on level {
             enabled: !meter.dragging
-            NumberAnimation { duration: 300; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+            NumberAnimation { duration: Theme.stateMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
         }
 
         Rectangle {
