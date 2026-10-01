@@ -57,7 +57,7 @@ Item {
     /** The clock returns when the pill has narrowed 3/5. */
     readonly property int clockCloseAtMs: widenCloseAtMs - Math.round(widenMs * 0.6)
     /** The time at which every step of the close is at rest. */
-    readonly property int closeEndMs: Math.min(widenCloseAtMs - Timeline.closeLength(widenMs), clockCloseAtMs - Timeline.closeLength(clockFadeMs), iconFlight.closeEndMs)
+    readonly property int closeEndMs: Math.min(Timeline.closeEnd(widenCloseAtMs, widenMs), Timeline.closeEnd(clockCloseAtMs, clockFadeMs), iconFlight.closeEndMs)
 
     /** True while a fullscreen window owns this monitor and the pill is not revealed; hides the pill. */
     property bool suppressed: false

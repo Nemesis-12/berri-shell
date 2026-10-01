@@ -11,8 +11,9 @@ import qs.services
  * accent one; it becomes the spine's active button.
  *
  * Every value comes from `elapsedMs`, the time since the open started. Close
- * plays `elapsedMs` backwards, so the flight runs in reversed order, and each
- * step eases out into rest (`closing`, see Timeline.js). All squares start
+ * plays `elapsedMs` backwards, so the flight runs in reversed order. While
+ * `closing`, each step is the mirrored ease over a shorter close window, so it
+ * settles into rest within 1 px (see Timeline.js). All squares start
  * `startMs` after the open (when the pill is wide enough) and share one flight
  * value, so at every moment their centers lie on one straight line and no
  * square is ahead of the others. All squares fade out at the end so the real
@@ -60,7 +61,7 @@ Item {
     readonly property int closeLagMs: endMs - (startMs + flightMs)
 
     /** The time at which the close of the squares is at rest: the fade-in of the squares is the last step of the close. */
-    readonly property int closeEndMs: startMs + closeLagMs - Timeline.closeLength(fadeInMs)
+    readonly property int closeEndMs: Timeline.closeEnd(startMs + closeLagMs, fadeInMs)
 
     readonly property real rowSize: barHeight - 8
     readonly property int rowGap: 4
@@ -133,7 +134,6 @@ Item {
 
             // The icon grows with the flight, 16px in the row to 19px in the spine.
             Icon {
-                id: glyph
                 // Centered on a whole device pixel (anchors.centerIn could land on a half pixel).
                 x: PixelGrid.snap((parent.width - width) / 2, root.dpr)
                 y: PixelGrid.snap((parent.height - height) / 2, root.dpr)

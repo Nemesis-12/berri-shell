@@ -65,7 +65,7 @@ test("closing springSlice leaves fast and settles slowly", () => {
 });
 
 test("closing is the open curve mirrored over the shorter close window", () => {
-  const closeMs = lib.closeLength(200);
+  const closeMs = 300 - lib.closeEnd(300, 200);
   for (let i = 0; i <= 100; i++) {
     const phase = i / 100;
     const at = 300 - closeMs + phase * closeMs;
@@ -74,9 +74,9 @@ test("closing is the open curve mirrored over the shorter close window", () => {
 });
 
 test("a closing part is within 1 px of rest at the end of its close window, even for 300 px of travel", () => {
-  const closeMs = lib.closeLength(500);
+  const closeMs = 500 - lib.closeEnd(500, 500);
   assert.ok(closeMs < 500);
-  assert.equal(lib.springSlice(500 - closeMs, 0, 500, true, 500), 0);
+  assert.equal(lib.springSlice(lib.closeEnd(500, 500), 0, 500, true, 500), 0);
   // 1 ms before the end of the window, 300 px of travel is left over by under 1 px.
   assert.ok(300 * lib.springSlice(500 - closeMs + 1, 0, 500, true, 500) < 1);
 });
@@ -93,11 +93,41 @@ test("fadeSlice is straight opening and settles slowly closing", () => {
 
 test("closing window ends at closeAtMs and has the close length", () => {
   // Window 100..300 closes over 700 minus its close length..700: at rest before that, in place from 700.
-  assert.equal(lib.springSlice(700 - lib.closeLength(200), 100, 200, true, 700), 0);
+  assert.equal(lib.springSlice(lib.closeEnd(700, 200), 100, 200, true, 700), 0);
   assert.equal(lib.springSlice(700, 100, 200, true, 700), 1);
   assert.equal(lib.fadeSlice(300, 100, 200, true, 700), 0);
   assert.equal(lib.fadeSlice(1000, 100, 200, true, 700), 1);
   // The open values do not depend on closeAtMs.
   assert.equal(lib.springSlice(200, 100, 200, false, 700), ease.spring(0.5));
   assert.equal(lib.fadeSlice(200, 100, 200, false, 700), 0.5);
+});
+
+// The real close of the notch (picker/ThemeNotch.qml) and the pill (pill/Pill.qml):
+// at the elapsed time where the close is cut, every size is within 1 px of rest.
+test("the notch close ends within 1 px of rest", () => {
+  const riseMs = 480, narrowMs = 420, wideStartMs = 470, wideMs = 420;
+  const totalMs = wideStartMs + 40 + 280 + 160;
+  const wideCloseAtMs = totalMs - 40;
+  const narrowCloseAtMs = wideCloseAtMs - Math.round(wideMs * 0.76);
+  const stripTermMs = narrowCloseAtMs - narrowMs;
+  const cutMs = Math.min(lib.closeEnd(narrowCloseAtMs, riseMs), lib.closeEnd(narrowCloseAtMs, narrowMs), stripTermMs);
+  const left = (travel, startMs, durationMs, closeAtMs) => travel * lib.springSlice(cutMs, startMs, durationMs, true, closeAtMs);
+  assert.ok(left(304 - 22, 0, riseMs, narrowCloseAtMs) < 1);
+  assert.ok(left(276 - 96, 0, narrowMs, narrowCloseAtMs) < 1);
+  assert.ok(left(900 - 276, wideStartMs, wideMs, wideCloseAtMs) < 1);
+});
+
+test("the pill close ends within 1 px of rest", () => {
+  const widenMs = 420, growMs = 500, clockFadeMs = 140;
+  const flightMs = 500, fadeInMs = 200, endMs = widenMs + 660 + 180;
+  const totalMs = endMs;
+  const growCloseAtMs = totalMs - 60;
+  const widenCloseAtMs = growCloseAtMs - Math.round(growMs * 0.76);
+  const clockCloseAtMs = widenCloseAtMs - Math.round(widenMs * 0.6);
+  const closeLagMs = endMs - (widenMs + flightMs);
+  const cutMs = Math.min(lib.closeEnd(widenCloseAtMs, widenMs), lib.closeEnd(clockCloseAtMs, clockFadeMs),
+    lib.closeEnd(widenMs + closeLagMs, fadeInMs));
+  const left = (travel, startMs, durationMs, closeAtMs) => travel * lib.springSlice(cutMs, startMs, durationMs, true, closeAtMs);
+  assert.ok(left(454 - 30, widenMs, growMs, growCloseAtMs) < 1);
+  assert.ok(left(800 - 124, 0, widenMs, widenCloseAtMs) < 1);
 });

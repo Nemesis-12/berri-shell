@@ -16,12 +16,15 @@
  * it is within 1 px of rest at the end of that shorter window.
  */
 
-/** The part of its open window that a closing part takes (0..1). */
+/** The part of its open window that a closing part takes (0..1). Used only in this file. */
 var closeShare = 0.6;
 
-/** Length in ms of the close of a part whose open window is `durationMs`. */
-function closeLength(durationMs) {
-    return durationMs * closeShare;
+/**
+ * The elapsed time at which a closing part is at rest: its close window ends
+ * at `closeAtMs` and is `closeShare` of the open window of `durationMs`.
+ */
+function closeEnd(closeAtMs, durationMs) {
+    return closeAtMs - durationMs * closeShare;
 }
 
 /** Straight-line 0..1 position of `elapsedMs` inside the window that starts at `startMs` and lasts `durationMs`. */
@@ -32,7 +35,7 @@ function slice(elapsedMs, startMs, durationMs) {
 }
 
 /**
- * The window of a part while closing: it has the same length, but it ends at
+ * The straight-line window of a part while closing: it has the length given, and it ends at
  * `closeAtMs` (default: where the open window ends). The part starts to leave
  * when `elapsedMs` falls to `closeAtMs`. Parts that follow one another can
  * overlap, so the close does not stop between two steps.
@@ -43,20 +46,31 @@ function closeSlice(elapsedMs, startMs, durationMs, closeAtMs) {
 }
 
 /**
+/**
+ * The mirror of the spring curve over the close window of a part (the window
+ * from closeEnd() to `closeAtMs`, default: where the open window ends):
+ * 1 - spring(1 - phase). The phase falls from 1 to 0 then, and the value
+ * leaves 1 fast and settles slowly onto 0.
+ */
+function closingSpring(elapsedMs, startMs, durationMs, closeAtMs) {
+    var endMs = closeAtMs === undefined ? startMs + durationMs : closeAtMs;
+    return 1 - Ease.spring(1 - slice(elapsedMs, closeEnd(endMs, durationMs), durationMs * closeShare));
+}
+
+/**
  * The spring curve over one window: slice() through spring(). While closing,
- * the mirror over the shorter close window (closeLength): 1 - spring(1 - phase). The phase falls
- * from 1 to 0 then, and the value leaves 1 fast and settles slowly onto 0.
+ * closingSpring(): the part is at rest from closeEnd() on.
  */
 function springSlice(elapsedMs, startMs, durationMs, closing, closeAtMs) {
     if (!closing) return Ease.spring(slice(elapsedMs, startMs, durationMs));
-    return 1 - Ease.spring(1 - closeSlice(elapsedMs, startMs, closeLength(durationMs), closeAtMs === undefined ? startMs + durationMs : closeAtMs));
+    return closingSpring(elapsedMs, startMs, durationMs, closeAtMs);
 }
 
 /**
  * A fade over one window. Opening it is the straight slice(). While closing it
- * is the same mirror as springSlice, so a fade does not stop hard at its end.
+ * is the same mirror as springSlice (closingSpring), so a fade does not stop hard at its end.
  */
 function fadeSlice(elapsedMs, startMs, durationMs, closing, closeAtMs) {
     if (!closing) return slice(elapsedMs, startMs, durationMs);
-    return 1 - Ease.spring(1 - closeSlice(elapsedMs, startMs, closeLength(durationMs), closeAtMs === undefined ? startMs + durationMs : closeAtMs));
+    return closingSpring(elapsedMs, startMs, durationMs, closeAtMs);
 }
