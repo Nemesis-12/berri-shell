@@ -18,7 +18,7 @@ Scope {
     signal read(string path, string text, bool failed)
     signal downloaded(var request, int code, string text)
 
-    /** Reads a small import file at once. Null means it could not be read. */
+    /** Reads a file once and releases the reader. Null means the read failed. */
     function readNow(path: string): var {
         var reader = importReader.createObject(root, { path: path });
         var text = null;
@@ -97,14 +97,24 @@ Scope {
         model: calendarPaths
         delegate: FileView {
             required property string filePath
+            readonly property bool isLink: filePath.indexOf(root.folder + "/subscriptions/") === 0
             path: filePath
             watchChanges: true
+            preload: !isLink
             atomicWrites: true
             blockWrites: true
             printErrors: false
+            Component.onCompleted: if (isLink) readLink()
+            function readLink(): void {
+                var content = root.readNow(filePath);
+                root.read(filePath, content === null ? "" : content, content === null);
+            }
             onLoaded: root.read(filePath, text(), false)
             onLoadFailed: root.read(filePath, "", true)
-            onFileChanged: reload()
+            onFileChanged: {
+                if (isLink) readLink();
+                else reload();
+            }
         }
     }
 

@@ -108,6 +108,17 @@ function countDuplicates(feedItems, existingItems) {
     return count;
 }
 
+/** Counts matching subscription records without creating full items. */
+function countStoredDuplicates(feedRecords, calendars) {
+    var existing = [];
+    for (var c = 0; c < calendars.length; c++) {
+        var calendar = calendars[c];
+        var items = calendar.document ? calendar.document.items : calendar.records || [];
+        for (var i = 0; i < items.length; i++) existing.push(items[i]);
+    }
+    return countDuplicates(feedRecords, existing);
+}
+
 /** { "YYYY-MM-DD": [Occurrence] } for days from..to. Shared events show once. */
 function occurrencesByDay(items, fromKey, toKey, names) {
     var all = [];
@@ -233,6 +244,17 @@ function pruneColorOverrides(overrides, items) {
     return out;
 }
 
+function pruneRecordColorOverrides(overrides, records) {
+    var live = {};
+    for (var i = 0; i < records.length; i++) live[records[i].uid] = true;
+    var out = {};
+    for (var uid in overrides || {}) {
+        var color = Items.cleanColor(overrides[uid]);
+        if (live[uid] && color) out[uid] = color;
+    }
+    return out;
+}
+
 /** Short message for a curl exit code. */
 function curlError(code) {
     switch (code) {
@@ -267,4 +289,62 @@ function projectCalendars(calendars) {
     var shownItems = mergeCalendars(lists);
     return { calendars: rows, items: shownItems, names: names, itemPaths: itemPaths,
         reminders: dropDuplicateItems(shownItems.filter(function (item) { return !item.readOnly; })) };
+}
+
+/** Keep feed records in the projection. Create feed items only for a requested month. */
+function projectStoredCalendars(calendars) {
+    var rows = [], names = {}, local = [], sources = [];
+    for (var c = 0; c < calendars.length; c++) {
+        var cal = calendars[c];
+        var records = cal.records || [];
+        var items = cal.document ? cal.document.items : [];
+        names[cal.id] = cal.name;
+        rows.push({ id: cal.id, name: cal.name, kind: cal.kind, color: cal.color,
+            hidden: cal.hidden, itemCount: cal.kind === "link" ? records.length : items.length,
+            source: cal.kind === "link" ? linkHost(cal.url) : cal.kind === "file" ? cal.file : "",
+            updatedAt: cal.updatedAt, readOnly: cal.kind === "link", error: cal.error || "" });
+        if (cal.kind === "link") {
+            if (!cal.hidden) sources.push({ id: cal.id, color: cal.color,
+                colorOverrides: cal.colorOverrides, records: records });
+        } else {
+            var shown = mergeCalendars([{ id: cal.id, color: cal.color, hidden: cal.hidden,
+                readOnly: false, items: items }]);
+            for (var i = 0; i < shown.length; i++) local.push(shown[i]);
+            if (!cal.hidden) sources.push({ items: shown });
+        }
+    }
+    return { calendars: rows, sources: sources, names: names,
+        reminders: dropDuplicateItems(local.filter(function (item) { return item.kind === "reminder"; })) };
+}
+
+function storedItemsInMonth(projection, year, month) {
+    var first = Times.pad(year, 4) + "-" + Times.pad(month) + "-01";
+    var last = Times.pad(year, 4) + "-" + Times.pad(month) + "-" + Times.pad(Items.daysInMonth(year, month));
+    var shown = [];
+    for (var f = 0; f < projection.sources.length; f++) {
+        var feed = projection.sources[f];
+        if (feed.items) {
+            for (var j = 0; j < feed.items.length; j++) shown.push(feed.items[j]);
+            continue;
+        }
+        var records = feed.records;
+        for (var i = 0; i < records.length; i++) {
+            var r = records[i];
+            if (r.date > last) break;
+            if (r.repeat === "none" && (r.endDate || r.date) < first) continue;
+            if (r.repeat !== "none" && r.until) {
+                var spanDays = r.time === null && r.endDate ? Times.dayNum(r.endDate) - Times.dayNum(r.date) : 0;
+                if (r.until < Items.addDays(first, -spanDays)) continue;
+            }
+            var item = Format.expandCompactItem(r);
+            item.calendarId = feed.id;
+            item.readOnly = true;
+            var own = Items.cleanColor(feed.colorOverrides && feed.colorOverrides[item.uid]);
+            item.hasOwnColor = !!own;
+            if (own) item.color = own;
+            else if (item.color === "accent") item.color = feed.color || "accent";
+            shown.push(item);
+        }
+    }
+    return itemsInMonth(shown, year, month, projection.names);
 }

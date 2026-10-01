@@ -374,6 +374,91 @@ function readCalendar(text, localZone) {
     return cal;
 }
 
+/** Read a subscription one content line at a time. Keep only fields used by views. */
+function readCompactCalendar(text, localZone) {
+    var records = [];
+    var name = "";
+    var stack = [];
+    var event = null;
+    var child = null;
+    function accept(line) {
+        var upper = line.toUpperCase();
+        if (upper.indexOf("BEGIN:") === 0) {
+            var part = upper.slice(6);
+            stack.push(part);
+            if (stack.length === 2 && stack[0] === "VCALENDAR" && (part === "VEVENT" || part === "VTODO"))
+                event = { name: part, props: [], children: [] };
+            else if (stack.length === 3 && event && part === "VALARM")
+                child = { name: part, props: [], children: [] };
+            return;
+        }
+        if (upper.indexOf("END:") === 0) {
+            if (stack.length === 3 && child) {
+                event.children.push(child);
+                child = null;
+            } else if (stack.length === 2 && event) {
+                if (!event.props.some(function (p) { return p.name === "RECURRENCE-ID"; }))
+                    records.push(compactItem(parseItem(event, localZone)));
+                event = null;
+            }
+            stack.pop();
+            return;
+        }
+        if (stack.length === 1 && !name && /^X-WR-CALNAME[^:]*:/i.test(line))
+            name = unescapeText(parseLine(line).value).trim();
+        else if (stack.length === 2 && event) event.props.push(parseLine(line));
+        else if (stack.length === 3 && child) child.props.push(parseLine(line));
+    }
+    var pending = "";
+    var start = 0;
+    for (var i = 0; i <= text.length; i++) {
+        if (i !== text.length && text.charAt(i) !== "\r" && text.charAt(i) !== "\n") continue;
+        var line = text.slice(start, i);
+        if (text.charAt(i) === "\r" && text.charAt(i + 1) === "\n") i++;
+        start = i + 1;
+        if (line.charAt(0) === " " || line.charAt(0) === "\t") pending += line.slice(1);
+        else {
+            if (pending) accept(pending);
+            pending = line;
+        }
+    }
+    if (pending) accept(pending);
+    records.sort(function (a, b) {
+        if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+        var first = a.time || "", second = b.time || "";
+        return first < second ? -1 : first > second ? 1 : 0;
+    });
+    // Copy strings out of the source text before the caller drops it.
+    return { name: name, records: records.map(function (record) {
+        return JSON.parse(JSON.stringify(record));
+    }) };
+}
+
+/** Fields needed to show a subscription event and open its details. */
+function compactItem(item) {
+    var location = "";
+    for (var i = 0; i < item.raw.length; i++) {
+        var property = parseLine(item.raw[i]);
+        if (property.name === "LOCATION") { location = unescapeText(property.value); break; }
+    }
+    return { uid: item.uid, kind: item.kind, title: item.title, location: location,
+        date: item.date, time: item.time, end: item.end, endDate: item.endDate,
+        color: item.color, repeat: item.repeat, interval: item.interval,
+        byDay: item.byDay.length ? item.byDay : null, until: item.until, count: item.count,
+        exdates: item.exdates.length ? item.exdates : null,
+        doneDates: item.doneDates.length ? item.doneDates : null,
+        alarmMinutes: item.alarmMinutes, status: item.status };
+}
+
+function expandCompactItem(record) {
+    return { uid: record.uid, kind: record.kind, title: record.title, location: record.location,
+        date: record.date, time: record.time, end: record.end, endDate: record.endDate,
+        color: record.color, repeat: record.repeat, interval: record.interval,
+        byDay: record.byDay || [], until: record.until, count: record.count,
+        exdates: record.exdates || [], doneDates: record.doneDates || [],
+        alarmMinutes: record.alarmMinutes, status: record.status };
+}
+
 function icsDate(key) {
     return key.replace(/-/g, "");
 }

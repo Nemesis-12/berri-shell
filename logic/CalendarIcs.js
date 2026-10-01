@@ -31,6 +31,7 @@
  *   hasOwnColor, alsoIn (names of the other calendars that hold the same
  *   event, [] when none), alsoInIds (their ids).
  *   (calendarId and readOnly come from mergeCalendars; items of several calendars.)
+ *   Subscription detail items also include location from LOCATION.
  *
  * Duplicates: an event in several calendars shows once. Two entries of
  * DIFFERENT calendars are the same event when the uid is the same, or when
@@ -75,6 +76,8 @@ var parseRule = Format.parseRule;
 var parseAlarm = Format.parseAlarm;
 var parseItem = Format.parseItem;
 var readCalendar = Format.readCalendar;
+var readCompactCalendar = Format.readCompactCalendar;
+var expandCompactItem = Format.expandCompactItem;
 var icsDate = Format.icsDate;
 var icsDateTime = Format.icsDateTime;
 var dateProp = Format.dateProp;
@@ -119,6 +122,7 @@ var dropDuplicateOccurrences = Queries.dropDuplicateOccurrences;
 var itemKeys = Queries.itemKeys;
 var dropDuplicateItems = Queries.dropDuplicateItems;
 var countDuplicates = Queries.countDuplicates;
+var countStoredDuplicates = Queries.countStoredDuplicates;
 var occurrencesByDay = Queries.occurrencesByDay;
 var itemsOn = Queries.itemsOn;
 var itemsInMonth = Queries.itemsInMonth;
@@ -132,5 +136,8 @@ var newCalendarColor = Queries.newCalendarColor;
 var mergeCalendars = Queries.mergeCalendars;
 var withColorOverride = Queries.withColorOverride;
 var pruneColorOverrides = Queries.pruneColorOverrides;
+var pruneRecordColorOverrides = Queries.pruneRecordColorOverrides;
 var curlError = Queries.curlError;
 var projectCalendars = Queries.projectCalendars;
+var projectStoredCalendars = Queries.projectStoredCalendars;
+var storedItemsInMonth = Queries.storedItemsInMonth;
