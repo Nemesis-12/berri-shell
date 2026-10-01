@@ -68,8 +68,8 @@ Variants {
             sourceSize.width: layer.width * modelData.devicePixelRatio
             sourceSize.height: layer.height * modelData.devicePixelRatio
             opacity: 0
-            Behavior on opacity { id: behaviorA; NumberAnimation { duration: Theme.stateMs; easing.type: Easing.OutCubic } }
-            onOpacityChanged: layer.releaseFaded(imageA)
+            Behavior on opacity { id: behaviorA; NumberAnimation { duration: 450; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve } }
+            onOpacityChanged: layer.freeHiddenImage(imageA)
         }
 
         Image {
@@ -82,47 +82,60 @@ Variants {
             sourceSize.width: layer.width * modelData.devicePixelRatio
             sourceSize.height: layer.height * modelData.devicePixelRatio
             opacity: 0
-            Behavior on opacity { id: behaviorB; NumberAnimation { duration: Theme.stateMs; easing.type: Easing.OutCubic } }
-            onOpacityChanged: layer.releaseFaded(imageB)
+            Behavior on opacity { id: behaviorB; NumberAnimation { duration: 450; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve } }
+            onOpacityChanged: layer.freeHiddenImage(imageB)
         }
 
         /** true when imageA is the currently-visible layer (imageB is the standby one). */
         property bool aVisible: false
+
+        /** The image that holds the current wallpaper. */
+        readonly property Item screenImage: layer.aVisible ? imageA : imageB
+        /** The image available for the next wallpaper. */
+        readonly property Item hiddenImage: layer.aVisible ? imageB : imageA
 
         /** Absolute path currently shown (matches whichever Image is visible), or "" for the solid color. Tracked separately from wallpaperPath so a transition still knows its "old frame" after Theme.currentKey has already moved on to the new theme. */
         property string currentPath: ""
 
         /** The newest load requested for this screen. */
         property int requestNumber: 0
-        property var loadHandler: null
-        property Item loadingImage: null
-        property string transitionPath: ""
+        /** The callback for the pending wallpaper choice. */
+        property var pendingWallpaperChoice: null
+        /** The image for the pending wallpaper choice. */
+        property Item pendingWallpaperImage: null
+        /** The wallpaper chosen for the current theme change. */
+        property string chosenWallpaperPath: ""
 
         /** Releases an image only after its opacity reaches zero. */
-        function releaseFaded(image) {
-            if (image.opacity !== 0 || image === (layer.aVisible ? imageA : imageB)
-                    || image === layer.loadingImage || effect.visible) return;
+        function freeHiddenImage(image) {
+            if (image.opacity !== 0 || image === layer.screenImage
+                    || image === layer.pendingWallpaperImage || effect.visible) return;
             image.source = "";
         }
 
         /** Stops the prior load and makes the last visible frame stable. */
-        function prepareChoice() {
+        function settleCurrentWallpaper() {
             layer.requestNumber++;
-            if (layer.loadHandler) {
-                layer.loadingImage.statusChanged.disconnect(layer.loadHandler);
-                layer.loadHandler = null;
-                layer.loadingImage = null;
+            if (layer.pendingWallpaperChoice) {
+                layer.pendingWallpaperImage.statusChanged.disconnect(layer.pendingWallpaperChoice);
+                layer.pendingWallpaperChoice = null;
+                layer.pendingWallpaperImage = null;
             }
             if (progressAnim.running) progressAnim.stop();
             if (effect.visible) layer.finishTransition();
 
-            var current = layer.aVisible ? imageA : imageB;
-            var hidden = layer.aVisible ? imageB : imageA;
+            var current = layer.screenImage;
+            var hidden = layer.hiddenImage;
+            layer.showWallpaperAtOnce(current, hidden, layer.currentPath ? 1 : 0);
+            hidden.source = "";
+        }
+
+        /** Sets both image opacities without a fade. */
+        function showWallpaperAtOnce(imageToShow, imageToHide, opacity) {
             behaviorA.enabled = false;
             behaviorB.enabled = false;
-            current.opacity = layer.currentPath ? 1 : 0;
-            hidden.opacity = 0;
-            hidden.source = "";
+            imageToShow.opacity = opacity;
+            imageToHide.opacity = 0;
             behaviorA.enabled = true;
             behaviorB.enabled = true;
         }
@@ -135,27 +148,27 @@ Variants {
                 return;
             }
 
-            layer.loadingImage = image;
+            layer.pendingWallpaperImage = image;
             image.source = "file://" + path;
             if (image.status === Image.Ready) {
-                layer.loadingImage = null;
+                layer.pendingWallpaperImage = null;
                 ready();
             } else if (image.status === Image.Error) {
-                layer.loadingImage = null;
+                layer.pendingWallpaperImage = null;
                 image.source = "";
             } else {
                 var handler = function() {
                     if (image.status === Image.Loading || image.status === Image.Null) return;
                     image.statusChanged.disconnect(handler);
-                    if (layer.loadHandler === handler) {
-                        layer.loadHandler = null;
-                        layer.loadingImage = null;
+                    if (layer.pendingWallpaperChoice === handler) {
+                        layer.pendingWallpaperChoice = null;
+                        layer.pendingWallpaperImage = null;
                     }
                     if (request !== layer.requestNumber) return;
                     if (image.status === Image.Ready) ready();
                     else image.source = "";
                 };
-                layer.loadHandler = handler;
+                layer.pendingWallpaperChoice = handler;
                 image.statusChanged.connect(handler);
             }
         }
@@ -165,19 +178,19 @@ Variants {
          * An empty path fades to the solid color underneath.
          */
         function show(path) {
-            layer.prepareChoice();
+            layer.settleCurrentWallpaper();
             if (path === layer.currentPath) return;
 
             var request = layer.requestNumber;
-            var incoming = layer.aVisible ? imageB : imageA;
-            var outgoing = layer.aVisible ? imageA : imageB;
+            var incoming = layer.hiddenImage;
+            var outgoing = layer.screenImage;
 
             function reveal() {
                 incoming.opacity = path ? 1 : 0;
                 outgoing.opacity = 0;
                 layer.aVisible = !layer.aVisible;
                 layer.currentPath = path;
-                layer.releaseFaded(outgoing);
+                layer.freeHiddenImage(outgoing);
             }
 
             layer.loadChoice(incoming, path, request, reveal);
@@ -203,15 +216,15 @@ Variants {
          * the shader over durationMs, then hands off to the plain image.
          */
         function startTransition(mode, durationMs) {
-            layer.prepareChoice();
+            layer.settleCurrentWallpaper();
             var request = layer.requestNumber;
             var oldPath = layer.currentPath;
             var newPath = layer.wallpaperPath;
-            var incoming = layer.aVisible ? imageB : imageA;
-            var outgoing = layer.aVisible ? imageA : imageB;
+            var incoming = layer.hiddenImage;
+            var outgoing = layer.screenImage;
 
             function begin() {
-                layer.transitionPath = newPath;
+                layer.chosenWallpaperPath = newPath;
                 effect.oldSource = outgoing;
                 effect.newSource = incoming;
                 effect.oldHasImage = oldPath ? 1 : 0;
@@ -241,16 +254,11 @@ Variants {
         /** Hides the shader and commits the new frame as the plain visible image (or solid color), with no extra fade. */
         function finishTransition() {
             if (!effect.visible) return;
-            var incoming = layer.aVisible ? imageB : imageA;
-            var outgoing = layer.aVisible ? imageA : imageB;
-            behaviorA.enabled = false;
-            behaviorB.enabled = false;
-            incoming.opacity = layer.transitionPath ? 1 : 0;
-            outgoing.opacity = 0;
+            var incoming = layer.hiddenImage;
+            var outgoing = layer.screenImage;
+            layer.showWallpaperAtOnce(incoming, outgoing, layer.chosenWallpaperPath ? 1 : 0);
             layer.aVisible = !layer.aVisible;
-            layer.currentPath = layer.transitionPath;
-            behaviorA.enabled = true;
-            behaviorB.enabled = true;
+            layer.currentPath = layer.chosenWallpaperPath;
             effect.visible = false;
             effect.oldSource = null;
             effect.newSource = null;
