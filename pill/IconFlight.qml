@@ -12,10 +12,11 @@ import qs.services
  *
  * Every value comes from `elapsedMs`, the time since the open started. Close
  * plays `elapsedMs` backwards, so the flight runs in reversed order, and each
- * step eases out into rest (`closing`, see Timeline.js). A square
- * starts `startMs` after the open (when the pill is wide enough), the last
- * square to leave the row starts first, and all squares fade out at the end so
- * the real spine shows. `endMs` is when the flight is over.
+ * step eases out into rest (`closing`, see Timeline.js). All squares start
+ * `startMs` after the open (when the pill is wide enough) and share one flight
+ * value, so at every moment their centers lie on one straight line and no
+ * square is ahead of the others. All squares fade out at the end so the real
+ * spine shows. `endMs` is when the flight is over.
  */
 Item {
     id: root
@@ -45,7 +46,6 @@ Item {
     readonly property int fadeInDelayMs: 100
     readonly property int fadeInMs: 200
     readonly property int flightMs: 500
-    readonly property int staggerMs: 18
     readonly property int colorMs: 400
     readonly property int fadeOutDelayMs: 660
     readonly property int fadeOutMs: 180
@@ -56,11 +56,11 @@ Item {
     /** Time of the last frame of the flight. */
     readonly property int endMs: fadeOutStartMs + fadeOutMs
 
-    /** While closing, every flight step starts this long after the open's last flight step ended, so the first square leaves at once (the fade-out of the squares is not played back). */
-    /** The time at which the close of the squares is at rest: the fade-in of the squares is the last step of the close. */
-    readonly property int closeEndMs: startMs + closeLagMs - fadeInMs
+    /** While closing, the flight starts at once: every flight step is shifted by this time, the length of the fade-out of the squares (which is not played back). */
+    readonly property int closeLagMs: endMs - (startMs + flightMs)
 
-    readonly property int closeLagMs: endMs - (startMs + (tabs.length - 1) * staggerMs + flightMs)
+    /** The time at which the close of the squares is at rest: the fade-in of the squares is the last step of the close. */
+    readonly property int closeEndMs: startMs + closeLagMs - Timeline.closeLength(fadeInMs)
 
     readonly property real rowSize: barHeight - 8
     readonly property int rowGap: 4
@@ -97,12 +97,9 @@ Item {
             readonly property real rowLeft: root.rowX + index * (root.rowSize + root.rowGap)
             readonly property real finalTop: root.spineY + index * root.buttonSize
 
-            // The last square leaves the row first, so paths never cross. On close
-            // the order reverses by itself.
-            readonly property real flight: Timeline.springSlice(root.elapsedMs,
-                root.startMs + (root.tabs.length - 1 - index) * root.staggerMs, root.flightMs, root.closing,
-                root.startMs + (root.tabs.length - 1 - index) * root.staggerMs + root.flightMs + root.closeLagMs)
-            readonly property real shape: Timeline.springSlice(root.elapsedMs, root.startMs, root.flightMs, root.closing,
+            // One flight value for position and size, the same for every square:
+            // the centers stay on one line, and each icon stays centered in its square.
+            readonly property real flight: Timeline.springSlice(root.elapsedMs, root.startMs, root.flightMs, root.closing,
                 root.startMs + root.flightMs + root.closeLagMs)
             readonly property real tintPhase: root.closing
                 ? Timeline.closeSlice(root.elapsedMs, root.startMs, root.colorMs, root.startMs + root.colorMs + root.closeLagMs)
@@ -115,9 +112,9 @@ Item {
 
             x: PixelGrid.snap(rowLeft + (root.spineX - rowLeft) * flight, root.dpr)
             y: PixelGrid.snap(root.rowY + (finalTop - root.rowY) * flight + slideOffset, root.dpr)
-            width: PixelGrid.snap(root.rowSize + (root.spineWidth - root.rowSize) * shape, root.dpr)
-            height: PixelGrid.snap(root.rowSize + (root.buttonSize - root.rowSize) * shape, root.dpr)
-            radius: 5 * (1 - shape)
+            width: PixelGrid.snap(root.rowSize + (root.spineWidth - root.rowSize) * flight, root.dpr)
+            height: PixelGrid.snap(root.rowSize + (root.buttonSize - root.rowSize) * flight, root.dpr)
+            radius: 5 * (1 - flight)
             opacity: root.opacityNow
             // The other squares become opaque stand-ins for their buttons, so the
             // real button never shows through during the handoff.
@@ -136,7 +133,10 @@ Item {
 
             // The icon grows with the flight, 16px in the row to 19px in the spine.
             Icon {
-                anchors.centerIn: parent
+                id: glyph
+                // Centered on a whole device pixel (anchors.centerIn could land on a half pixel).
+                x: PixelGrid.snap((parent.width - width) / 2, root.dpr)
+                y: PixelGrid.snap((parent.height - height) / 2, root.dpr)
                 name: square.modelData.icon
                 size: PixelGrid.snap(16 + 3 * square.flight, root.dpr)
                 strokeWidth: 1.5

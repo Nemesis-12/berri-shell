@@ -64,12 +64,21 @@ test("closing springSlice leaves fast and settles slowly", () => {
   assert.ok(first > 5 * last, "first " + first + " last " + last);
 });
 
-test("closing is the open curve mirrored, so open and close agree at every phase", () => {
+test("closing is the open curve mirrored over the shorter close window", () => {
+  const closeMs = lib.closeLength(200);
   for (let i = 0; i <= 100; i++) {
     const phase = i / 100;
-    const at = 100 + phase * 200;
+    const at = 300 - closeMs + phase * closeMs;
     assert.ok(Math.abs(lib.springSlice(at, 100, 200, true) - (1 - ease.spring(1 - phase))) < 1e-12);
   }
+});
+
+test("a closing part is within 1 px of rest at the end of its close window, even for 300 px of travel", () => {
+  const closeMs = lib.closeLength(500);
+  assert.ok(closeMs < 500);
+  assert.equal(lib.springSlice(500 - closeMs, 0, 500, true, 500), 0);
+  // 1 ms before the end of the window, 300 px of travel is left over by under 1 px.
+  assert.ok(300 * lib.springSlice(500 - closeMs + 1, 0, 500, true, 500) < 1);
 });
 
 test("fadeSlice is straight opening and settles slowly closing", () => {
@@ -82,9 +91,9 @@ test("fadeSlice is straight opening and settles slowly closing", () => {
   assert.ok(atStart > 5 * atRest);
 });
 
-test("closing window ends at closeAtMs and keeps its length", () => {
-  // Window 100..300 closes over 500..700: the part is at rest before 500, in place from 700.
-  assert.equal(lib.springSlice(500, 100, 200, true, 700), 0);
+test("closing window ends at closeAtMs and has the close length", () => {
+  // Window 100..300 closes over 700 minus its close length..700: at rest before that, in place from 700.
+  assert.equal(lib.springSlice(700 - lib.closeLength(200), 100, 200, true, 700), 0);
   assert.equal(lib.springSlice(700, 100, 200, true, 700), 1);
   assert.equal(lib.fadeSlice(300, 100, 200, true, 700), 0);
   assert.equal(lib.fadeSlice(1000, 100, 200, true, 700), 1);

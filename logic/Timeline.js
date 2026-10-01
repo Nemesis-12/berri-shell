@@ -9,7 +9,20 @@
  * the parts run in reversed order. Each part is eased the other way round
  * while closing (`closing` true): it leaves fast and settles slowly into rest,
  * like it does when it opens. The open values stay as they are.
+ *
+ * The spring curve spends the last third of its time on the last few percent
+ * of the way. In a tall panel that is a visible slow tail after the close
+ * looks finished. So a closing part runs over `closeShare` of its window, and
+ * it is within 1 px of rest at the end of that shorter window.
  */
+
+/** The part of its open window that a closing part takes (0..1). */
+var closeShare = 0.6;
+
+/** Length in ms of the close of a part whose open window is `durationMs`. */
+function closeLength(durationMs) {
+    return durationMs * closeShare;
+}
 
 /** Straight-line 0..1 position of `elapsedMs` inside the window that starts at `startMs` and lasts `durationMs`. */
 function slice(elapsedMs, startMs, durationMs) {
@@ -31,12 +44,12 @@ function closeSlice(elapsedMs, startMs, durationMs, closeAtMs) {
 
 /**
  * The spring curve over one window: slice() through spring(). While closing,
- * the mirror over the close window: 1 - spring(1 - phase). The phase falls
+ * the mirror over the shorter close window (closeLength): 1 - spring(1 - phase). The phase falls
  * from 1 to 0 then, and the value leaves 1 fast and settles slowly onto 0.
  */
 function springSlice(elapsedMs, startMs, durationMs, closing, closeAtMs) {
     if (!closing) return Ease.spring(slice(elapsedMs, startMs, durationMs));
-    return 1 - Ease.spring(1 - closeSlice(elapsedMs, startMs, durationMs, closeAtMs));
+    return 1 - Ease.spring(1 - closeSlice(elapsedMs, startMs, closeLength(durationMs), closeAtMs === undefined ? startMs + durationMs : closeAtMs));
 }
 
 /**
@@ -45,5 +58,5 @@ function springSlice(elapsedMs, startMs, durationMs, closing, closeAtMs) {
  */
 function fadeSlice(elapsedMs, startMs, durationMs, closing, closeAtMs) {
     if (!closing) return slice(elapsedMs, startMs, durationMs);
-    return 1 - Ease.spring(1 - closeSlice(elapsedMs, startMs, durationMs, closeAtMs));
+    return 1 - Ease.spring(1 - closeSlice(elapsedMs, startMs, closeLength(durationMs), closeAtMs === undefined ? startMs + durationMs : closeAtMs));
 }
