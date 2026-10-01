@@ -3,11 +3,10 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.common
+import "../logic/SystemReadings.js" as Readings
 
 /**
- * Total CPU load in percent, from /proc/stat. This is the one place that
- * reads it for the Home rings (SystemUsage) and the auto power profile
- * (AutoPowerProfile). It samples only while someone needs it: a visible
+ * Total and per-core CPU load from one /proc/stat read. It samples while a visible
  * view (`viewers` > 0) or the auto power profile (`autoProfileOn`). A
  * visible view gets a sample every 2.5 s; the auto profile alone needs one
  * every 5 s. `measured` fires after each new sample.
@@ -26,47 +25,34 @@ Singleton {
 
     /** Load in percent between the last two samples. */
     property real percent: 0
+    property var coreLoads: [0, 0, 0, 0, 0, 0, 0, 0]
+    property int threadCount: 1
 
     signal measured(real percent)
 
-    property double previousIdle: -1
-    property double previousTotal: -1
+    property var previousCounters: null
 
     // Without a timer running, the next sample has no earlier one to compare to.
     onActiveChanged: {
-        if (!active) {
-            previousIdle = -1;
-            previousTotal = -1;
-        }
+        if (!active) previousCounters = null;
     }
 
-    Process {
-        id: statReader
-        command: ["head", "-n", "1", "/proc/stat"]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.readSample(text)
-        }
+    FileView {
+        id: statFile
+        path: "/proc/stat"
+        printErrors: false
+        onLoaded: if (root.active) root.readSample(text())
     }
 
-    /** Turns one "/proc/stat" cpu line into the load since the last sample. */
-    function readSample(line) {
-        var fields = line.trim().split(/\s+/).slice(1).map(Number);
-        if (fields.length < 4) return;
-
-        var idle = fields[3] + (fields[4] || 0);
-        var total = fields.reduce(function (a, b) { return a + b; }, 0);
-
-        if (root.previousTotal >= 0) {
-            var totalDelta = total - root.previousTotal;
-            var idleDelta = idle - root.previousIdle;
-            if (totalDelta > 0) {
-                root.percent = Math.max(0, Math.min(100, 100 * (totalDelta - idleDelta) / totalDelta));
-                root.measured(root.percent);
-            }
-        }
-        root.previousIdle = idle;
-        root.previousTotal = total;
+    function readSample(text) {
+        var sample = Readings.readCpuLoad(text, previousCounters);
+        if (!sample) return;
+        previousCounters = sample.counters;
+        threadCount = Math.max(1, sample.threadCount);
+        if (sample.percent === null) return;
+        percent = sample.percent;
+        coreLoads = sample.coreLoads;
+        measured(percent);
     }
 
     Timer {
@@ -74,6 +60,6 @@ Singleton {
         running: root.active
         repeat: true
         triggeredOnStart: true
-        onTriggered: statReader.running = true
+        onTriggered: statFile.reload()
     }
 }

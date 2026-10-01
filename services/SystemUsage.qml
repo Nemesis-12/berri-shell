@@ -9,8 +9,8 @@ import qs.services
 /**
  * Numbers for the Home usage rings. CPU percent comes from CpuLoad. RAM
  * used percent comes from /proc/meminfo (parsed by MemoryUse.js) and disk used
- * percent of / from `df`. Nothing runs until a view is visible (`viewers` > 0):
- * then one shell process every sampleIntervalMs reads both sources.
+ * percent of / from `df`. Memory is read without a process while visible.
+ * Disk usage refreshes when the view opens and every 30 seconds.
  */
 Singleton {
     id: root
@@ -28,19 +28,20 @@ Singleton {
     property real ramUsedGb: 0
     property real diskUsedGb: 0
 
-    Process {
-        id: sampleReader
-        command: ["sh", "-c", "cat /proc/meminfo; echo @@DISK@@; df -P /"]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.readSample(text)
-        }
+    FileView {
+        id: memoryFile
+        path: "/proc/meminfo"
+        printErrors: false
+        onLoaded: if (root.viewers > 0) root.readMemory(text())
     }
 
-    function readSample(text) {
-        var parts = text.split("@@DISK@@\n");
-        root.readMemory(parts[0] || "");
-        root.readDisk(parts[1] || "");
+    Process {
+        id: diskReader
+        command: ["df", "-P", "/"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.readDisk(text)
+        }
     }
 
     /** Updates ramPercent and ramUsedGb from a "/proc/meminfo" dump. */
@@ -67,6 +68,14 @@ Singleton {
         running: root.viewers > 0
         repeat: true
         triggeredOnStart: true
-        onTriggered: sampleReader.running = true
+        onTriggered: memoryFile.reload()
+    }
+
+    Timer {
+        interval: 30000
+        running: root.viewers > 0
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: if (!diskReader.running) diskReader.running = true
     }
 }
