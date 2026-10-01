@@ -497,6 +497,8 @@ Item {
     // The icon flight sits above pillRect. It is clipped to the pill's own shape,
     // so no icon is ever seen outside the bar while the bar narrows or shrinks.
     Item {
+        id: iconClip
+        // Keeps the flying icons inside the bar.
         x: pillRect.x
         y: pillRect.y
         width: pillRect.width
@@ -505,8 +507,8 @@ Item {
 
         IconFlight {
             id: iconFlight
-            x: -parent.x
-            y: -parent.y
+            x: -iconClip.x
+            y: -iconClip.y
             width: root.width
             height: root.height
             tabs: root.tabs

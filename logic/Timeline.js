@@ -46,7 +46,6 @@ function closeSlice(elapsedMs, startMs, durationMs, closeAtMs) {
 }
 
 /**
-/**
  * The mirror of the spring curve over the close window of a part (the window
  * from closeEnd() to `closeAtMs`, default: where the open window ends):
  * 1 - spring(1 - phase). The phase falls from 1 to 0 then, and the value

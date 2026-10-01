@@ -91,8 +91,8 @@ test("fadeSlice is straight opening and settles slowly closing", () => {
   assert.ok(atStart > 5 * atRest);
 });
 
-test("closing window ends at closeAtMs and has the close length", () => {
-  // Window 100..300 closes over 700 minus its close length..700: at rest before that, in place from 700.
+test("closing window ends at closeAtMs and is closeShare of the open window long", () => {
+  // Window 100..300 closes over closeEnd(700, 200)..700: at rest before that, in place from 700.
   assert.equal(lib.springSlice(lib.closeEnd(700, 200), 100, 200, true, 700), 0);
   assert.equal(lib.springSlice(700, 100, 200, true, 700), 1);
   assert.equal(lib.fadeSlice(300, 100, 200, true, 700), 0);
