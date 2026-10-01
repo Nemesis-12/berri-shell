@@ -6,3 +6,5 @@ node_modules/
 *.log
 .env
 AGENTS.md
+tools/feed-to-records/target/
+tools/feed-to-records/feed-to-records
