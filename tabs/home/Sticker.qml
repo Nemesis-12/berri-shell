@@ -63,8 +63,14 @@ Item {
         copySourcePath = stickerPath;
         copyWidth = width;
         copyHeight = height;
-        displayCopy.command = ["sh", Quickshell.shellPath("scripts/sticker-display-copy.sh"), stickerPath,
-            configDirPath + "/sticker-display.png", String(width), String(height)];
+        displayCopy.command = [
+            "sh",
+            Quickshell.shellPath("scripts/sticker-display-copy.sh"),
+            stickerPath,
+            configDirPath + "/sticker-display.png",
+            String(width),
+            String(height)
+        ];
         displayCopy.running = true;
     }
 
@@ -105,12 +111,14 @@ Item {
     Process {
         id: setSticker
 
-        // Removes any older sticker.* first so only the new one remains,
-        // even when the extension changes (e.g. a .png replaced by a .gif).
+        // sh -c: $1 is the config directory, $2 is the chosen file, $3 is its extension.
         function copyFrom(path) {
             var ext = path.substring(path.lastIndexOf(".") + 1).toLowerCase();
             setSticker.command = ["sh", "-c",
-                'mkdir -p -- "$1" && find "$1" -maxdepth 1 -name "sticker.*" ! -type d -delete && cp -f -- "$2" "$1/sticker.$3"',
+                "mkdir -p -- \"$1\" && temp=$(mktemp \"$1/.sticker-copy.XXXXXX\") "
+                    + "&& trap 'rm -f -- \"$temp\"' EXIT && cp -f -- \"$2\" \"$temp\" "
+                    + "&& find \"$1\" -maxdepth 1 -name \"sticker.*\" ! -type d -delete "
+                    + "&& mv -f -- \"$temp\" \"$1/sticker.$3\"",
                 "sh", root.configDirPath, path, ext];
             setSticker.running = true;
         }
@@ -129,6 +137,7 @@ Item {
 
     Process {
         id: findStickerProc
+        // sh -c: $1 is the config directory.
         command: ["sh", "-c", 'ls "$1"/sticker.* 2>/dev/null | head -n1',
             "sh", root.configDirPath]
         stdout: StdioCollector {
