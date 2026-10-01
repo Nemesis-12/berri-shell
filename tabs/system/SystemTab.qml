@@ -17,6 +17,7 @@ Item {
 
     readonly property real dpr: PixelGrid.dpr(Screen.devicePixelRatio)
     WhileVisible { service: SystemStats }
+    WhileVisible { service: CpuLoad }
 
     Rectangle {
         anchors.fill: parent
