@@ -35,6 +35,7 @@ Scope {
         writer.destroy();
     }
 
+    /** Short text for a `FileViewError` value of a failed write. */
     function writeError(error: var): string {
         if (error === FileViewError.PermissionDenied) return "Permission denied";
         if (error === FileViewError.NotAFile) return "Path is not a file";
