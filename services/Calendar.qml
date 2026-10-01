@@ -46,6 +46,11 @@ Singleton {
     readonly property var calendars: _projection.calendars
     /** Short text of the last failed importFile, "" after a good one. */
     property string lastError: ""
+    /** An installation error shown in the Calendar source view. */
+    property string parserError: ""
+    readonly property string parserMissingText: "Calendar parser is missing. Build tools/feed-to-records"
+    readonly property string convertErrorText: "Could not read the saved calendar file"
+    readonly property string recordsErrorText: "Could not read subscription records"
     /** How many items of the last importFile were already in other calendars (0 after a failed import). */
     property int lastImportDuplicates: 0
 
@@ -410,7 +415,8 @@ Singleton {
 
     function _idOfPath(path: string): string {
         for (var i = 0; i < _order.length; i++)
-            if (_calendars[_order[i]].path === path) return _order[i];
+            if (_calendars[_order[i]].path === path ||
+                _calendars[_order[i]].kind === "link" && files.recordPath(_calendars[_order[i]].path) === path) return _order[i];
         return "";
     }
 
@@ -428,7 +434,7 @@ Singleton {
     function _newMeta(id: string, kind: string, name: string, file: string, color): var {
         return { id: id, kind: kind, name: name, color: kind === "local" ? "accent" : Ics.newCalendarColor(color, _usedColors()),
             hidden: false, url: "", file: file, updatedAt: 0, colorOverrides: ({}),
-            path: dir + "/" + file, document: null, records: null, text: "", signature: "", error: "", refreshing: false, loaded: false };
+            path: dir + "/" + file, document: null, records: null, text: "", signature: "", error: "", convertError: "", refreshing: false, loaded: false };
     }
 
     function _addCalendar(id: string, kind: string, name: string, file: string, url: string, color): var {
@@ -463,18 +469,38 @@ Singleton {
         return Date.fromLocaleString(Qt.locale("C"), value + " " + zone, "yyyyMMdd'T'HHmmss tttt").getTime();
     }
 
+    // Parses a subscription record file. Null when it is not valid records.
+    function _parseRecords(json: string): var {
+        var parsed;
+        try { parsed = JSON.parse(json); } catch (e) { return null; }
+        return parsed && Array.isArray(parsed.records) ? parsed : null;
+    }
+
+    // Shows an error for a subscription whose records could not be read. The calendar counts as loaded.
+    function _recordsFailed(calendar: var, message: string): void {
+        calendar.error = message;
+        console.error("Calendar: " + message + " for " + calendar.name);
+        calendar.loaded = true;
+        _rebuild();
+        _checkReady();
+    }
+
     function _ingest(path: string, text: string, failed: bool): void {
         var id = _idOfPath(path);
         if (!id) return;
         var calendar = _calendars[id];
         var signature = text.length + ":" + Ics.shortHash(text);
+        if (failed && calendar.kind === "link") { _recordsFailed(calendar, calendar.convertError || parserError || recordsErrorText); return; }
         if ((!calendar.document && !calendar.records) || !failed && calendar.signature !== signature) {
             var unnamed = !calendar.name;
             if (calendar.kind === "link") {
-                var parsed = Ics.readCompactCalendar(text, _localZone);
+                var parsed = _parseRecords(text);
+                if (!parsed) { _recordsFailed(calendar, recordsErrorText); return; }
                 calendar.records = parsed.records;
                 calendar.signature = signature;
                 if (unnamed) calendar.name = parsed.name || calendar.file.replace(/\.ics$/i, "");
+                // Old records stay on screen as a fallback while a failed conversion shows its error.
+                calendar.error = calendar.convertError || "";
             } else {
                 calendar.document = Ics.readCalendar(text, _localZone);
                 calendar.text = text;
@@ -532,9 +558,24 @@ Singleton {
             color: color === undefined || color === null ? "" : String(color), requestId: requestId || 0 });
     }
 
-    function _downloaded(purpose: string, shownUrl: string, url: string, id: string, code: int, text: string, color: string, requestId: int): void {
-        var error = code !== 0 ? Ics.curlError(code) : Ics.looksLikeCalendar(text) ? "" : "Not a calendar feed";
-        var doc = error ? null : Ics.readCompactCalendar(text, _localZone);
+    function _downloaded(purpose: string, shownUrl: string, url: string, id: string, code: int, jsonPath: string, color: string, requestId: int): void {
+        var error = code === files.exitParserMissing ? parserMissingText :
+            code === files.exitNotCalendar ? "Not a calendar feed or parser failed" :
+            code === files.exitSaveFailed ? "Could not save calendar" : code !== 0 ? Ics.curlError(code) : "";
+        var doc = null;
+        var json = "";
+        if (!error) {
+            json = files.readNow(jsonPath) || "";
+            doc = _parseRecords(json);
+            if (!doc) error = recordsErrorText;
+        }
+        if (purpose === "check" && jsonPath) Quickshell.execDetached(["sh", "-c",
+            'rm -f "$1" "$2"; rmdir "$3"', "sh", jsonPath,
+            jsonPath.replace(/feed\.json$/, "feed.ics"), jsonPath.slice(0, jsonPath.lastIndexOf("/"))]);
+        if (error) {
+            console.error("Calendar: " + error);
+            if (code === files.exitParserMissing) parserError = error;
+        } else parserError = "";
         var name = doc ? doc.name || Ics.linkHost(url) : "";
         if (purpose === "check") {
             var records = doc ? doc.records : [];
@@ -544,12 +585,9 @@ Singleton {
         } else if (purpose === "subscribe") {
             if (error) { subscribed(shownUrl, "", error, requestId); return; }
             if (_calendars[id]) { subscribed(shownUrl, id, "", requestId); return; }
-            var path = dir + "/subscriptions/" + id + ".ics";
-            var written = _write(path, text, "", "Could not save calendar");
-            if (!written.saved) { subscribed(shownUrl, "", written.error, requestId); return; }
             var calendar = _addCalendar(id, "link", name, "subscriptions/" + id + ".ics", url, color);
             calendar.records = doc.records;
-            calendar.signature = text.length + ":" + Ics.shortHash(text);
+            calendar.signature = json.length + ":" + Ics.shortHash(json);
             calendar.loaded = true;
             _finishAdd();
             subscribed(shownUrl, id, "", requestId);
@@ -560,20 +598,14 @@ Singleton {
             if (error) {
                 meta.error = error;
             } else {
-                var cache = dir + "/" + meta.file;
-                files.write(cache, text, function (ok, writeError) {
-                    if (ok) {
-                        meta.records = doc.records;
-                        meta.signature = text.length + ":" + Ics.shortHash(text);
-                        meta.loaded = true;
-                        meta.error = "";
-                        meta.colorOverrides = Ics.pruneRecordColorOverrides(meta.colorOverrides, doc.records);
-                        meta.updatedAt = Date.now();
-                        _saveState();
-                    } else {
-                        meta.error = "Could not save calendar: " + writeError;
-                    }
-                });
+                meta.records = doc.records;
+                meta.signature = json.length + ":" + Ics.shortHash(json);
+                meta.loaded = true;
+                meta.error = "";
+                meta.convertError = "";
+                meta.colorOverrides = Ics.pruneRecordColorOverrides(meta.colorOverrides, doc.records);
+                meta.updatedAt = Date.now();
+                _saveState();
             }
             _rebuild();
         }
@@ -612,7 +644,7 @@ Singleton {
             meta[s.id] = { id: s.id, kind: s.kind, name: String(s.name || ""), color: Ics.cleanColor(s.color) || "accent",
                 hidden: !!s.hidden, url: s.kind === "link" ? String(s.url || "") : "", file: s.file, updatedAt: +s.updatedAt || 0,
                 colorOverrides: s.kind === "link" ? Ics.pruneColorOverrides(s.colorOverrides, null) : ({}),
-                path: dir + "/" + s.file, document: null, records: null, text: "", signature: "", error: "", refreshing: false, loaded: false };
+                path: dir + "/" + s.file, document: null, records: null, text: "", signature: "", error: "", convertError: "", refreshing: false, loaded: false };
             order.push(s.id);
         }
         meta.berri = local;
@@ -649,6 +681,16 @@ Singleton {
         onRead: (path, text, failed) => root._ingest(path, text, failed)
         onDownloaded: (request, code, text) => root._downloaded(request.purpose, request.shownUrl,
             request.url, request.calendarId, code, text, request.color, request.requestId)
+        onConvertFailed: jsonPath => {
+            var id = root._idOfPath(jsonPath);
+            if (!id) return;
+            root._calendars[id].convertError = root.convertErrorText;
+            console.error("Calendar: " + root.convertErrorText + " for " + root._calendars[id].name);
+        }
+        onParserMissing: {
+            root.parserError = root.parserMissingText;
+            console.error("Calendar: " + root.parserError);
+        }
     }
 
     // Add new file calendars and drop file calendars whose source is gone.
@@ -675,7 +717,10 @@ Singleton {
 
     // File readers and readiness follow the same calendar list.
     function _syncPaths(): void {
-        files.paths = _order.map(function (id) { return _calendars[id].path; });
+        files.paths = _order.map(function (id) {
+            var calendar = _calendars[id];
+            return calendar.kind === "link" ? files.recordPath(calendar.path) : calendar.path;
+        });
         _checkReady();
     }
 

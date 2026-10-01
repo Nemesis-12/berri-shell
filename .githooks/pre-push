@@ -4,11 +4,18 @@
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "pre-push: cargo not found, install Rust to run the feed parser tests"
+  echo "pre-push: push stopped"
+  exit 1
+fi
+
 log=$(mktemp) || exit 1
 trap 'rm -f "$log"' EXIT
 
 if node --test tests/ >"$log" 2>&1 \
-  && (cd scripts && python3 -m unittest test-*.py) >>"$log" 2>&1; then
+  && (cd scripts && python3 -m unittest test-*.py) >>"$log" 2>&1 \
+  && cargo test --manifest-path tools/feed-to-records/Cargo.toml --offline >>"$log" 2>&1; then
   echo "pre-push: all tests passed"
 else
   cat "$log"

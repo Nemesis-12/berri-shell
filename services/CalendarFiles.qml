@@ -8,6 +8,11 @@ Scope {
     id: root
 
     required property string folder
+    readonly property string parser: Quickshell.shellPath("tools/feed-to-records/feed-to-records")
+    // Exit codes of the download and parse scripts. Calendar.qml turns them into text.
+    readonly property int exitParserMissing: 127
+    readonly property int exitNotCalendar: 70
+    readonly property int exitSaveFailed: 71
     property bool active: false
     property var paths: []
     property bool folderReady: false
@@ -16,7 +21,10 @@ Scope {
 
     signal listed(var paths)
     signal read(string path, string text, bool failed)
-    signal downloaded(var request, int code, string text)
+    signal downloaded(var request, int code, string jsonPath)
+    signal parserMissing()
+    /** The parser ran on a saved subscription and failed. The old records file may still be read. */
+    signal convertFailed(string jsonPath)
 
     /** Reads a file once and releases the reader. Null means the read failed. */
     function readNow(path: string): var {
@@ -46,12 +54,38 @@ Scope {
     /** Keeps a removed file out of listings until its deletion has finished. */
     function removeFile(path: string): void {
         removedPaths[path] = true;
-        Quickshell.execDetached(["rm", "-f", path]);
+        if (path.indexOf(root.folder + "/subscriptions/") === 0)
+            Quickshell.execDetached(["rm", "-f", path, recordPath(path)]);
+        else Quickshell.execDetached(["rm", "-f", path]);
     }
 
     /** Starts one bounded download. The request stays with its result. */
     function download(request: var): void {
         feedDownload.createObject(root, { request: request });
+    }
+
+    property var freshening: ({})
+
+    /** The compact record file that goes with a subscription's .ics file. */
+    function recordPath(icsPath: string): string {
+        return icsPath.replace(/\.ics$/, ".json");
+    }
+
+    /** True when a path is the compact record file of a subscription. */
+    function isRecordFile(path: string): bool {
+        return path.indexOf(root.folder + "/subscriptions/") === 0;
+    }
+
+    /**
+     * Starts reading one calendar file. A subscription first gets its records
+     * made again from its .ics file, so a changed system time zone or a newer
+     * .ics file never leaves old clock times. Reading waits for that.
+     */
+    function openReader(path: string): void {
+        if (!isRecordFile(path)) { calendarPaths.append({ filePath: path }); return; }
+        if (freshening[path]) return;
+        freshening[path] = true;
+        recordFreshener.createObject(root, { jsonPath: path });
     }
 
     /** Rechecks the folder after a watch change or the slow safety check. */
@@ -76,7 +110,7 @@ Scope {
             if (!wanted[calendarPaths.get(row).filePath]) calendarPaths.remove(row);
         var present = {};
         for (var p = 0; p < calendarPaths.count; p++) present[calendarPaths.get(p).filePath] = true;
-        for (var path in wanted) if (!present[path]) calendarPaths.append({ filePath: path });
+        for (var path in wanted) if (!present[path]) openReader(path);
     }
 
     Component { id: importReader; FileView { blockLoading: true; printErrors: false } }
@@ -97,7 +131,7 @@ Scope {
         model: calendarPaths
         delegate: FileView {
             required property string filePath
-            readonly property bool isLink: filePath.indexOf(root.folder + "/subscriptions/") === 0
+            readonly property bool isLink: root.isRecordFile(filePath)
             path: filePath
             watchChanges: true
             preload: !isLink
@@ -107,13 +141,31 @@ Scope {
             Component.onCompleted: if (isLink) readLink()
             function readLink(): void {
                 var content = root.readNow(filePath);
-                root.read(filePath, content === null ? "" : content, content === null);
+                root.read(filePath, content === null ? "" : content, content === null || content === "");
             }
             onLoaded: root.read(filePath, text(), false)
             onLoadFailed: root.read(filePath, "", true)
             onFileChanged: {
                 if (isLink) readLink();
                 else reload();
+            }
+        }
+    }
+
+    Component {
+        id: recordFreshener
+        Process {
+            required property string jsonPath
+            running: true
+            command: ["sh", "-c",
+                '[ -f "$2" ] || exit 0; [ -x "$1" ] || exit ' + root.exitParserMissing + '; "$1" "$2" "$3"',
+                "sh", root.parser, jsonPath.replace(/\.json$/, ".ics"), jsonPath]
+            onExited: (code, status) => {
+                delete root.freshening[jsonPath];
+                if (code === root.exitParserMissing) root.parserMissing();
+                else if (code !== 0) root.convertFailed(jsonPath);
+                if (root.paths.indexOf(jsonPath) >= 0) calendarPaths.append({ filePath: jsonPath });
+                destroy();
             }
         }
     }
@@ -168,20 +220,20 @@ Scope {
         onTriggered: root.checkFolder()
     }
 
-    // One curl per request. Exit code 63 means the feed exceeds 10 MB.
+    // Download and convert in a child process. No ICS text enters QML.
     Component {
         id: feedDownload
         Process {
             id: download
             required property var request
             running: true
-            command: ["sh", "-c",
-                't=$(mktemp) || exit 1; curl -fsSL --max-time 15 --max-filesize 10485760 -o "$t" "$1" || { c=$?; rm -f "$t"; exit $c; }; ' +
-                '[ "$(wc -c <"$t")" -gt 10485760 ] && { rm -f "$t"; exit 63; }; cat "$t"; rm -f "$t"',
-                "sh", request.url]
-            stdout: StdioCollector { id: downloadedText }
+            command: ["sh", Quickshell.shellPath("scripts/feed-download.sh"), request.url, root.parser,
+                request.purpose === "check" ? "" : root.folder + "/subscriptions/" + request.calendarId,
+                root.folder + "/subscriptions",
+                String(root.exitParserMissing), String(root.exitNotCalendar), String(root.exitSaveFailed)]
+            stdout: StdioCollector { id: outputPath }
             onExited: (code, status) => {
-                root.downloaded(download.request, code, downloadedText.text);
+                root.downloaded(download.request, code, outputPath.text.trim());
                 download.destroy();
             }
         }
