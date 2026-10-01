@@ -20,7 +20,7 @@ import qs.notifications
  *
  * Views read Calendar.itemsOn(date) or Calendar.itemsInMonth(year, month) inside
  * a binding. Both read `revision`, so the binding runs again after every change.
- * Results are cached per month until the next change: do not edit the arrays.
+ * Up to three months are cached until the next change: do not edit the arrays.
  * The same event in several calendars shows once (see CalendarIcs.js): the copy
  * of the calendar added first, or the copy with its own color. It has `alsoIn`
  * and `alsoInIds`.
@@ -75,20 +75,23 @@ Singleton {
         void root.revision;
         var id = year * 12 + month;
         if (!_cache[id]) {
-            var days = Ics.itemsInMonth(_projection.items, year, month, _projection.names);
+            var days = Ics.storedItemsInMonth(_projection, year, month);
             for (var day in days) days[day] = days[day].map(Ics.withItemIdentity);
             _cache[id] = days;
+            _cacheOrder.push(id);
+            if (_cacheOrder.length > 3) delete _cache[_cacheOrder.shift()];
         }
         return _cache[id];
     }
 
-    /** The stored item (with every rule field, its own `color`, `calendarId` and `readOnly`) for the edit form, or null. */
+    /** The selected item for the detail form, or null. Editable items keep their full document fields. */
     function getItem(uid: string): var {
         void root.revision;
         var found = _locate(uid, false);
         if (!found) return null;
-        var item = found.doc.items[found.index];
-        var meta = _calendars[item.calendarId];
+        var item = found.doc ? found.doc.items[found.index] : Ics.expandCompactItem(found.meta.records[found.index]);
+        if (!found.doc) { item.calendarId = found.meta.id; item.readOnly = true; }
+        var meta = found.meta;
         return Ics.withItemIdentity(Ics.withColorOverride(item, meta ? meta.colorOverrides : null));
     }
 
@@ -104,7 +107,8 @@ Singleton {
         var clear = color === null || color === undefined || color === "";
         var clean = clear ? "" : Ics.cleanColor(color);
         if (!clear && !clean) return false;
-        var item = found.doc.items[found.index];
+        var item = found.doc ? found.doc.items[found.index] : Ics.expandCompactItem(found.meta.records[found.index]);
+        if (!found.doc) { item.calendarId = found.meta.id; item.readOnly = true; }
         if (!item.readOnly) return update(uid, { color: clean || "accent" });
         var meta = _calendars[item.calendarId];
         if (!meta) return false;
@@ -236,6 +240,7 @@ Singleton {
         var meta = _addCalendar("f-" + Ics.shortHash(file), "file", Ics.calendarName(doc) || stem, file, "", color);
         meta.document = doc;
         meta.text = text;
+        meta.signature = text.length + ":" + Ics.shortHash(text);
         meta.loaded = true;
         _finishAdd();
         lastImportDuplicates = duplicates;
@@ -338,11 +343,12 @@ Singleton {
 
     // ---- storage
 
-    // One calendar owns its metadata, document, text, path and current read state.
+    // Editable calendars keep documents and text; links keep compact records.
     property var _calendars: ({})
     property var _order: []
-    property var _projection: ({ calendars: [], items: [], reminders: [], names: {}, itemPaths: {} })
+    property var _projection: ({ calendars: [], sources: [], reminders: [], names: {} })
     property var _cache: ({})
+    property var _cacheOrder: []
     property bool _stateRead: false
     property int _nextSubscription: 0
 
@@ -367,11 +373,13 @@ Singleton {
         var out = [];
         for (var c = 0; c < _order.length; c++) {
             var id = _order[c];
-            var doc = _calendars[id].document;
-            if (!doc) continue;
-            for (var i = 0; i < doc.items.length; i++) {
+            var meta = _calendars[id];
+            var doc = meta.document;
+            var items = doc ? doc.items : meta.records || [];
+            for (var i = 0; i < items.length; i++) {
                 var copy = {};
-                for (var k in doc.items[i]) copy[k] = doc.items[i][k];
+                var item = doc ? items[i] : Ics.expandCompactItem(items[i]);
+                for (var k in item) copy[k] = item[k];
                 copy.calendarId = id;
                 out.push(copy);
             }
@@ -386,15 +394,13 @@ Singleton {
 
     /** The item and its file, or null. Items of link calendars are found only for reading. */
     function _locate(uid: string, forEdit: bool): var {
-        var path = _projection.itemPaths[uid];
-        if (!path) return null;
         var identity = Ics.itemIdentity(uid);
         var meta = identity ? _calendars[identity.calendarId] : null;
         if (!meta || forEdit && meta.kind === "link") return null;
         var doc = meta.document;
-        if (!doc) return null;
-        var index = Ics.itemIndex(doc.items, uid, forEdit);
-        return index < 0 ? null : { path: path, doc: doc, index: index };
+        var items = doc ? doc.items : meta.records || [];
+        var index = items.findIndex(function (item) { return (doc ? item.uid : item[0]) === identity.uid; });
+        return index < 0 ? null : { path: meta.path, doc: doc, meta: meta, index: index };
     }
 
     function _idOfPath(path: string): string {
@@ -417,7 +423,7 @@ Singleton {
     function _newMeta(id: string, kind: string, name: string, file: string, color): var {
         return { id: id, kind: kind, name: name, color: kind === "local" ? "accent" : Ics.newCalendarColor(color, _usedColors()),
             hidden: false, url: "", file: file, updatedAt: 0, colorOverrides: ({}),
-            path: dir + "/" + file, document: null, text: "", error: "", refreshing: false, loaded: false };
+            path: dir + "/" + file, document: null, records: null, text: "", signature: "", error: "", refreshing: false, loaded: false };
     }
 
     function _addCalendar(id: string, kind: string, name: string, file: string, url: string, color): var {
@@ -440,8 +446,9 @@ Singleton {
 
     // Replace every derived list together before notifying the views.
     function _rebuild(): void {
-        var projection = Ics.projectCalendars(_order.map(function (id) { return _calendars[id]; }));
+        var projection = Ics.projectStoredCalendars(_order.map(function (id) { return _calendars[id]; }));
         _cache = ({});
+        _cacheOrder = [];
         _projection = projection;
         revision++;
     }
@@ -455,13 +462,23 @@ Singleton {
         var id = _idOfPath(path);
         if (!id) return;
         var calendar = _calendars[id];
-        if (!calendar.document || !failed && calendar.text !== text) {
-            calendar.document = Ics.readCalendar(text, _localZone);
-            calendar.text = text;
-            if (!calendar.name) {
-                calendar.name = Ics.calendarName(calendar.document) || calendar.file.replace(/\.ics$/i, "");
-                _saveState();
+        var signature = text.length + ":" + Ics.shortHash(text);
+        if ((!calendar.document && !calendar.records) || !failed && calendar.signature !== signature) {
+            var unnamed = !calendar.name;
+            if (calendar.kind === "link") {
+                var parsed = Ics.readCompactCalendar(text, _localZone);
+                calendar.records = parsed.records;
+                calendar.signature = signature;
+                if (unnamed) calendar.name = parsed.name || calendar.file.replace(/\.ics$/i, "");
+            } else {
+                calendar.document = Ics.readCalendar(text, _localZone);
+                calendar.text = text;
+                calendar.signature = signature;
             }
+            if (unnamed && calendar.kind !== "link") {
+                calendar.name = Ics.calendarName(calendar.document) || calendar.file.replace(/\.ics$/i, "");
+            }
+            if (unnamed) _saveState();
             _rebuild();
         }
         calendar.loaded = true;
@@ -492,6 +509,7 @@ Singleton {
         var written = _write(path, nextText, calendar.text, "Could not save " + calendar.name);
         if (written.saved) {
             calendar.text = written.text;
+            calendar.signature = written.text.length + ":" + Ics.shortHash(written.text);
             calendar.loaded = true;
         } else {
             calendar.document = Ics.readCalendar(written.text, _localZone);
@@ -511,10 +529,11 @@ Singleton {
 
     function _downloaded(purpose: string, shownUrl: string, url: string, id: string, code: int, text: string, color: string, requestId: int): void {
         var error = code !== 0 ? Ics.curlError(code) : Ics.looksLikeCalendar(text) ? "" : "Not a calendar feed";
-        var doc = error ? null : Ics.readCalendar(text, _localZone);
-        var name = doc ? Ics.calendarName(doc) || Ics.linkHost(url) : "";
+        var doc = error ? null : Ics.readCompactCalendar(text, _localZone);
+        var name = doc ? doc.name || Ics.linkHost(url) : "";
         if (purpose === "check") {
-            linkChecked(shownUrl, !error, name, doc ? doc.items.length : 0, error, doc ? Ics.countDuplicates(doc.items, _existingItems()) : 0);
+            var candidates = doc ? doc.records.map(Ics.expandCompactItem) : [];
+            linkChecked(shownUrl, !error, name, candidates.length, error, doc ? Ics.countDuplicates(candidates, _existingItems()) : 0);
         } else if (purpose === "subscribe") {
             if (error) { subscribed(shownUrl, "", error, requestId); return; }
             if (_calendars[id]) { subscribed(shownUrl, id, "", requestId); return; }
@@ -522,8 +541,8 @@ Singleton {
             var written = _write(path, text, "", "Could not save calendar");
             if (!written.saved) { subscribed(shownUrl, "", written.error, requestId); return; }
             var calendar = _addCalendar(id, "link", name, "subscriptions/" + id + ".ics", url, color);
-            calendar.document = doc;
-            calendar.text = text;
+            calendar.records = doc.records;
+            calendar.signature = text.length + ":" + Ics.shortHash(text);
             calendar.loaded = true;
             _finishAdd();
             subscribed(shownUrl, id, "", requestId);
@@ -537,11 +556,11 @@ Singleton {
                 var cache = dir + "/" + meta.file;
                 files.write(cache, text, function (ok, writeError) {
                     if (ok) {
-                        meta.document = doc;
-                        meta.text = text;
+                        meta.records = doc.records;
+                        meta.signature = text.length + ":" + Ics.shortHash(text);
                         meta.loaded = true;
                         meta.error = "";
-                        meta.colorOverrides = Ics.pruneColorOverrides(meta.colorOverrides, doc.items);
+                        meta.colorOverrides = Ics.pruneRecordColorOverrides(meta.colorOverrides, doc.records);
                         meta.updatedAt = Date.now();
                         _saveState();
                     } else {
@@ -586,7 +605,7 @@ Singleton {
             meta[s.id] = { id: s.id, kind: s.kind, name: String(s.name || ""), color: Ics.cleanColor(s.color) || "accent",
                 hidden: !!s.hidden, url: s.kind === "link" ? String(s.url || "") : "", file: s.file, updatedAt: +s.updatedAt || 0,
                 colorOverrides: s.kind === "link" ? Ics.pruneColorOverrides(s.colorOverrides, null) : ({}),
-                path: dir + "/" + s.file, document: null, text: "", error: "", refreshing: false, loaded: false };
+                path: dir + "/" + s.file, document: null, records: null, text: "", signature: "", error: "", refreshing: false, loaded: false };
             order.push(s.id);
         }
         meta.berri = local;

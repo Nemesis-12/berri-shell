@@ -374,6 +374,75 @@ function readCalendar(text, localZone) {
     return cal;
 }
 
+/** Read a subscription one content line at a time. Keep only fields used by views. */
+function readCompactCalendar(text, localZone) {
+    var records = [];
+    var name = "";
+    var stack = [];
+    var event = null;
+    var child = null;
+    function accept(line) {
+        var upper = line.toUpperCase();
+        if (upper.indexOf("BEGIN:") === 0) {
+            var part = upper.slice(6);
+            stack.push(part);
+            if (stack.length === 2 && stack[0] === "VCALENDAR" && (part === "VEVENT" || part === "VTODO"))
+                event = { name: part, props: [], children: [] };
+            else if (stack.length === 3 && event && part === "VALARM")
+                child = { name: part, props: [], children: [] };
+            return;
+        }
+        if (upper.indexOf("END:") === 0) {
+            if (stack.length === 3 && child) {
+                event.children.push(child);
+                child = null;
+            } else if (stack.length === 2 && event) {
+                if (!event.props.some(function (p) { return p.name === "RECURRENCE-ID"; }))
+                    records.push(compactItem(parseItem(event, localZone)));
+                event = null;
+            }
+            stack.pop();
+            return;
+        }
+        if (stack.length === 1 && !name && /^X-WR-CALNAME[^:]*:/i.test(line))
+            name = unescapeText(parseLine(line).value).trim();
+        else if (stack.length === 2 && event) event.props.push(parseLine(line));
+        else if (stack.length === 3 && child) child.props.push(parseLine(line));
+    }
+    var pending = "";
+    var start = 0;
+    for (var i = 0; i <= text.length; i++) {
+        if (i !== text.length && text.charAt(i) !== "\r" && text.charAt(i) !== "\n") continue;
+        var line = text.slice(start, i);
+        if (text.charAt(i) === "\r" && text.charAt(i + 1) === "\n") i++;
+        start = i + 1;
+        if (line.charAt(0) === " " || line.charAt(0) === "\t") pending += line.slice(1);
+        else {
+            if (pending) accept(pending);
+            pending = line;
+        }
+    }
+    if (pending) accept(pending);
+    records.sort(function (a, b) { return a[3] < b[3] ? -1 : a[3] > b[3] ? 1 : 0; });
+    return { name: name, records: records };
+}
+
+/** Fixed field order avoids one object and many property names per feed item. */
+function compactItem(item) {
+    return [item.uid, item.kind, item.title, item.date, item.time, item.end, item.endDate,
+        item.color, item.repeat, item.interval, item.byDay.length ? item.byDay : null,
+        item.until, item.count, item.exdates.length ? item.exdates : null,
+        item.doneDates.length ? item.doneDates : null, item.alarmMinutes, item.status];
+}
+
+function expandCompactItem(record) {
+    return { uid: record[0], kind: record[1], title: record[2], date: record[3],
+        time: record[4], end: record[5], endDate: record[6], color: record[7],
+        repeat: record[8], interval: record[9], byDay: record[10] || [],
+        until: record[11], count: record[12], exdates: record[13] || [],
+        doneDates: record[14] || [], alarmMinutes: record[15], status: record[16] };
+}
+
 function icsDate(key) {
     return key.replace(/-/g, "");
 }
