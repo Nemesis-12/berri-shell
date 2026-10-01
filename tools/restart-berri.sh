@@ -1,6 +1,6 @@
 #!/bin/sh
 # Stops the running berri instance and starts it again, detached.
-# Use after editing files: live reload is off (QS_DISABLE_FILE_WATCHER=1).
+# Use after adding or moving QML files; live reload misses those changes.
 # Usage: tools/restart-berri.sh
 
 repo=$(cd "$(dirname "$0")/.." && pwd) || exit 1
@@ -23,5 +23,4 @@ if [ -n "$pids" ]; then
   fi
 fi
 
-QSG_RENDER_LOOP=basic QS_DISABLE_FILE_WATCHER=1 \
-  setsid qs -p "$repo" >/dev/null 2>&1 </dev/null &
+setsid qs -p "$repo" >/dev/null 2>&1 </dev/null &
