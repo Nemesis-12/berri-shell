@@ -9,11 +9,13 @@ github-stats.py. The two lists merge by hash, newest first.
 
 The result is cached in $XDG_CACHE_HOME/berri-shell/commits.json for 10 minutes.
 Output: [{"sha": 7 chars, "message": str, "repo": str, "date": iso8601}, ...]
+With --with-version: {"version": cache file time in milliseconds, "commits": output array}
 """
 import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from recent_answers import answer_path, read_recent_answer, save_answer
@@ -102,12 +104,18 @@ def merged() -> list[dict]:
 
 def main() -> None:
     cached = read_recent_answer(CACHE_PATH, CACHE_FRESH_S) if "--force" not in sys.argv else None
-    if cached is not None:
-        print(cached)
-        return
-    text = json.dumps(merged())
-    save_answer(CACHE_PATH, text)
-    print(text)
+    text = cached
+    if text is None:
+        text = json.dumps(merged())
+        save_answer(CACHE_PATH, text)
+    if "--with-version" in sys.argv:
+        try:
+            version = CACHE_PATH.stat().st_mtime_ns // 1_000_000
+        except OSError:
+            version = int(time.time() * 1000)
+        print(json.dumps({"version": version, "commits": json.loads(text)}))
+    else:
+        print(text)
 
 
 if __name__ == "__main__":

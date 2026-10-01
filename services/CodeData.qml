@@ -8,9 +8,9 @@ import Quickshell.Io
  * Claude and Codex logs, cached 10 minutes); the contribution
  * calendar comes from scripts/github-stats.py (GitHub CLI, cached 30
  * minutes); commits come from scripts/local-commits.py (local git folders
- * merged with the GitHub commits, cached 10 minutes). All scripts answer from their disk cache when it is fresh, so
- * refresh() is cheap. Each open CodeTab calls watch() while it is visible;
- * the timer only runs while at least one tab is watching. Limits are not
+ * merged with the GitHub commits, cached 10 minutes). Each open CodeTab calls
+ * watch() while it is visible. The minute timer updates captions. Each source
+ * has its own refresh timer while at least one tab is watching. Limits are not
  * here: the tab reads them from AgentUsage.
  */
 Singleton {
@@ -41,6 +41,19 @@ Singleton {
     /** Number of tabs that are visible now. */
     property int watchers: 0
 
+    /** Cache ages for local data and GitHub data. */
+    readonly property int localAge: 10 * 60000
+    readonly property int githubAge: 30 * 60000
+
+    /** Start time of the current cache age for each source. */
+    property double statsCheckedAt: 0
+    property double githubCheckedAt: 0
+    property double commitsCheckedAt: 0
+    /** Last answer version shown by each source. */
+    property string statsVersion: ""
+    property string githubVersion: ""
+    property double commitsVersion: 0
+    /** Return the local path of a Code data script. */
     function scriptPath(name) {
         return Quickshell.shellPath("scripts/" + name);
     }
@@ -48,69 +61,144 @@ Singleton {
     /** A tab calls this with true when it shows and with false when it hides. */
     function watch(on) {
         root.watchers = Math.max(0, root.watchers + (on ? 1 : -1));
-        if (on) root.refresh();
+        if (on) {
+            root.now = new Date();
+            root.checkFreshData();
+        } else if (root.watchers === 0) {
+            statsTimer.stop();
+            githubTimer.stop();
+            commitsTimer.stop();
+        }
     }
 
+    /** A user request gets a new answer from every source. */
     function refresh() {
         root.now = new Date();
-        if (!statsProcess.running) statsProcess.running = true;
-        if (!githubProcess.running) githubProcess.running = true;
+        root.startStats(true);
+        root.startGithub(true);
+        root.startCommits(true);
     }
 
-    /** Sets a property only when the value changed, so views do not rebuild for equal data. */
-    function assign(name, value) {
-        if (JSON.stringify(root[name]) !== JSON.stringify(value)) root[name] = value;
+    /** Start old sources, or set their next timer from the saved answer age. */
+    function checkFreshData() {
+        root.checkSource(root.statsCheckedAt, root.localAge, statsTimer, root.startStats);
+        root.checkSource(root.githubCheckedAt, root.githubAge, githubTimer, root.startGithub);
+        if (!githubProcess.running)
+            root.checkSource(root.commitsCheckedAt, root.localAge, commitsTimer, root.startCommits);
+    }
+
+    /** Start one old source or wait until its cache age ends. */
+    function checkSource(checkedAt, age, timer, start) {
+        if (root.watchers === 0) return;
+        if (Date.now() - checkedAt >= age) start();
+        else root.scheduleSource(timer, checkedAt, age);
+    }
+
+    /** Set a source timer to the time left in its cache age. */
+    function scheduleSource(timer, checkedAt, age) {
+        if (root.watchers === 0) return;
+        timer.interval = Math.max(1, age - (Date.now() - checkedAt));
+        timer.restart();
+    }
+
+    /** Keep a fresh disk answer's age; retry an old offline answer after one age. */
+    function cacheAgeStart(savedAt, age) {
+        var time = Date.now();
+        return savedAt > time - age && savedAt <= time ? savedAt : time;
+    }
+
+    /** Ask the local statistics source for data. */
+    function startStats(force) {
+        if (statsProcess.running) return;
+        statsTimer.stop();
+        root.statsCheckedAt = Date.now();
+        statsProcess.command = ["python3", root.scriptPath("code-stats.py")].concat(force ? ["--force"] : []);
+        statsProcess.running = true;
+    }
+
+    /** Ask GitHub for contribution data. */
+    function startGithub(force) {
+        if (githubProcess.running) return;
+        githubTimer.stop();
+        root.githubCheckedAt = Date.now();
+        githubProcess.command = ["python3", root.scriptPath("github-stats.py")].concat(force ? ["--force"] : []);
+        githubProcess.running = true;
+    }
+
+    /** Ask the commits source for data. */
+    function startCommits(force) {
+        if (commitsProcess.running) return;
+        commitsTimer.stop();
+        root.commitsCheckedAt = Date.now();
+        commitsProcess.command = ["python3", root.scriptPath("local-commits.py"), "--with-version"]
+            .concat(force ? ["--force"] : []);
+        commitsProcess.running = true;
     }
 
     Process {
         id: statsProcess
-        command: ["python3", root.scriptPath("code-stats.py")]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
                 try {
                     var data = JSON.parse(text);
-                    root.assign("days", data.days);
-                    root.assign("models", data.models);
-                    root.assign("usage", data.usage || {});
+                    root.statsCheckedAt = root.cacheAgeStart(Date.parse(data.generatedAt), root.localAge);
+                    if (data.generatedAt !== root.statsVersion) {
+                        root.statsVersion = data.generatedAt;
+                        root.days = data.days;
+                        root.models = data.models;
+                        root.usage = data.usage || {};
+                    }
                 } catch (e) {
                     // Empty or bad output: keep what the tab shows now.
                 }
+                root.scheduleSource(statsTimer, root.statsCheckedAt, root.localAge);
             }
         }
     }
 
     Process {
         id: githubProcess
-        command: ["python3", root.scriptPath("github-stats.py")]
+        onExited: {
+            // Commits include GitHub data, so rebuild them after its cache changes.
+            if (root.watchers > 0) root.startCommits();
+        }
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
                 try {
                     var data = JSON.parse(text);
-                    root.assign("calendar", data.days);
-                    root.calendarTotal = data.total;
-                    root.assign("calendarYears", data.years || []);
+                    root.githubCheckedAt = root.cacheAgeStart(Date.parse(data.fetchedAt), root.githubAge);
+                    if (data.fetchedAt !== root.githubVersion) {
+                        root.githubVersion = data.fetchedAt;
+                        root.calendar = data.days;
+                        root.calendarTotal = data.total;
+                        root.calendarYears = data.years || [];
+                    }
                 } catch (e) {
                     // Offline with no cache: keep what the tab shows now.
                 }
-                // Commits merge the GitHub cache, so they run after it.
-                if (!commitsProcess.running) commitsProcess.running = true;
+                root.scheduleSource(githubTimer, root.githubCheckedAt, root.githubAge);
             }
         }
     }
 
     Process {
         id: commitsProcess
-        command: ["python3", root.scriptPath("local-commits.py")]
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
                 try {
-                    root.assign("commits", JSON.parse(text));
+                    var data = JSON.parse(text);
+                    root.commitsCheckedAt = root.cacheAgeStart(data.version, root.localAge);
+                    if (data.version !== root.commitsVersion) {
+                        root.commitsVersion = data.version;
+                        root.commits = data.commits;
+                    }
                 } catch (e) {
                     // Empty or bad output: keep what the tab shows now.
                 }
+                root.scheduleSource(commitsTimer, root.commitsCheckedAt, root.localAge);
             }
         }
     }
@@ -119,9 +207,21 @@ Singleton {
         interval: 60000
         running: root.watchers > 0
         repeat: true
-        onTriggered: {
-            root.now = new Date();
-            root.refresh();
-        }
+        onTriggered: root.now = new Date()
+    }
+
+    Timer {
+        id: statsTimer
+        onTriggered: root.startStats()
+    }
+
+    Timer {
+        id: githubTimer
+        onTriggered: root.startGithub()
+    }
+
+    Timer {
+        id: commitsTimer
+        onTriggered: if (!githubProcess.running) root.startCommits()
     }
 }
