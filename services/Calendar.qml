@@ -399,7 +399,7 @@ Singleton {
         if (!meta || forEdit && meta.kind === "link") return null;
         var doc = meta.document;
         var items = doc ? doc.items : meta.records || [];
-        var index = items.findIndex(function (item) { return (doc ? item.uid : item[0]) === identity.uid; });
+        var index = items.findIndex(function (item) { return (doc ? item : Ics.expandCompactItem(item)).uid === identity.uid; });
         return index < 0 ? null : { path: meta.path, doc: doc, meta: meta, index: index };
     }
 

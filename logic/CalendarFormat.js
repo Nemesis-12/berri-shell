@@ -424,10 +424,14 @@ function readCompactCalendar(text, localZone) {
     }
     if (pending) accept(pending);
     records.sort(function (a, b) { return a[3] < b[3] ? -1 : a[3] > b[3] ? 1 : 0; });
-    return { name: name, records: records };
+    // JSON makes one independent string per event. Parsed fields can refer to
+    // slices of the complete feed text, which would otherwise stay in memory.
+    return { name: name, records: records.map(function (record) {
+        return (record[3] || "0000-00-00") + "\t" + JSON.stringify(record);
+    }) };
 }
 
-/** Fixed field order avoids one object and many property names per feed item. */
+/** Fixed field order for the stored event text. */
 function compactItem(item) {
     return [item.uid, item.kind, item.title, item.date, item.time, item.end, item.endDate,
         item.color, item.repeat, item.interval, item.byDay.length ? item.byDay : null,
@@ -436,6 +440,7 @@ function compactItem(item) {
 }
 
 function expandCompactItem(record) {
+    if (typeof record === "string") record = JSON.parse(record.slice(11));
     return { uid: record[0], kind: record[1], title: record[2], date: record[3],
         time: record[4], end: record[5], endDate: record[6], color: record[7],
         repeat: record[8], interval: record[9], byDay: record[10] || [],

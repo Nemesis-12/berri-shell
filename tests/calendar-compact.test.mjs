@@ -12,8 +12,8 @@ test("streamed subscription records give the same month as a full parse", () => 
   const full = ics.readCalendar(text);
   const compact = ics.readCompactCalendar(text);
   assert.equal(compact.records.length, full.items.length);
-  assert.equal(compact.records.every(Array.isArray), true);
-  assert.equal(compact.records.every((record) => record.length === 17), true);
+  assert.equal(compact.records.every((record) => typeof record === "string"), true);
+  assert.equal(compact.records.every((record) => record.startsWith("20") && record[10] === "\t"), true);
   const feed = { id: "feed", name: "Feed", kind: "link", color: "blue", hidden: false,
     url: "https://example.test/cal", records: compact.records, colorOverrides: {} };
   const projected = ics.projectStoredCalendars([feed]);
@@ -62,8 +62,8 @@ test("folded title, alarm, and month span match the editable parser", () => {
     assert.deepEqual(plain(ics.storedItemsInMonth(stored, 2026, month)),
       plain(ics.itemsInMonth(items, 2026, month, stored.names)));
   }
-  assert.equal(compact.records[0][2], "Long calendar item");
-  assert.equal(compact.records[0][15], 10);
+  assert.equal(ics.expandCompactItem(compact.records[0]).title, "Long calendar item");
+  assert.equal(ics.expandCompactItem(compact.records[0]).alarmMinutes, 10);
 });
 
 test("editable document keeps unknown fields through an edit and save", () => {

@@ -12,6 +12,7 @@ Scope {
     property var paths: []
     property bool folderReady: false
     property var removedPaths: ({})
+    property var readLinks: ({})
     property bool listingAgain: false
 
     signal listed(var paths)
@@ -72,11 +73,20 @@ Scope {
     onPathsChanged: {
         var wanted = {};
         for (var i = 0; i < paths.length; i++) wanted[paths[i]] = true;
+        for (var oldPath in readLinks) if (!wanted[oldPath]) delete readLinks[oldPath];
         for (var row = calendarPaths.count - 1; row >= 0; row--)
             if (!wanted[calendarPaths.get(row).filePath]) calendarPaths.remove(row);
         var present = {};
         for (var p = 0; p < calendarPaths.count; p++) present[calendarPaths.get(p).filePath] = true;
-        for (var path in wanted) if (!present[path]) calendarPaths.append({ filePath: path });
+        for (var path in wanted) {
+            if (path.indexOf(root.folder + "/subscriptions/") === 0) {
+                if (!readLinks[path]) {
+                    readLinks[path] = true;
+                    var text = root.readNow(path);
+                    root.read(path, text === null ? "" : text, text === null);
+                }
+            } else if (!present[path]) calendarPaths.append({ filePath: path });
+        }
     }
 
     Component { id: importReader; FileView { blockLoading: true; printErrors: false } }

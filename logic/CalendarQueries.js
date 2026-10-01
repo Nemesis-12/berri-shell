@@ -235,7 +235,7 @@ function pruneColorOverrides(overrides, items) {
 
 function pruneRecordColorOverrides(overrides, records) {
     var live = {};
-    for (var i = 0; i < records.length; i++) live[records[i][0]] = true;
+    for (var i = 0; i < records.length; i++) live[Format.expandCompactItem(records[i]).uid] = true;
     var out = {};
     for (var uid in overrides || {}) {
         var color = Items.cleanColor(overrides[uid]);
@@ -319,10 +319,10 @@ function storedItemsInMonth(projection, year, month) {
         var records = feed.records;
         for (var i = 0; i < records.length; i++) {
             var r = records[i];
-            if (r[3] > last) break;
-            if (r[8] === "none" && (r[6] || r[3]) < first) continue;
-            if (r[8] !== "none" && r[11] && r[11] < first) continue;
+            if (r.slice(0, 10) > last) break;
             var item = Format.expandCompactItem(r);
+            if (item.repeat === "none" && (item.endDate || item.date) < first) continue;
+            if (item.repeat !== "none" && item.until && item.until < first) continue;
             item.calendarId = feed.id;
             item.readOnly = true;
             var own = Items.cleanColor(feed.colorOverrides && feed.colorOverrides[item.uid]);
