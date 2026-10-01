@@ -2,6 +2,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import "../logic/CalendarIcs.js" as Ics
+import "../logic/CalendarSave.js" as Save
 import "../logic/Times.js" as Times
 import qs.common
 import qs.notifications
@@ -55,6 +56,10 @@ Singleton {
     signal linkChecked(string url, bool ok, string name, int eventCount, string error, int duplicateCount)
     /** Subscribe finished. requestId identifies the call; id is the calendar id or empty on error. */
     signal subscribed(string url, string id, string error, int requestId)
+    /** A calendar edit could not be saved and was undone. */
+    signal saveFailed(string message)
+    /** True while a Calendar tab shows `saveFailed` messages. The tab sets it. When false, the notifier shows them as a desktop notification. */
+    property bool saveErrorShown: false
 
     // ---- queries
 
@@ -115,19 +120,18 @@ Singleton {
 
     // ---- changes. Each one saves the file and bumps revision.
 
-    /** Adds an item to berri.ics, or to the file calendar in `calendarId` (fields as in CalendarIcs.js, at least date; `color` is a preset key or "#rrggbb", default "accent"). Returns its uid. */
-    function add(fields: var): string {
+    /** Adds an item to berri.ics, or to the file calendar in `calendarId` (fields as in CalendarIcs.js, at least date; `color` is a preset key or "#rrggbb", default "accent"). Returns true when the item is saved. */
+    function add(fields: var): bool {
         var path = defaultPath;
         var target = fields.calendarId ? _calendars[fields.calendarId] : null;
-        if (fields.calendarId && (!target || target.kind === "link")) return "";
+        if (fields.calendarId && (!target || target.kind === "link")) return false;
         if (target) path = dir + "/" + target.file;
         var calendar = target || _calendars.berri;
         var doc = calendar.document || Ics.emptyCalendar();
         var item = Ics.makeItem(_cleanDates(fields));
         doc.items.push(item);
         calendar.document = doc;
-        _commit(path);
-        return Ics.itemKey(target ? target.id : "berri", item.uid);
+        return _commit(path);
     }
 
     /** Changes fields of the whole item (all occurrences of a repeating one). */
@@ -135,8 +139,7 @@ Singleton {
         var found = _locate(uid, true);
         if (!found) return false;
         found.doc.items[found.index] = Ics.applyChanges(found.doc.items[found.index], _cleanDates(changes));
-        _commit(found.path);
-        return true;
+        return _commit(found.path);
     }
 
     /** Deletes an item, or only one occurrence when occurrenceDate is given for a repeating item. */
@@ -148,8 +151,7 @@ Singleton {
         var kept = day ? Ics.withoutOccurrence(item, day) : null;
         if (kept) found.doc.items[found.index] = kept;
         else found.doc.items.splice(found.index, 1);
-        _commit(found.path);
-        return true;
+        return _commit(found.path);
     }
 
     /** Ticks an item off. For a repeating item only that occurrence (occurrenceDate). */
@@ -158,8 +160,7 @@ Singleton {
         if (!found) return false;
         var item = found.doc.items[found.index];
         found.doc.items[found.index] = Ics.withDone(item, _optionalKey(occurrenceDate) || item.date, done);
-        _commit(found.path);
-        return true;
+        return _commit(found.path);
     }
 
     /**
@@ -173,8 +174,7 @@ Singleton {
         var moved = Ics.moveOccurrence(found.doc.items[found.index], Ics.toKey(fromDate), Ics.toKey(toDate), _cleanDates(changes || {}));
         found.doc.items[found.index] = moved.item;
         if (moved.created) found.doc.items.push(moved.created);
-        _commit(found.path);
-        return true;
+        return _commit(found.path);
     }
 
     /**
@@ -230,12 +230,13 @@ Singleton {
         for (var n = 2; _fileTaken(file); n++) file = stem + "-" + n + ".ics";
         var doc = Ics.readCalendar(text, _localZone);
         var duplicates = Ics.countDuplicates(doc.items, _existingItems());
-        var meta = _addCalendar("f-" + Ics.shortHash(file), "file", Ics.calendarName(doc) || stem, file, "", color);
         var dest = dir + "/" + file;
+        var written = _write(dest, text, "", "Could not import calendar");
+        if (!written.saved) { lastError = written.error; return ""; }
+        var meta = _addCalendar("f-" + Ics.shortHash(file), "file", Ics.calendarName(doc) || stem, file, "", color);
         meta.document = doc;
         meta.text = text;
         meta.loaded = true;
-        files.write(dest, text);
         _finishAdd();
         lastImportDuplicates = duplicates;
         return meta.id;
@@ -311,15 +312,20 @@ Singleton {
         var meta = _calendars[id];
         var clean = Ics.cleanColor(color);
         if (!meta || meta.kind === "local" || !clean) return false;
+        var previousColor = meta.color;
         meta.color = clean;
         var path = dir + "/" + meta.file;
         var doc = meta.document;
         var fileChanged = false;
         if (meta.kind === "link") meta.colorOverrides = ({});
         else if (doc) fileChanged = Ics.clearItemColors(doc.items) > 0;
+        if (fileChanged && !_commit(path)) {
+            meta.color = previousColor;
+            _rebuild();
+            return false;
+        }
         _saveState();
-        if (fileChanged) _commit(path);
-        else _rebuild();
+        if (!fileChanged) _rebuild();
         return true;
     }
 
@@ -462,12 +468,38 @@ Singleton {
         _checkReady();
     }
 
-    function _commit(path: string): void {
+    /**
+     * Writes one file and returns `Save.writeOutcome`. CalendarFiles sets
+     * `blockWrites`, so the write finishes and reports before it returns and the
+     * result is known here.
+     */
+    function _write(path: string, nextText: string, previousText: string, failurePrefix: string): var {
+        var outcome = null;
+        files.write(path, nextText, function (ok, error) {
+            outcome = Save.writeOutcome(ok, error, failurePrefix, previousText, nextText);
+        });
+        return outcome;
+    }
+
+    /**
+     * Saves a changed calendar document. On a failed write the document goes
+     * back to the text before the edit, the views rebuild, and `saveFailed`
+     * and `lastError` carry the error. Returns whether the file was saved.
+     */
+    function _commit(path: string): bool {
         var calendar = _calendars[_idOfPath(path)];
-        calendar.text = Ics.writeCalendar(calendar.document, _localZone);
-        calendar.loaded = true;
+        var nextText = Ics.writeCalendar(calendar.document, _localZone);
+        var written = _write(path, nextText, calendar.text, "Could not save " + calendar.name);
+        if (written.saved) {
+            calendar.text = written.text;
+            calendar.loaded = true;
+        } else {
+            calendar.document = Ics.readCalendar(written.text, _localZone);
+        }
+        lastError = written.error;
         _rebuild();
-        files.write(path, calendar.text);
+        if (!written.saved) saveFailed(written.error);
+        return written.saved;
     }
 
     // ---- downloads
@@ -486,12 +518,13 @@ Singleton {
         } else if (purpose === "subscribe") {
             if (error) { subscribed(shownUrl, "", error, requestId); return; }
             if (_calendars[id]) { subscribed(shownUrl, id, "", requestId); return; }
-            var calendar = _addCalendar(id, "link", name, "subscriptions/" + id + ".ics", url, color);
             var path = dir + "/subscriptions/" + id + ".ics";
+            var written = _write(path, text, "", "Could not save calendar");
+            if (!written.saved) { subscribed(shownUrl, "", written.error, requestId); return; }
+            var calendar = _addCalendar(id, "link", name, "subscriptions/" + id + ".ics", url, color);
             calendar.document = doc;
             calendar.text = text;
             calendar.loaded = true;
-            files.write(path, text);
             _finishAdd();
             subscribed(shownUrl, id, "", requestId);
         } else {
@@ -502,14 +535,19 @@ Singleton {
                 meta.error = error;
             } else {
                 var cache = dir + "/" + meta.file;
-                meta.document = doc;
-                meta.text = text;
-                meta.loaded = true;
-                files.write(cache, text);
-                meta.error = "";
-                meta.colorOverrides = Ics.pruneColorOverrides(meta.colorOverrides, doc.items);
-                meta.updatedAt = Date.now();
-                _saveState();
+                files.write(cache, text, function (ok, writeError) {
+                    if (ok) {
+                        meta.document = doc;
+                        meta.text = text;
+                        meta.loaded = true;
+                        meta.error = "";
+                        meta.colorOverrides = Ics.pruneColorOverrides(meta.colorOverrides, doc.items);
+                        meta.updatedAt = Date.now();
+                        _saveState();
+                    } else {
+                        meta.error = "Could not save calendar: " + writeError;
+                    }
+                });
             }
             _rebuild();
         }

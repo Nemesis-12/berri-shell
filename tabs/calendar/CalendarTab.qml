@@ -37,6 +37,17 @@ Item {
 
     /** True while the calendars view is shown in place of the month grid. */
     property bool showCalendars: false
+    property string saveError: ""
+
+    Binding { target: Calendar; property: "saveErrorShown"; value: root.visible && root.panelOpen }
+
+    Connections {
+        target: Calendar
+        function onSaveFailed(message) { root.saveError = message; }
+        function onRevisionChanged() {
+            if (Calendar.lastError === "") root.saveError = "";
+        }
+    }
 
     /** Asks the host to close the panel first: the file dialog would open under the panel's Overlay window. */
     signal importRequested
@@ -149,11 +160,11 @@ Item {
                 var corner = root.frontGrid.cellOriginOnScene(day);
                 if (corner) target = root.mapFromItem(null, corner.x, corner.y);
             }
-            Calendar.move(root.dragUid, root.dragOccurrenceDate, Times.dayKey(day));
-            root.pick(day);
+            if (Calendar.move(root.dragUid, root.dragOccurrenceDate, Times.dayKey(day))) root.pick(day);
+            else target = null;
             // Into the chip slot of the cell (6px left, 5px number row and gap above).
-            settleX.to = target ? target.x + 6 : ghost.x;
-            settleY.to = target ? target.y + 24 : ghost.y;
+            settleX.to = target ? target.x + 6 : root.dragOrigin.x;
+            settleY.to = target ? target.y + 24 : root.dragOrigin.y;
         } else {
             settleX.to = root.dragOrigin.x;
             settleY.to = root.dragOrigin.y;
@@ -554,6 +565,49 @@ Item {
             font.weight: Font.Medium
             font.letterSpacing: 0.36
             color: Theme.dim
+        }
+    }
+
+    Rectangle {
+        z: 200
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 36
+        color: Theme.raised
+        opacity: root.saveError !== "" ? 1 : 0
+        visible: opacity > 0
+        enabled: root.saveError !== ""
+        Fade on opacity { duration: Theme.stateMs }
+
+        Rectangle {
+            width: 2
+            height: parent.height
+            color: CalendarColors.paletteColor("red", Theme.accent)
+        }
+
+        MonoText {
+            anchors.left: parent.left
+            anchors.leftMargin: 12
+            anchors.right: dismissError.left
+            anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.saveError
+            elide: Text.ElideRight
+            font.pixelSize: 10
+            color: Theme.fg
+        }
+
+        HoverButton {
+            id: dismissError
+            anchors.right: parent.right
+            anchors.rightMargin: 6
+            anchors.verticalCenter: parent.verticalCenter
+            width: 24
+            height: 24
+            icon: "x"
+            iconSize: 13
+            onClicked: root.saveError = ""
         }
     }
 
