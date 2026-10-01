@@ -151,8 +151,8 @@ Item {
 
             Rectangle {
                 height: parent.height
-                // Snapped to device pixels: the window redraws only when the bar grows by a
-                // full pixel (no width animation, which redrew every frame for sub-pixel change).
+                // Snapped to device pixels, no animation.
+                // Redraws only when the snapped width changes.
                 width: PixelGrid.snap(parent.width * (root.length > 0 ? Math.min(1, root.displayPosition / root.length) : 0), root.dpr)
                 color: Theme.accent
             }
