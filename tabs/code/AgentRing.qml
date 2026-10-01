@@ -8,6 +8,7 @@ import qs.common
  * clockwise (butt caps, no rounding). Like UsageRing, but leaves the center
  * mark to the caller (a BrandMark or an Icon) instead of baking one in, so
  * AgentsRings can also stack two of these to make the weekly double ring.
+ * Only large value changes animate.
  */
 Item {
     id: root
@@ -19,6 +20,28 @@ Item {
     property color valueColor: Theme.accent
     /** 0-100. */
     property real value: 0
+    property bool arcReady: false
+
+    function updateArc() {
+        const nextAngle = value * 3.6;
+        const largeChange = Math.abs(nextAngle - valueArc.sweepAngle) >= 36;
+        arcAnimation.stop();
+        arcBehavior.enabled = visible && largeChange;
+        valueArc.sweepAngle = nextAngle;
+    }
+
+    onValueChanged: if (arcReady) updateArc()
+    onVisibleChanged: {
+        if (!arcReady || visible) return;
+        arcAnimation.stop();
+        arcBehavior.enabled = false;
+        valueArc.sweepAngle = value * 3.6;
+    }
+    Component.onCompleted: {
+        arcBehavior.enabled = false;
+        valueArc.sweepAngle = value * 3.6;
+        arcReady = true;
+    }
 
     default property alias content: centerSlot.data
 
@@ -55,16 +78,20 @@ Item {
             ColorFade on strokeColor { duration: Theme.stateMs }
 
             PathAngleArc {
+                id: valueArc
                 centerX: root.size / 2
                 centerY: root.size / 2
                 radiusX: root.radius
                 radiusY: root.radius
                 startAngle: -90
-                sweepAngle: root.value * 3.6
+                sweepAngle: 0
 
                 Behavior on sweepAngle {
+                    id: arcBehavior
+                    enabled: false
                     NumberAnimation {
-                        duration: 600
+                        id: arcAnimation
+                        duration: Theme.stateMs
                         easing.type: Easing.BezierSpline
                         easing.bezierCurve: Theme.standardCurve
                     }
