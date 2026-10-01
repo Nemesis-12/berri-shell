@@ -109,9 +109,9 @@ Item {
                 : Timeline.slice(root.elapsedMs, root.startMs, root.colorMs)
             readonly property real tint: root.closing ? 1 - Theme.easeOut(1 - tintPhase) : Theme.easeOut(tintPhase)
 
-            // While a square and the real spine button are both on screen, the
-            // dashboard slides; the square follows it to stay on the button.
-            readonly property real slideOffset: root.elapsedMs >= root.startMs ? root.dashboardSlide : 0
+            // The dashboard slides while it opens and closes. A square follows it by
+            // the same share as its vertical move, so a square in the bar row is not shifted.
+            readonly property real slideOffset: root.dashboardSlide * drop
 
             x: PixelGrid.snap(rowLeft + (root.spineX - rowLeft) * flight, root.dpr)
             y: PixelGrid.snap(root.rowY + (finalTop - root.rowY) * drop + slideOffset, root.dpr)

@@ -494,25 +494,36 @@ Item {
         }
     }
 
-    // The icon flight sits above pillRect and outside its clip: its row spans
-    // the bar's full open width before the pill has finished widening.
-    IconFlight {
-        id: iconFlight
-        anchors.fill: parent
-        tabs: root.tabs
-        activeTab: root.activeTab
-        elapsedMs: root.elapsedMs
-        closing: root.closing
-        startMs: root.widenMs
-        dpr: root.dpr
-        barHeight: root.pillHeight
-        barCenterX: PixelGrid.snap(root.width / 2, root.dpr)
-        // The spine's left edge and top edge once the pill is at full size (dashboard inset 1px).
-        spineX: barCenterX + root.panelWidth / 2 - 1 - spine.width
-        spineY: 1
-        spineWidth: spine.width
-        buttonSize: spine.buttonSize
-        dashboardSlide: dashboardSlide.y
+    // The icon flight sits above pillRect. It is clipped to the pill's own shape,
+    // so no icon is ever seen outside the bar while the bar narrows or shrinks.
+    Item {
+        x: pillRect.x
+        y: pillRect.y
+        width: pillRect.width
+        height: pillRect.height
+        clip: true
+
+        IconFlight {
+            id: iconFlight
+            x: -parent.x
+            y: -parent.y
+            width: root.width
+            height: root.height
+            tabs: root.tabs
+            activeTab: root.activeTab
+            elapsedMs: root.elapsedMs
+            closing: root.closing
+            startMs: root.widenMs
+            dpr: root.dpr
+            barHeight: root.pillHeight
+            barCenterX: PixelGrid.snap(root.width / 2, root.dpr)
+            // The spine's left edge and top edge once the pill is at full size (dashboard inset 1px).
+            spineX: barCenterX + root.panelWidth / 2 - 1 - spine.width
+            spineY: 1
+            spineWidth: spine.width
+            buttonSize: spine.buttonSize
+            dashboardSlide: dashboardSlide.y
+        }
     }
 
     // ---- Tab bodies, one per entry of `tabs`. ----
