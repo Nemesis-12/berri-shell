@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""Print token totals per day and per model from local Claude Code and Codex logs.
+
+Reads only numeric usage fields, timestamps and model names from
+~/.claude/projects/**/*.jsonl and ~/.codex/sessions/**/*.jsonl. It never reads
+message text and never uses the network. Counted tokens: Claude = input +
+output + cache writes (cache reads are left out); Codex = total tokens minus
+cached input. Cost is an estimate: tokens per model times the list prices in
+data/model-prices.json (input, output, cache writes 5m/1h, cache reads).
+
+The result is cached in $XDG_CACHE_HOME/berri-shell/code-stats.json and reused
+for 10 minutes (pass --force to skip the cache).
+
+Output shape:
+    {"generatedAt": iso8601,
+     "days": [{"date": "YYYY-MM-DD", "claude": int, "codex": int}, ... 7 items, oldest first],
+     "models": {"claude": [{"name": str, "tokens": int}, ...],
+                "codex":  [...]},       # this week (Monday to now), largest first
+     "usage": {"claude": {"today"|"week"|"month": {"tokens": int, "cost": usd}}, "codex": {...}},
+     "unpricedModels": {"claude": [model id], "codex": [...]}}  # tokens counted, no cost
+"""
+import datetime as dt
+import json
+import re
+import sys
+import time
+from pathlib import Path
+
+from recent_answers import answer_path, read_recent_answer, save_answer
+
+CACHE_PATH = answer_path("code-stats.json")
+CACHE_FRESH_S = 10 * 60
+DAY_COUNT = 7
+PRICES_PATH = Path(__file__).resolve().parent.parent / "data" / "model-prices.json"
+
+
+def pretty_model(raw: str) -> str:
+    """"claude-opus-4-1-20250805" -> "Opus 4.1", "gpt-6-sol" -> "GPT-6-Sol"."""
+    if raw.startswith("claude-"):
+        parts = [p for p in raw[7:].split("-") if not re.fullmatch(r"\d{8}", p)]
+        words = [p for p in parts if not p.isdigit()]
+        nums = [p for p in parts if p.isdigit()]
+        return " ".join([" ".join(w.capitalize() for w in words), ".".join(nums)]).strip()
+    return "-".join("GPT" if p == "gpt" else p.capitalize() if p.isalpha() else p for p in raw.split("-"))
+
+
+def local_day(ts: str) -> dt.date | None:
+    try:
+        return dt.datetime.fromisoformat(ts.replace("Z", "+00:00")).astimezone().date()
+    except Exception:
+        return None
+
+
+KINDS = ("input", "output", "cache_write_5m", "cache_write_1h", "cache_read")
+
+
+def counted(k: dict) -> int:
+    """Tokens shown in the tab: everything except cache reads."""
+    return k["input"] + k["output"] + k["cache_write_5m"] + k["cache_write_1h"]
+
+
+def load_prices() -> tuple[dict, dict]:
+    """Load prices and aliases from model-prices.json. Returns (models, aliases)."""
+    try:
+        data = json.loads(PRICES_PATH.read_text(encoding="utf-8"))
+        return data.get("models", {}), data.get("aliases", {})
+    except (OSError, ValueError, KeyError):
+        return {}, {}
+
+
+def price_for(prices: dict, aliases: dict, model: str) -> dict | None:
+    """Price entry: check exact alias match first, then longest prefix."""
+    resolved = aliases.get(model, model)
+    keys = [k for k in prices if resolved.startswith(k)]
+    return prices[max(keys, key=len)] if keys else None
+
+
+def cost_of(k: dict, price: dict) -> float:
+    return sum(k[n] * price[n] for n in KINDS) / 1e6
+
+
+def claude_events(path: Path, first_day: dt.date):
+    """Yields (day, model, kinds) once per assistant message (streamed lines repeat one message id)."""
+    latest = {}
+    with path.open(encoding="utf-8", errors="replace") as f:
+        for line in f:
+            if '"usage"' not in line:
+                continue
+            try:
+                o = json.loads(line)
+                m = o["message"]
+                u = m["usage"]
+                day = local_day(o["timestamp"])
+                model = m.get("model") or ""
+                if o.get("type") != "assistant" or day is None or day < first_day or model.startswith("<"):
+                    continue
+                write = int(u.get("cache_creation_input_tokens") or 0)
+                split = u.get("cache_creation") or {}
+                w1 = int(split.get("ephemeral_1h_input_tokens") or 0)
+                w5 = int(split.get("ephemeral_5m_input_tokens") or 0) if split else write
+                kinds = {
+                    "input": int(u.get("input_tokens") or 0),
+                    "output": int(u.get("output_tokens") or 0),
+                    "cache_write_5m": w5,
+                    "cache_write_1h": w1,
+                    "cache_read": int(u.get("cache_read_input_tokens") or 0),
+                }
+                latest[m.get("id") or o.get("uuid") or line] = (day, model, kinds)
+            except Exception:
+                continue
+    yield from latest.values()
+
+
+def codex_events(path: Path, first_day: dt.date):
+    """Yields (day, model, kinds) per growth of the running session totals."""
+    model = ""
+    prev = {"input": 0, "output": 0, "cache_read": 0}
+    with path.open(encoding="utf-8", errors="replace") as f:
+        for line in f:
+            is_turn = '"turn_context"' in line
+            if not is_turn and '"token_count"' not in line:
+                continue
+            try:
+                o = json.loads(line)
+                p = o["payload"]
+                if is_turn:
+                    model = p.get("model") or model
+                    continue
+                if p.get("type") != "token_count" or not p.get("info"):
+                    continue
+                t = p["info"]["total_token_usage"]
+                cached = int(t.get("cached_input_tokens") or 0)
+                cur = {
+                    "input": int(t.get("input_tokens") or 0) - cached,  # input_tokens includes cached ones
+                    "output": int(t.get("output_tokens") or 0),
+                    "cache_read": cached,
+                }
+                day = local_day(o["timestamp"])
+                delta = {n: max(0, cur[n] - prev[n]) for n in prev}
+                prev = {n: max(prev[n], cur[n]) for n in prev}
+                if day is not None and day >= first_day and any(delta.values()):
+                    yield day, model, {**delta, "cache_write_5m": 0, "cache_write_1h": 0}
+            except Exception:
+                continue
+
+
+def empty_kinds() -> dict:
+    return {n: 0 for n in KINDS}
+
+
+def collect() -> dict:
+    today = dt.date.today()
+    first_day = today - dt.timedelta(days=DAY_COUNT - 1)
+    week_start = today - dt.timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+    oldest = min(first_day, month_start)
+    cutoff = time.mktime(oldest.timetuple())
+    home = Path.home()
+    prices, aliases = load_prices()
+    sources = {
+        "claude": (home / ".claude" / "projects", claude_events),
+        "codex": (home / ".codex" / "sessions", codex_events),
+    }
+    per_day = {(first_day + dt.timedelta(days=i)).isoformat(): {"claude": 0, "codex": 0} for i in range(DAY_COUNT)}
+    per_model = {"claude": {}, "codex": {}}
+    # buckets[agent][bucket][raw model] = kinds
+    buckets = {a: {"today": {}, "week": {}, "month": {}} for a in sources}
+    for agent, (root, events) in sources.items():
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*.jsonl"):
+            try:
+                if path.stat().st_mtime < cutoff:
+                    continue
+                for day, model, kinds in events(path, oldest):
+                    tokens = counted(kinds)
+                    if day >= first_day:
+                        per_day[day.isoformat()][agent] += tokens
+                    if day >= week_start and model:
+                        name = pretty_model(model)
+                        per_model[agent][name] = per_model[agent].get(name, 0) + tokens
+                    for bucket, start in (("today", today), ("week", week_start), ("month", month_start)):
+                        if day >= start:
+                            acc = buckets[agent][bucket].setdefault(model or "unknown", empty_kinds())
+                            for n in KINDS:
+                                acc[n] += kinds[n]
+            except OSError:
+                continue
+    usage = {a: {} for a in sources}
+    unknown = {a: set() for a in sources}
+    for agent, by_bucket in buckets.items():
+        for bucket, by_model in by_bucket.items():
+            total_tokens, total_cost = 0, 0.0
+            for model, kinds in by_model.items():
+                total_tokens += counted(kinds)
+                price = price_for(prices, aliases, model)
+                if price is None:
+                    if counted(kinds) or kinds["cache_read"]:
+                        unknown[agent].add(model)
+                else:
+                    total_cost += cost_of(kinds, price)
+            usage[agent][bucket] = {"tokens": total_tokens, "cost": round(total_cost, 4)}
+    return {
+        "generatedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "days": [{"date": d, **v} for d, v in per_day.items()],
+        "models": {a: [{"name": n, "tokens": t} for n, t in sorted(m.items(), key=lambda kv: -kv[1])]
+                   for a, m in per_model.items()},
+        "usage": usage,
+        "unpricedModels": {a: sorted(u) for a, u in unknown.items()},
+    }
+
+
+def main() -> None:
+    cached = read_recent_answer(CACHE_PATH, CACHE_FRESH_S) if "--force" not in sys.argv else None
+    if cached is not None:
+        print(cached)
+        return
+    text = json.dumps(collect())
+    save_answer(CACHE_PATH, text)
+    print(text)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,225 @@
+import QtQuick
+import QtQuick.Window
+import Quickshell
+import Quickshell.Io
+import qs.common
+import qs.picker
+import qs.services
+
+/**
+ * Profile cell (ticket 13): account picture on the left, username and
+ * uptime on the right. Mirrors the mock's 5C profile row (Berri Dashboard
+ * v2.dc.html, ~line 342). Picture source, in order: AccountsService's icon
+ * for this user, then ~/.face, then a solid Theme.accent square. Both files
+ * are re-checked every minute so a newly added ~/.face appears without a
+ * restart. Uptime comes from /proc/uptime, also refreshed every minute.
+ * Both refresh only while the cell is visible, and once when it shows again.
+ *
+ * Clicking the picture (ticket 13a) opens ImagePicker's portable chooser to
+ * ~/.face, then reloads it at once. Pill closes the panel first via
+ * pictureClicked(), since the panel's own Overlay layer would otherwise sit
+ * above a normal dialog window.
+ */
+Item {
+    id: root
+
+    readonly property string userName: Quickshell.env("USER") || ""
+    readonly property string homePath: Quickshell.env("HOME") || ""
+    readonly property string accountsIconPath: "/var/lib/AccountsService/icons/" + userName
+    readonly property string facePath: homePath + "/.face"
+    readonly property string picturesDirPath: homePath + "/Pictures"
+
+    /** "" means no picture file was found; show the solid fallback square. */
+    property string pictureSource: ""
+    property string uptimeText: ""
+
+    /** Output scale of the screen this cell is on; used to decode images at native sharpness. */
+    readonly property real dpr: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
+
+    /** Click on the picture; Pill closes the panel then calls openPictureChooser(). */
+    signal pictureClicked()
+
+    function openPictureChooser() {
+        picker.open();
+    }
+
+    ImagePicker {
+        id: picker
+        dialogTitle: "Choose Profile Picture"
+        nameFilters: ["Images (*.png *.jpg *.jpeg *.webp)"]
+        startDir: root.picturesDirPath
+        fallbackDir: root.homePath
+        onChosen: (path) => copyToFace.copyFrom(path)
+    }
+
+    Process {
+        id: copyToFace
+
+        function copyFrom(path) {
+            copyToFace.command = ["cp", "-f", path, root.facePath];
+            copyToFace.running = true;
+        }
+
+        onExited: (exitCode) => {
+            if (exitCode === 0) root.reloadFace();
+        }
+    }
+
+    /** Re-points pictureSource at ~/.face with a cache-busting query so the Image reloads at once. */
+    function reloadFace() {
+        root.pictureSource = "file://" + root.facePath + "?" + Date.now();
+    }
+
+    function checkPicture() {
+        accountsIconCheck.running = true;
+    }
+
+    Process {
+        id: accountsIconCheck
+        command: ["test", "-f", root.accountsIconPath]
+        onExited: (exitCode) => {
+            if (exitCode === 0) root.pictureSource = "file://" + root.accountsIconPath;
+            else faceCheck.running = true;
+        }
+    }
+
+    Process {
+        id: faceCheck
+        command: ["test", "-f", root.facePath]
+        onExited: (exitCode) => {
+            root.pictureSource = exitCode === 0 ? ("file://" + root.facePath) : "";
+        }
+    }
+
+    function readUptime() {
+        uptimeProc.running = true;
+    }
+
+    Process {
+        id: uptimeProc
+        command: ["cat", "/proc/uptime"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.uptimeText = root.formatUptime(parseFloat(text))
+        }
+    }
+
+    /** Seconds to "UP <d>D <h>H" (days, once at least 1) or "UP <h>H <m>M". */
+    function formatUptime(seconds) {
+        if (isNaN(seconds)) return "";
+        var totalMinutes = Math.floor(seconds / 60);
+        var days = Math.floor(totalMinutes / 1440);
+        var hours = Math.floor((totalMinutes % 1440) / 60);
+        var minutes = totalMinutes % 60;
+        if (days >= 1) return "UP " + days + "D " + hours + "H";
+        return "UP " + hours + "H " + minutes + "M";
+    }
+
+    Component.onCompleted: {
+        checkPicture();
+        readUptime();
+    }
+
+    WhileVisible { service: Clock }
+
+    /** Refreshes the picture and the uptime on each new minute, while visible. */
+    Connections {
+        target: Clock
+        enabled: root.visible
+        function onMinuteChanged() {
+            root.checkPicture();
+            root.readUptime();
+        }
+    }
+
+    onVisibleChanged: {
+        if (!visible) return;
+        checkPicture();
+        readUptime();
+    }
+
+    Row {
+        anchors.fill: parent
+
+        // Picture: 80x80 square, flush to the cell edges, cropped to fill.
+        // Solid Theme.accent fallback when no picture file exists. Clickable
+        // either way, opening the picture chooser (ticket 13a).
+        Rectangle {
+            id: pictureCell
+            width: 80
+            height: 80
+            color: Theme.accent
+            clip: true
+
+            Image {
+                anchors.fill: parent
+                visible: root.pictureSource.length > 0
+                source: root.pictureSource
+                fillMode: Image.PreserveAspectCrop
+                sourceSize: Qt.size(width * root.dpr, height * root.dpr)
+                smooth: true
+                mipmap: true
+                asynchronous: true
+                cache: false
+            }
+
+            // Hover hint: a dark veil that fades in/out to show the picture is clickable.
+            Rectangle {
+                anchors.fill: parent
+                color: "black"
+                opacity: pictureHover.hovered ? 0.3 : 0
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: Theme.hoverMs
+                        easing.type: Easing.OutCubic
+                    }
+                }
+            }
+
+            HoverHandler {
+                id: pictureHover
+                cursorShape: Qt.PointingHandCursor
+            }
+
+            TapHandler {
+                onTapped: root.pictureClicked()
+            }
+        }
+
+        Column {
+            anchors.verticalCenter: parent.verticalCenter
+            leftPadding: 14
+            rightPadding: 14
+            spacing: 7
+
+            // lineHeightMode/lineHeight/height pin each line's box to exactly
+            // its font size (Qt's default line box is taller than the pixel
+            // size), so the 7px spacing above is the only gap between lines.
+            Text {
+                text: root.userName
+                font.family: Theme.condensed
+                font.weight: Font.DemiBold
+                font.pixelSize: 16
+                lineHeightMode: Text.FixedHeight
+                lineHeight: 16
+                height: 16
+                verticalAlignment: Text.AlignVCenter
+                color: Theme.fg
+            }
+
+            Text {
+                text: root.uptimeText
+                font.family: Theme.mono
+                font.weight: Font.Medium
+                font.pixelSize: 10
+                font.letterSpacing: 1.0
+                font.capitalization: Font.AllUppercase
+                lineHeightMode: Text.FixedHeight
+                lineHeight: 10
+                height: 10
+                verticalAlignment: Text.AlignVCenter
+                color: Theme.dim
+            }
+        }
+    }
+}
