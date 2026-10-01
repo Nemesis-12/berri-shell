@@ -11,8 +11,8 @@ import qs.services
  * assigned.
  *
  * A wallpaper-only change (same theme: a new assignment, or removing one)
- * cross-fades: two Image items, the incoming one faded in only once it
- * reports Ready, so there is never a blank frame.
+ * cross-fades after the incoming image reports Ready. A failed load keeps
+ * the current image. Each screen ignores loads from older choices.
  *
  * A theme switch (Theme.wallpaperTransition, 28a) instead runs one of five
  * picked transitions in a fragment shader (shaders/transition.frag), from
@@ -64,11 +64,12 @@ Variants {
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             smooth: true
-            mipmap: true
+            mipmap: false
             sourceSize.width: layer.width * modelData.devicePixelRatio
             sourceSize.height: layer.height * modelData.devicePixelRatio
             opacity: 0
-            Behavior on opacity { id: behaviorA; NumberAnimation { duration: 450; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve } }
+            Behavior on opacity { id: behaviorA; NumberAnimation { duration: Theme.stateMs; easing.type: Easing.OutCubic } }
+            onOpacityChanged: layer.releaseFaded(imageA)
         }
 
         Image {
@@ -77,11 +78,12 @@ Variants {
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             smooth: true
-            mipmap: true
+            mipmap: false
             sourceSize.width: layer.width * modelData.devicePixelRatio
             sourceSize.height: layer.height * modelData.devicePixelRatio
             opacity: 0
-            Behavior on opacity { id: behaviorB; NumberAnimation { duration: 450; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve } }
+            Behavior on opacity { id: behaviorB; NumberAnimation { duration: Theme.stateMs; easing.type: Easing.OutCubic } }
+            onOpacityChanged: layer.releaseFaded(imageB)
         }
 
         /** true when imageA is the currently-visible layer (imageB is the standby one). */
@@ -90,43 +92,95 @@ Variants {
         /** Absolute path currently shown (matches whichever Image is visible), or "" for the solid color. Tracked separately from wallpaperPath so a transition still knows its "old frame" after Theme.currentKey has already moved on to the new theme. */
         property string currentPath: ""
 
-        /**
-         * Loads path into whichever Image item is currently hidden, then
-         * cross-fades to it once the image reports Ready (or at once if
-         * path is empty, revealing the solid Rectangle underneath instead).
-         */
-        function show(path) {
-            var incoming = layer.aVisible ? imageB : imageA;
-            var outgoing = layer.aVisible ? imageA : imageB;
+        /** The newest load requested for this screen. */
+        property int requestNumber: 0
+        property var loadHandler: null
+        property Item loadingImage: null
+        property string transitionPath: ""
 
+        /** Releases an image only after its opacity reaches zero. */
+        function releaseFaded(image) {
+            if (image.opacity !== 0 || image === (layer.aVisible ? imageA : imageB)
+                    || image === layer.loadingImage || effect.visible) return;
+            image.source = "";
+        }
+
+        /** Stops the prior load and makes the last visible frame stable. */
+        function prepareChoice() {
+            layer.requestNumber++;
+            if (layer.loadHandler) {
+                layer.loadingImage.statusChanged.disconnect(layer.loadHandler);
+                layer.loadHandler = null;
+                layer.loadingImage = null;
+            }
+            if (progressAnim.running) progressAnim.stop();
+            if (effect.visible) layer.finishTransition();
+
+            var current = layer.aVisible ? imageA : imageB;
+            var hidden = layer.aVisible ? imageB : imageA;
+            behaviorA.enabled = false;
+            behaviorB.enabled = false;
+            current.opacity = layer.currentPath ? 1 : 0;
+            hidden.opacity = 0;
+            hidden.source = "";
+            behaviorA.enabled = true;
+            behaviorB.enabled = true;
+        }
+
+        /** Loads a choice and calls ready only for its newest successful load. */
+        function loadChoice(image, path, request, ready) {
             if (!path) {
-                imageA.source = "";
-                imageB.source = "";
-                imageA.opacity = 0;
-                imageB.opacity = 0;
-                layer.currentPath = "";
+                image.source = "";
+                ready();
                 return;
             }
 
-            incoming.source = "file://" + path;
+            layer.loadingImage = image;
+            image.source = "file://" + path;
+            if (image.status === Image.Ready) {
+                layer.loadingImage = null;
+                ready();
+            } else if (image.status === Image.Error) {
+                layer.loadingImage = null;
+                image.source = "";
+            } else {
+                var handler = function() {
+                    if (image.status === Image.Loading || image.status === Image.Null) return;
+                    image.statusChanged.disconnect(handler);
+                    if (layer.loadHandler === handler) {
+                        layer.loadHandler = null;
+                        layer.loadingImage = null;
+                    }
+                    if (request !== layer.requestNumber) return;
+                    if (image.status === Image.Ready) ready();
+                    else image.source = "";
+                };
+                layer.loadHandler = handler;
+                image.statusChanged.connect(handler);
+            }
+        }
+
+        /**
+         * Loads path into the hidden Image, then cross-fades after Ready.
+         * An empty path fades to the solid color underneath.
+         */
+        function show(path) {
+            layer.prepareChoice();
+            if (path === layer.currentPath) return;
+
+            var request = layer.requestNumber;
+            var incoming = layer.aVisible ? imageB : imageA;
+            var outgoing = layer.aVisible ? imageA : imageB;
 
             function reveal() {
-                incoming.opacity = 1;
+                incoming.opacity = path ? 1 : 0;
                 outgoing.opacity = 0;
                 layer.aVisible = !layer.aVisible;
                 layer.currentPath = path;
+                layer.releaseFaded(outgoing);
             }
 
-            if (incoming.status === Image.Ready) {
-                reveal();
-            } else {
-                var handler = function() {
-                    if (incoming.status === Image.Loading) return;
-                    incoming.statusChanged.disconnect(handler);
-                    if (incoming.status === Image.Ready) reveal();
-                };
-                incoming.statusChanged.connect(handler);
-            }
+            layer.loadChoice(incoming, path, request, reveal);
         }
 
         // --- Theme-switch transition shader (28a) ---
@@ -149,12 +203,15 @@ Variants {
          * the shader over durationMs, then hands off to the plain image.
          */
         function startTransition(mode, durationMs) {
+            layer.prepareChoice();
+            var request = layer.requestNumber;
             var oldPath = layer.currentPath;
             var newPath = layer.wallpaperPath;
             var incoming = layer.aVisible ? imageB : imageA;
             var outgoing = layer.aVisible ? imageA : imageB;
 
             function begin() {
+                layer.transitionPath = newPath;
                 effect.oldSource = outgoing;
                 effect.newSource = incoming;
                 effect.oldHasImage = oldPath ? 1 : 0;
@@ -178,38 +235,26 @@ Variants {
                 progressAnim.restart();
             }
 
-            if (!newPath) {
-                incoming.source = "";
-                begin();
-                return;
-            }
-
-            incoming.source = "file://" + newPath;
-            if (incoming.status === Image.Ready) {
-                begin();
-            } else {
-                var handler = function() {
-                    if (incoming.status === Image.Loading) return;
-                    incoming.statusChanged.disconnect(handler);
-                    begin();
-                };
-                incoming.statusChanged.connect(handler);
-            }
+            layer.loadChoice(incoming, newPath, request, begin);
         }
 
         /** Hides the shader and commits the new frame as the plain visible image (or solid color), with no extra fade. */
         function finishTransition() {
+            if (!effect.visible) return;
             var incoming = layer.aVisible ? imageB : imageA;
             var outgoing = layer.aVisible ? imageA : imageB;
             behaviorA.enabled = false;
             behaviorB.enabled = false;
-            incoming.opacity = layer.wallpaperPath ? 1 : 0;
+            incoming.opacity = layer.transitionPath ? 1 : 0;
             outgoing.opacity = 0;
             layer.aVisible = !layer.aVisible;
-            layer.currentPath = layer.wallpaperPath;
+            layer.currentPath = layer.transitionPath;
             behaviorA.enabled = true;
             behaviorB.enabled = true;
             effect.visible = false;
+            effect.oldSource = null;
+            effect.newSource = null;
+            outgoing.source = "";
         }
 
         NumberAnimation {
@@ -218,7 +263,7 @@ Variants {
             property: "progress"
             from: 0
             to: 1
-            onStopped: layer.finishTransition()
+            onFinished: layer.finishTransition()
         }
 
         ShaderEffect {
@@ -241,8 +286,8 @@ Variants {
             property color paletteColor3: "black"
             property color paletteColor4: "black"
             property color paletteColor5: "black"
-            property var oldSource: imageA
-            property var newSource: imageB
+            property var oldSource: null
+            property var newSource: null
 
             fragmentShader: Qt.resolvedUrl("../shaders/transition.frag.qsb")
         }
