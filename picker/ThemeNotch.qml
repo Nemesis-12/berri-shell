@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Window
-import QtQuick.Effects
 import "../logic/PixelGrid.js" as PixelGrid
 import "../logic/Timeline.js" as Timeline
 import qs.common
@@ -232,29 +231,20 @@ Item {
         }
     }
 
-    // blurMax (and shadowEnabled/autoPaddingEnabled) must stay CONSTANT: Qt's
-    // MultiEffect rebuilds its shader and padding whenever blurMax changes,
-    // which drops one blank frame. Only shadowBlur/shadowOpacity/
-    // shadowVerticalOffset animate; shadowBlur is rescaled against a fixed
-    // blurMax: 64 so the rest/hover ~10.8px radius (was 0.6*18) and open
-    // ~60px radius (was 1.0*60) look the same as before.
-    MultiEffect {
-        source: notchRect
-        anchors.fill: notchRect
-        shadowEnabled: true
-        shadowColor: "black"
-        shadowHorizontalOffset: 0
-        blurMax: 64
-
-        // The shadow at rest or under the pointer; the open motion deepens it.
-        property real restOpacity: root.pointerInside ? 0.3 : 0
-        Behavior on restOpacity { NumberAnimation { duration: root.shadowMs } }
-
-        readonly property real deepen: Timeline.fadeSlice(root.elapsedMs, 0, root.shadowMs, root.closing, root.narrowCloseAtMs)
-
-        shadowVerticalOffset: -6 + (-20 + 6) * deepen
-        shadowBlur: 0.17 + (0.94 - 0.17) * deepen
-        shadowOpacity: restOpacity + (0.45 - restOpacity) * deepen
+    // The shadow at rest or under the pointer; the open motion deepens it.
+    PanelShadow {
+        target: notchRect
+        cornerRadius: notchRect.topLeftRadius
+        hovered: root.pointerInside
+        hoverMs: root.shadowMs
+        openProgress: Timeline.fadeSlice(root.elapsedMs, 0, root.shadowMs, root.closing, root.narrowCloseAtMs)
+        restOffset: -6
+        restStrength: 0
+        restBlur: 11
+        hoverStrength: 0.3
+        openOffset: -20
+        openStrength: 0.45
+        openBlur: 60
     }
 
     Rectangle {

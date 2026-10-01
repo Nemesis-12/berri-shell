@@ -1,5 +1,5 @@
 import QtQuick
-import QtQuick.Effects
+import qs.common
 import qs.services
 
 /**
@@ -43,16 +43,11 @@ Item {
         Translate { y: -6 * (1 - root.progress) }
     ]
 
-    MultiEffect {
-        source: card
-        anchors.fill: card
-        shadowEnabled: true
-        shadowColor: "black"
-        shadowOpacity: 0.45
-        shadowVerticalOffset: 18
-        shadowHorizontalOffset: 0
-        shadowBlur: 1.0
-        blurMax: 44
+    PanelShadow {
+        target: card
+        restOffset: 18
+        restStrength: 0.45
+        restBlur: 44
     }
 
     Rectangle {
