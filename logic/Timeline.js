@@ -74,3 +74,15 @@ function fadeSlice(elapsedMs, startMs, durationMs, closing, closeAtMs) {
     if (!closing) return slice(elapsedMs, startMs, durationMs);
     return closingSpring(elapsedMs, startMs, durationMs, closeAtMs);
 }
+
+/**
+ * How far the icons of a column have moved vertically, from one flight value
+ * (0 in the bar row, 1 in the side column). Opening it is the flight itself.
+ * Closing it is the cube of it: the icons lean on a slant while they are
+ * between row and column, and the spring close spends its last third close to
+ * the row, so the vertical spread must die out faster than the flight does or
+ * the row stays on a slant until the last frames.
+ */
+function columnSpread(flight, closing) {
+    return closing ? flight * flight * flight : flight;
+}

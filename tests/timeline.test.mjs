@@ -131,3 +131,12 @@ test("the pill close ends within 1 px of rest", () => {
   assert.ok(left(454 - 30, widenMs, growMs, growCloseAtMs) < 1);
   assert.ok(left(800 - 124, 0, widenMs, widenCloseAtMs) < 1);
 });
+
+test("columnSpread keeps the open path and levels the row early while closing", () => {
+  assert.equal(lib.columnSpread(0.4, false), 0.4);
+  assert.equal(lib.columnSpread(1, true), 1);
+  assert.equal(lib.columnSpread(0, true), 0);
+  // Spine buttons are 48 px apart: with 7 tabs the row spread is 6 * 48 * spread.
+  // The spring close is at flight 0.1 for a long time; the row must be level there (under 1 px).
+  assert.ok(6 * 48 * lib.columnSpread(0.1, true) < 1);
+});

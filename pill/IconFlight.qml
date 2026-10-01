@@ -102,6 +102,8 @@ Item {
             // the centers stay on one line, and each icon stays centered in its square.
             readonly property real flight: Timeline.springSlice(root.elapsedMs, root.startMs, root.flightMs, root.closing,
                 root.startMs + root.flightMs + root.closeLagMs)
+            // How far this square is from the bar line vertically (see Timeline.columnSpread).
+            readonly property real drop: Timeline.columnSpread(flight, root.closing)
             readonly property real tintPhase: root.closing
                 ? Timeline.closeSlice(root.elapsedMs, root.startMs, root.colorMs, root.startMs + root.colorMs + root.closeLagMs)
                 : Timeline.slice(root.elapsedMs, root.startMs, root.colorMs)
@@ -112,7 +114,7 @@ Item {
             readonly property real slideOffset: root.elapsedMs >= root.startMs ? root.dashboardSlide : 0
 
             x: PixelGrid.snap(rowLeft + (root.spineX - rowLeft) * flight, root.dpr)
-            y: PixelGrid.snap(root.rowY + (finalTop - root.rowY) * flight + slideOffset, root.dpr)
+            y: PixelGrid.snap(root.rowY + (finalTop - root.rowY) * drop + slideOffset, root.dpr)
             width: PixelGrid.snap(root.rowSize + (root.spineWidth - root.rowSize) * flight, root.dpr)
             height: PixelGrid.snap(root.rowSize + (root.buttonSize - root.rowSize) * flight, root.dpr)
             radius: 5 * (1 - flight)
