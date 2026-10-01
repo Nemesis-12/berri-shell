@@ -8,7 +8,7 @@ log=$(mktemp) || exit 1
 trap 'rm -f "$log"' EXIT
 
 if node --test tests/ >"$log" 2>&1 \
-  && (cd scripts && python3 -m unittest test-recent-answers.py) >>"$log" 2>&1; then
+  && (cd scripts && python3 -m unittest test-*.py) >>"$log" 2>&1; then
   echo "pre-push: all tests passed"
 else
   cat "$log"
