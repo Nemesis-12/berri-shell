@@ -1,7 +1,6 @@
 import QtQuick
 import Quickshell.Services.UPower
 import qs.common
-import qs.tabs.system
 
 /**
  * Battery cell: level, charging state and time left from UPower, a 3px

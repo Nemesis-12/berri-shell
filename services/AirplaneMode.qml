@@ -3,7 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Networking
 import Quickshell.Bluetooth
-import "../../logic/AirplaneLogic.js" as AirplaneLogic
+import "../logic/AirplaneLogic.js" as AirplaneLogic
 import qs.common
 
 /**

@@ -5,7 +5,6 @@ import Quickshell
 import "../logic/PixelGrid.js" as PixelGrid
 import qs.common
 import qs.services
-import qs.tabs.home
 
 /**
  * The Wallpapers tab body (ticket 28): a horizontal carousel of the shared

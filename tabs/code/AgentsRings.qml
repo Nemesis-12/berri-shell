@@ -1,7 +1,6 @@
 import QtQuick
 import qs.common
 import qs.services
-import qs.tabs.system
 
 /**
  * Agents cell (ticket 22): a vertical "AGENTS" label plus three rings fed by

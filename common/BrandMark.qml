@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
 import "../logic/BrandPaths.js" as BrandPaths
-import qs.tabs.code
 
 /**
  * The Claude spark or the Codex mark, drawn as a filled shape in a flat

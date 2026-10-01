@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs.services
-import qs.tabs.system
 
 /**
  * One full-monitor overlay window for a panel that sits at the top or bottom

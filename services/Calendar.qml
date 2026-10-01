@@ -5,7 +5,6 @@ import "../logic/CalendarIcs.js" as Ics
 import "../logic/Times.js" as Times
 import qs.common
 import qs.notifications
-import qs.tabs.calendar
 
 /**
  * berri's calendars. Three kinds: "local" (berri.ics, always there), "file"
