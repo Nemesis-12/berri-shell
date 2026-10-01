@@ -39,7 +39,7 @@ Item {
             Behavior on height {
                 enabled: !root.dragging
                 NumberAnimation {
-                    duration: 300
+                    duration: Theme.stateMs
                     easing.type: Easing.BezierSpline
                     easing.bezierCurve: Theme.standardCurve
                 }

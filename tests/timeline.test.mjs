@@ -140,3 +140,99 @@ test("columnSpread keeps the open path and levels the row early while closing", 
   // The spring close is at flight 0.1 for a long time; the row must be level there (under 1 px).
   assert.ok(6 * 48 * lib.columnSpread(0.1, true) < 1);
 });
+
+test("an open from rest runs the whole motion; an interrupted open runs only the rest of it", () => {
+  assert.equal(lib.slideDurationMs(1000, 0, 1), 1000);
+  assert.equal(lib.slideDurationMs(1000, 0.25, 1), 750);
+  assert.equal(lib.slideDurationMs(1000, 1, 1), 0);
+});
+
+test("a close from fully open stops at the rest time; an interrupted close goes straight back to 0", () => {
+  assert.deepEqual({ ...lib.startClose(1, 600, 1000) }, { fromOpen: true, target: 0.6 });
+  assert.deepEqual({ ...lib.startClose(0.99, 600, 1000) }, { fromOpen: false, target: 0 });
+  assert.deepEqual({ ...lib.startClose(0.3, 600, 1000) }, { fromOpen: false, target: 0 });
+  // The close from full open takes only the share of the motion up to the rest time.
+  assert.equal(lib.slideDurationMs(1000, 1, lib.startClose(1, 600, 1000).target), 400);
+});
+
+test("a step starts to close when the step after it has closed the given share", () => {
+  assert.equal(lib.overlapEnd(1000, 500, lib.bigStepHandover), 620);
+  assert.equal(lib.overlapEnd(700, 420, lib.smallStepHandover), 448);
+});
+
+// A view in miniature: the same calls as Pill.qml, with time stepped by hand.
+// One part (spring slice of 400 ms from 0, closing at 1000 of a 1000 ms motion) stands for the motion.
+function motion() {
+  const totalMs = 1000, restMs = 700, partMs = 400;
+  const view = { open: false, closeFromOpen: false, progress: 0, to: 0, speed: 0 };
+  const slideTo = (to) => { view.to = to; view.speed = (to - view.progress) / lib.slideDurationMs(totalMs, view.progress, to); };
+  return {
+    view,
+    open() { view.open = true; slideTo(1); },
+    close() {
+      const c = lib.startClose(view.progress, restMs, totalMs);
+      view.closeFromOpen = c.fromOpen;
+      view.open = false;
+      slideTo(c.target);
+    },
+    // Moves the straight-line progress for `ms` (it stops at its target).
+    run(ms) {
+      const next = view.progress + view.speed * ms;
+      view.progress = view.speed > 0 ? Math.min(next, view.to) : Math.max(next, view.to);
+    },
+    part() {
+      const closing = !view.open && view.closeFromOpen;
+      return lib.springSlice(view.progress * totalMs, 0, partMs, closing, totalMs);
+    },
+  };
+}
+
+test("full open: the part rises along the spring and ends at 1", () => {
+  const m = motion();
+  m.open();
+  m.run(200);
+  assert.ok(Math.abs(m.part() - ease.spring(0.5)) < 1e-9);
+  m.run(800);
+  assert.equal(m.view.progress, 1);
+  assert.equal(m.part(), 1);
+});
+
+test("full close: the part falls, is at rest at the rest time, and the open path is not replayed", () => {
+  const m = motion();
+  m.open(); m.run(1000);
+  m.close();
+  assert.equal(m.view.closeFromOpen, true);
+  m.run(100);
+  const early = m.part();
+  assert.ok(early < 1 && early > 0);
+  m.run(10000);
+  assert.equal(m.view.progress, 0.7);
+  assert.ok(m.part() < 0.003);
+});
+
+test("interrupted open: a close then an open again continues from where the progress is", () => {
+  const m = motion();
+  m.open(); m.run(1000);
+  m.close(); m.run(300);
+  const before = m.view.progress;
+  m.open();
+  assert.equal(m.view.to, 1);
+  assert.equal(m.view.progress, before);
+  assert.equal(m.part(), lib.springSlice(before * 1000, 0, 400, false, 1000));
+  m.run(10000);
+  assert.equal(m.part(), 1);
+});
+
+test("interrupted close: a close started mid-open plays the open back in a straight line to 0", () => {
+  const m = motion();
+  m.open(); m.run(300);
+  const at = m.part();
+  m.close();
+  assert.equal(m.view.closeFromOpen, false);
+  assert.equal(m.view.to, 0);
+  assert.equal(m.part(), at);
+  m.run(150);
+  assert.ok(Math.abs(m.part() - ease.spring(lib.slice(150, 0, 400))) < 1e-9);
+  m.run(10000);
+  assert.equal(m.part(), 0);
+});

@@ -27,7 +27,7 @@ Item {
 
     Behavior on level {
         NumberAnimation {
-            duration: 300
+            duration: Theme.stateMs
             easing.type: Easing.BezierSpline
             easing.bezierCurve: Theme.standardCurve
         }

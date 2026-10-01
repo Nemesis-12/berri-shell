@@ -85,3 +85,40 @@ function fadeSlice(elapsedMs, startMs, durationMs, closing, closeAtMs) {
 function columnSpread(flight, closing) {
     return closing ? flight * flight * flight : flight;
 }
+
+/**
+ * How long (ms) the straight-line progress takes to go from `from` to `to`
+ * (both 0..1), at the speed of the full motion of `totalMs`. An open that
+ * interrupts a close starts from where the progress is now.
+ */
+function slideDurationMs(totalMs, from, to) {
+    return Math.round(totalMs * Math.abs(to - from));
+}
+
+/**
+ * The decision at the start of a close, made once: `fromOpen` tells the
+ * views to ease each step into rest (the closing form of springSlice and
+ * fadeSlice), and `target` is the progress (0..1) the close runs to. A close
+ * from fully open (`progress` 1) ends where every step is at rest (`restMs`,
+ * see closeEnd) and cuts the slow tail. A close that starts mid-way plays the
+ * open back in a straight line to 0, so nothing jumps.
+ */
+function startClose(progress, restMs, totalMs) {
+    var fromOpen = progress >= 1;
+    return { fromOpen: fromOpen, target: fromOpen ? restMs / totalMs : 0 };
+}
+
+/** Share of a big step (the pill or notch growing tall, the picker widening) that has closed when the step before it starts to close. */
+var bigStepHandover = 0.76;
+
+/** Share of a small step (the pill narrowing) that has closed when the clock fades back. */
+var smallStepHandover = 0.6;
+
+/**
+ * The close time at which a step ends, so that the step before it starts to
+ * close when this one has closed `doneShare` (0..1) of its `durationMs`. The
+ * steps overlap, so the close does not stop between two of them.
+ */
+function overlapEnd(closeAtMs, durationMs, doneShare) {
+    return closeAtMs - Math.round(durationMs * doneShare);
+}

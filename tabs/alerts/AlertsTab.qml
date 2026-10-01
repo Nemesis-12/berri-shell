@@ -267,7 +267,7 @@ Item {
                         NumberAnimation {
                             duration: 200
                             easing.type: Easing.BezierSpline
-                            easing.bezierCurve: [0.2, 0, 0, 1, 1, 1]
+                            easing.bezierCurve: Theme.emphasizedCurve
                         }
                     }
                 }
@@ -294,12 +294,12 @@ Item {
             spacing: root.gap
             model: filterModel
 
-            add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220 } }
-            remove: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 180 } }
+            add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.listMs } }
+            remove: Transition { NumberAnimation { property: "opacity"; to: 0; duration: Theme.hoverMs } }
             displaced: Transition {
                 NumberAnimation {
                     property: "y"
-                    duration: 220
+                    duration: Theme.listMs
                     easing.type: Easing.BezierSpline
                     easing.bezierCurve: Theme.standardCurve
                 }
@@ -481,11 +481,11 @@ Item {
                 boundsBehavior: Flickable.StopAtBounds
                 clip: true
 
-                add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220 } }
+                add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.listMs } }
                 remove: Transition {
                     ParallelAnimation {
-                        NumberAnimation { property: "opacity"; to: 0; duration: 220 }
-                        NumberAnimation { property: "x"; to: 32; duration: 220 }
+                        NumberAnimation { property: "opacity"; to: 0; duration: Theme.listMs }
+                        NumberAnimation { property: "x"; to: 32; duration: Theme.listMs }
                     }
                 }
                 displaced: Transition {

@@ -18,19 +18,19 @@ ListView {
     add: Transition {
         enabled: root.animateChanges
         ParallelAnimation {
-            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
-            NumberAnimation { property: "x"; from: -12; to: 0; duration: 220; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.listMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+            NumberAnimation { property: "x"; from: -12; to: 0; duration: Theme.listMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
         }
     }
     remove: Transition {
         enabled: root.animateChanges
         ParallelAnimation {
-            NumberAnimation { property: "opacity"; to: 0; duration: 180; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
-            NumberAnimation { property: "x"; to: 12; duration: 180; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+            NumberAnimation { property: "opacity"; to: 0; duration: Theme.hoverMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+            NumberAnimation { property: "x"; to: 12; duration: Theme.hoverMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
         }
     }
     displaced: Transition {
         enabled: root.animateChanges
-        NumberAnimation { properties: "y"; duration: 220; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+        NumberAnimation { properties: "y"; duration: Theme.listMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
     }
 }
