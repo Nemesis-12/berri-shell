@@ -17,6 +17,8 @@ Item {
     property bool hovered: false
     property real openProgress: 0
     property int hoverMs: Theme.hoverMs
+    /** Corner radius of the shadow; set it when `target` rounds only some corners. */
+    property real cornerRadius: target.radius
 
     property real restOffset: 0
     property real restStrength: 0
@@ -48,7 +50,7 @@ Item {
 
     RectangularShadow {
         anchors.fill: parent
-        radius: root.target.radius
+        radius: root.cornerRadius
         color: Qt.rgba(0, 0, 0, root.towardOpen(root.hoverBlendStrength, root.openStrength))
         blur: root.towardOpen(root.hoverBlendBlur, root.openBlur)
         offset: Qt.vector2d(0, root.towardOpen(root.hoverBlendOffset, root.openOffset))

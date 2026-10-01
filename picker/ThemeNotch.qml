@@ -234,6 +234,7 @@ Item {
     // The shadow at rest or under the pointer; the open motion deepens it.
     PanelShadow {
         target: notchRect
+        cornerRadius: notchRect.topLeftRadius
         hovered: root.pointerInside
         hoverMs: root.shadowMs
         openProgress: Timeline.fadeSlice(root.elapsedMs, 0, root.shadowMs, root.closing, root.narrowCloseAtMs)
