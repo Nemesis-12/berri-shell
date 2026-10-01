@@ -60,9 +60,12 @@ ShellRoot {
         }
     }
 
-    // Top pill: one edge-reveal window per monitor (see EdgeWindow.qml).
+    // One overlay window per monitor (see EdgeWindow.qml): the top pill with its
+    // notification card, and the bottom-center theme notch. The notch fades out on
+    // its own in fullscreen (ticket 29) and returns while the cursor touches the
+    // bottom edge strip.
     Variants {
-        id: pillVariants
+        id: overlayVariants
         model: Quickshell.screens
 
         EdgeWindow {
@@ -71,26 +74,51 @@ ShellRoot {
 
             property alias pill: pill
             property alias popup: popup
+            property alias themeNotch: notch
 
             screen: modelData
             layerName: "berri-shell"
-            panelX: pill.x + pill.maskX
-            panelY: pill.y + pill.maskY
-            panelWidth: pill.maskWidth
-            panelHeight: pill.maskHeight
-            panelOpen: pill.panelOpen || pill.trayLayerOpen
-            keepShown: pill.panelOpen || pill.hovered
-            dimmed: pill.panelOpen
+            // Wide enough for the hovered pill, its shadow and the 380 px card; an even width keeps the center on a whole pixel.
+            restWidth: 2 * Math.ceil((Math.max(pill.hoverWidth, popup.cardMaxWidth) + 128) / 2)
+            topX: pill.x + pill.maskX
+            topY: pill.y + pill.maskY
+            topWidth: pill.maskWidth
+            topHeight: pill.maskHeight
+            bottomX: notch.x + notch.maskX
+            bottomY: notch.y + notch.maskY
+            bottomWidth: notch.maskWidth
+            bottomHeight: notch.maskHeight
+            panelOpen: pill.panelOpen || pill.trayLayerOpen || notch.pickerOpen
+            topKeepShown: pill.panelOpen || pill.hovered
+            bottomKeepShown: notch.pickerOpen || notch.hovered
+            dimmed: pill.panelOpen || notch.pickerOpen
             card: popup
-            // The Wi-Fi password row and text fields need the keyboard while used.
-            wantsKeyboard: pill.wifiPasswordActive || pill.textEntryActive || pill.panelOpen || pill.trayLayerOpen
+            // The Wi-Fi password row and text fields need the keyboard while used; the picker needs it for Esc.
+            wantsKeyboard: pill.wifiPasswordActive || pill.textEntryActive || pill.panelOpen || pill.trayLayerOpen || notch.pickerOpen
 
-            onDimClicked: pill.closePanel()
-            onFullscreenStarted: pill.closeAtOnce()
+            onDimClicked: {
+                pill.closePanel();
+                notch.closePicker();
+            }
+            onFullscreenStarted: {
+                pill.closeAtOnce();
+                notch.closeAtOnce();
+            }
+
+            ThemeNotch {
+                id: notch
+                screenName: modelData.name
+                opacity: overlay.bottomHidden ? 0 : 1
+                Behavior on opacity { NumberAnimation { duration: 200 } }
+                // Slides in from the bottom edge with the fade (same progress: opacity).
+                transform: Translate { y: PixelGrid.snap((1 - notch.opacity) * 8, notch.dpr) }
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: parent.bottom
+            }
 
             Pill {
                 id: pill
-                suppressed: overlay.panelHidden
+                suppressed: overlay.topHidden
                 popupActive: popup.active
                 screenName: modelData.name
 
@@ -109,48 +137,6 @@ ShellRoot {
         }
     }
 
-    // Bottom-center theme notch: its own window per monitor so it sits over the
-    // pill/apps and works independent of the pill; it fades out on its own in
-    // fullscreen (ticket 29) and returns while the cursor touches the bottom edge strip.
-    Variants {
-        id: notchVariants
-        model: Quickshell.screens
-
-        EdgeWindow {
-            id: notchOverlay
-            required property var modelData
-
-            property alias themeNotch: notch
-
-            screen: modelData
-            atBottom: true
-            layerName: "berri-theme-notch"
-            panelX: notch.x + notch.maskX
-            panelY: notch.y + notch.maskY
-            panelWidth: notch.maskWidth
-            panelHeight: notch.maskHeight
-            panelOpen: notch.pickerOpen
-            keepShown: notch.pickerOpen || notch.hovered
-            dimmed: notch.pickerOpen
-            // The window grabs the keyboard only while the picker is open, so Esc can close it.
-            wantsKeyboard: notch.pickerOpen
-
-            onDimClicked: notch.closePicker()
-            onFullscreenStarted: notch.closeAtOnce()
-
-            ThemeNotch {
-                id: notch
-                screenName: modelData.name
-                opacity: notchOverlay.panelHidden ? 0 : 1
-                Behavior on opacity { NumberAnimation { duration: 200 } }
-                // Slides in from the bottom edge with the fade (same progress: opacity).
-                transform: Translate { y: PixelGrid.snap((1 - notch.opacity) * 8, notch.dpr) }
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.bottom: parent.bottom
-            }
-        }
-    }
-
     // TEMP: the window of the laptop monitor from a Variants, or null (for pickertest).
     function laptopWindow(variants: var): var {
         for (var i = 0; i < variants.instances.length; i++) {
@@ -165,30 +151,30 @@ ShellRoot {
 
         // Reveals the notch first if fullscreen hides it (hide timer stays off while open).
         function open(tab: string): void {
-            var window = root.laptopWindow(notchVariants);
+            var window = root.laptopWindow(overlayVariants);
             if (!window) return;
-            window.revealed = true;
+            window.bottomRevealed = true;
             window.themeNotch.openPicker();
             window.themeNotch.pickerTab = tab;
         }
 
         function close(): void {
-            var window = root.laptopWindow(notchVariants);
+            var window = root.laptopWindow(overlayVariants);
             if (window) window.themeNotch.closePicker();
         }
 
         // Opens the dashboard on one tab like a pill click; reveals the pill
         // first if fullscreen hides it (hide timer stays off while open).
         function dash(tab: string): void {
-            var window = root.laptopWindow(pillVariants);
+            var window = root.laptopWindow(overlayVariants);
             if (!window) return;
-            window.revealed = true;
+            window.topRevealed = true;
             window.pill.activeTab = window.pill.tabIds.indexOf(tab);
             window.pill.openPanel();
         }
 
         function dashClose(): void {
-            var window = root.laptopWindow(pillVariants);
+            var window = root.laptopWindow(overlayVariants);
             if (window) window.pill.closePanel();
         }
 

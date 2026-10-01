@@ -606,14 +606,15 @@ Item {
         AlertsTab { anchors.fill: parent }
     }
 
-    // Tray popover, app menu and their click catcher. Fills the monitor
-    // (the parent window); the rects are outside pillRect's clip.
+    // Tray popover, app menu and their click catcher. Fills the monitor, not the
+    // window: the window is narrow at rest and grows around its center when a
+    // layer opens. The rects are outside pillRect's clip.
     PillTrayLayers {
         id: trayLayers
-        x: -root.x
+        x: (root.parent ? root.parent.width : 0) / 2 - width / 2 - root.x
         y: -root.y
-        width: root.parent ? root.parent.width : 0
-        height: root.parent ? root.parent.height : 0
+        width: Screen.width
+        height: Screen.height
         items: root.trayItems
     }
 

@@ -4,37 +4,47 @@ import Quickshell.Wayland
 import qs.services
 
 /**
- * One full-monitor overlay window for a panel that sits at the top or bottom
- * edge: the top pill and the bottom theme notch.
+ * The one overlay window of a monitor. It holds the top pill (with its
+ * pop-up card) and the bottom theme notch.
  *
- * At rest the window passes input through everywhere except the panel shape
- * (and the pop-up card, if any). While a fullscreen or maximized window covers
- * the monitor the panel is hidden and only a thin strip on the screen edge takes
- * input. The cursor on the strip reveals the panel; it hides again 600 ms after
- * the cursor left it, never while the panel is open. While the panel is open the
- * whole monitor takes input and is dimmed; a click on the dim layer emits dimClicked.
+ * At rest the window is narrow (`restWidth`, full height) and passes input
+ * through everywhere except the pill shape, the notch shape and the pop-up
+ * card. While a panel is open, closing or still dimming, the window grows to
+ * the whole monitor, the monitor is dimmed and takes input, and a click on the
+ * dim layer emits dimClicked. The window grows around its center, so the panels
+ * keep their place on the screen.
  *
- * The panel and its pop-up go inside this window as children. The parent sets
- * the panel shape (panelX..panelHeight) and the state flags.
+ * While a fullscreen or maximized window covers the monitor, each panel is
+ * hidden and only a thin strip on its screen edge takes input (see EdgeStrip).
+ *
+ * The panels go inside this window as children, bottom one first. The parent
+ * sets the panel shapes (topX..bottomHeight) and the state flags.
  */
 PanelWindow {
     id: root
 
-    /** The strip and the panel are at the bottom edge instead of the top. */
-    property bool atBottom: false
     /** Layer-shell name of this window. */
     property string layerName: ""
+    /** Width of the window at rest, in logical pixels. Wide enough for the hovered pill, its shadow and the pop-up card. */
+    property real restWidth: 640
 
-    /** Input shape of the panel at rest, in window coordinates. */
-    property real panelX: 0
-    property real panelY: 0
-    property real panelWidth: 0
-    property real panelHeight: 0
-    /** The panel is open: the whole monitor takes input. */
+    /** Input shape of the top panel at rest, in window coordinates. */
+    property real topX: 0
+    property real topY: 0
+    property real topWidth: 0
+    property real topHeight: 0
+    /** Input shape of the bottom panel at rest, in window coordinates. */
+    property real bottomX: 0
+    property real bottomY: 0
+    property real bottomWidth: 0
+    property real bottomHeight: 0
+    /** A panel is open: the whole monitor takes input. */
     property bool panelOpen: false
-    /** The panel is open, closing or pointed at: the reveal must not end now. */
-    property bool keepShown: false
-    /** The panel needs the keyboard (a text field is in use). */
+    /** The top panel is open, closing or pointed at: its reveal must not end now. */
+    property bool topKeepShown: false
+    /** The bottom panel is open, closing or pointed at: its reveal must not end now. */
+    property bool bottomKeepShown: false
+    /** A panel needs the keyboard. */
     property bool wantsKeyboard: false
     /** Dims the monitor behind the panel. */
     property bool dimmed: false
@@ -48,18 +58,15 @@ PanelWindow {
 
     /** True while a fullscreen or maximized window covers this monitor. */
     readonly property bool screenHasFullscreenWindow: FullscreenState.coversMonitor(root.screen)
-    /**
-     * True while the panel is shown on purpose during fullscreen: the cursor
-     * touched the edge strip. Cleared by the hide timer or when fullscreen ends.
-     */
-    property bool revealed: false
-    /** The panel is hidden only in fullscreen and only until it is revealed. */
-    readonly property bool panelHidden: screenHasFullscreenWindow && !revealed
+    /** The top or bottom panel is shown on purpose during fullscreen (the cursor touched its strip). */
+    property alias topRevealed: topEdge.revealed
+    property alias bottomRevealed: bottomEdge.revealed
+    /** A panel is hidden only in fullscreen and only until it is revealed. */
+    readonly property bool topHidden: topEdge.panelHidden
+    readonly property bool bottomHidden: bottomEdge.panelHidden
 
-    readonly property int stripWidth: 400
-    readonly property int stripHeight: 2
-    readonly property real stripX: Math.round((width - stripWidth) / 2)
-    readonly property real stripY: atBottom ? height - stripHeight : 0
+    /** True while the window covers the whole monitor: a panel is open or the dim layer still shows. */
+    readonly property bool expanded: panelOpen || dimLayer.opacity > 0.001
 
     default property alias content: panelContent.data
 
@@ -68,19 +75,22 @@ PanelWindow {
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.namespace: root.layerName
 
-    // The window takes no keyboard focus at rest. It asks for it while the panel
+    // The window takes no keyboard focus at rest. It asks for it while a panel
     // needs it, so that a click on a text field gets the keyboard: Hyprland gives
     // on-demand focus only to a click that lands while the layer already asks.
     WlrLayershell.keyboardFocus: root.wantsKeyboard
         ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
-    // Covers the whole monitor so the dim layer and the open panel have room;
-    // the mask keeps input pass-through everywhere else at rest.
-    anchors { top: true; left: true; right: true; bottom: true }
+    // Full height always (the bottom panel sits on the bottom edge). Narrow at
+    // rest and centered by the compositor; left and right anchors make it as wide
+    // as the monitor while expanded. Its buffers are small at rest.
+    implicitWidth: root.restWidth
+    anchors { top: true; bottom: true; left: root.expanded; right: root.expanded }
 
-    /** Closes the panel at once (parent reacts to the signal) if fullscreen takes over. A reveal never runs this. */
+    /** Closes the panels at once (parent reacts to the signal) if fullscreen takes over. A reveal never runs this. */
     onScreenHasFullscreenWindowChanged: {
-        root.revealed = false;
+        topEdge.revealed = false;
+        bottomEdge.revealed = false;
         if (root.screenHasFullscreenWindow) {
             root.fullscreenStarted();
             // Clear an unfinished dim fade too, including one already closing.
@@ -89,20 +99,38 @@ PanelWindow {
         }
     }
 
-    // Input, by state: hidden = only the strip; open = the whole monitor;
-    // otherwise the panel shape, plus the strip in fullscreen so the cursor can
+    // Input, by state: a panel open = the whole monitor; otherwise each panel
+    // shape that is not hidden, plus each strip in fullscreen so the cursor can
     // travel from the edge to the panel. The pop-up card is written once.
     mask: Region {
-        x: root.panelHidden ? root.stripX : root.panelOpen ? 0 : root.panelX
-        y: root.panelHidden ? root.stripY : root.panelOpen ? 0 : root.panelY
-        width: root.panelHidden ? root.stripWidth : root.panelOpen ? root.width : root.panelWidth
-        height: root.panelHidden ? root.stripHeight : root.panelOpen ? root.height : root.panelHeight
+        x: 0
+        y: 0
+        width: root.panelOpen ? root.width : 0
+        height: root.panelOpen ? root.height : 0
 
         Region {
-            x: root.stripX
-            y: root.stripY
-            width: root.screenHasFullscreenWindow ? root.stripWidth : 0
-            height: root.screenHasFullscreenWindow ? root.stripHeight : 0
+            x: root.topX
+            y: root.topY
+            width: root.panelOpen || root.topHidden ? 0 : root.topWidth
+            height: root.panelOpen || root.topHidden ? 0 : root.topHeight
+        }
+        Region {
+            x: root.bottomX
+            y: root.bottomY
+            width: root.panelOpen || root.bottomHidden ? 0 : root.bottomWidth
+            height: root.panelOpen || root.bottomHidden ? 0 : root.bottomHeight
+        }
+        Region {
+            x: topEdge.x
+            y: topEdge.y
+            width: root.screenHasFullscreenWindow ? topEdge.width : 0
+            height: root.screenHasFullscreenWindow ? topEdge.height : 0
+        }
+        Region {
+            x: bottomEdge.x
+            y: bottomEdge.y
+            width: root.screenHasFullscreenWindow ? bottomEdge.width : 0
+            height: root.screenHasFullscreenWindow ? bottomEdge.height : 0
         }
         Region {
             x: root.card ? root.card.cardX : 0
@@ -112,35 +140,34 @@ PanelWindow {
         }
     }
 
-    /** Reports the cursor on the edge strip; it reveals the panel. */
-    Item {
-        x: root.stripX
-        y: root.stripY
-        width: root.stripWidth
-        height: root.stripHeight
-        z: 10 // above the panel, which would otherwise take the hover
-        HoverHandler {
-            id: stripHover
-            onHoveredChanged: if (hovered && root.screenHasFullscreenWindow) root.revealed = true
-        }
+    EdgeStrip {
+        id: topEdge
+        monitorWidth: root.width
+        monitorHeight: root.height
+        covered: root.screenHasFullscreenWindow
+        keepShown: root.topKeepShown
     }
 
-    /** Hides the revealed panel 600 ms after the cursor left it, never while it must stay. */
-    Timer {
-        interval: 600
-        running: root.revealed && root.screenHasFullscreenWindow && !root.keepShown && !stripHover.hovered
-        onTriggered: root.revealed = false
+    EdgeStrip {
+        id: bottomEdge
+        atBottom: true
+        monitorWidth: root.width
+        monitorHeight: root.height
+        covered: root.screenHasFullscreenWindow
+        keepShown: root.bottomKeepShown
     }
 
-    /** Dims the rest of the monitor while the panel is open or closing; a click closes it. */
+    /** Dims the rest of the monitor while a panel is open or closing; a click closes it. */
     Rectangle {
         id: dimLayer
         anchors.fill: parent
         color: "black"
         opacity: root.dimmed ? 0.32 : 0
+        // Nothing to draw or hit while clear.
+        visible: opacity > 0.001
 
         Behavior on opacity {
-            enabled: !root.panelHidden
+            enabled: !root.topHidden && !root.bottomHidden
             NumberAnimation {
                 id: dimFade
                 duration: 450
@@ -155,7 +182,7 @@ PanelWindow {
         }
     }
 
-    // The panel and its pop-up, above the dim layer.
+    // The panels and the pop-up, above the dim layer.
     Item {
         id: panelContent
         anchors.fill: parent
