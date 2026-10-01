@@ -89,10 +89,16 @@ Singleton {
         void root.revision;
         var found = _locate(uid, false);
         if (!found) return null;
-        var item = found.doc ? found.doc.items[found.index] : Ics.expandCompactItem(found.meta.records[found.index]);
-        if (!found.doc) { item.calendarId = found.meta.id; item.readOnly = true; }
-        var meta = found.meta;
-        return Ics.withItemIdentity(Ics.withColorOverride(item, meta ? meta.colorOverrides : null));
+        return Ics.withItemIdentity(Ics.withColorOverride(_storedItem(found), found.meta.colorOverrides));
+    }
+
+    /** Reads the selected stored item and adds link details when needed. */
+    function _storedItem(found: var): var {
+        if (found.doc) return found.doc.items[found.index];
+        var item = Ics.expandCompactItem(found.meta.records[found.index]);
+        item.calendarId = found.meta.id;
+        item.readOnly = true;
+        return item;
     }
 
     /**
@@ -107,8 +113,7 @@ Singleton {
         var clear = color === null || color === undefined || color === "";
         var clean = clear ? "" : Ics.cleanColor(color);
         if (!clear && !clean) return false;
-        var item = found.doc ? found.doc.items[found.index] : Ics.expandCompactItem(found.meta.records[found.index]);
-        if (!found.doc) { item.calendarId = found.meta.id; item.readOnly = true; }
+        var item = _storedItem(found);
         if (!item.readOnly) return update(uid, { color: clean || "accent" });
         var meta = _calendars[item.calendarId];
         if (!meta) return false;
@@ -399,7 +404,7 @@ Singleton {
         if (!meta || forEdit && meta.kind === "link") return null;
         var doc = meta.document;
         var items = doc ? doc.items : meta.records || [];
-        var index = items.findIndex(function (item) { return (doc ? item : Ics.expandCompactItem(item)).uid === identity.uid; });
+        var index = items.findIndex(function (item) { return item.uid === identity.uid; });
         return index < 0 ? null : { path: meta.path, doc: doc, meta: meta, index: index };
     }
 
@@ -532,8 +537,10 @@ Singleton {
         var doc = error ? null : Ics.readCompactCalendar(text, _localZone);
         var name = doc ? doc.name || Ics.linkHost(url) : "";
         if (purpose === "check") {
-            var candidates = doc ? doc.records.map(Ics.expandCompactItem) : [];
-            linkChecked(shownUrl, !error, name, candidates.length, error, doc ? Ics.countDuplicates(candidates, _existingItems()) : 0);
+            var records = doc ? doc.records : [];
+            var calendars = _order.map(function (key) { return _calendars[key]; });
+            linkChecked(shownUrl, !error, name, records.length, error,
+                doc ? Ics.countStoredDuplicates(records, calendars) : 0);
         } else if (purpose === "subscribe") {
             if (error) { subscribed(shownUrl, "", error, requestId); return; }
             if (_calendars[id]) { subscribed(shownUrl, id, "", requestId); return; }

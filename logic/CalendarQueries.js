@@ -108,6 +108,17 @@ function countDuplicates(feedItems, existingItems) {
     return count;
 }
 
+/** Counts matching subscription records without creating full items. */
+function countStoredDuplicates(feedRecords, calendars) {
+    var existing = [];
+    for (var c = 0; c < calendars.length; c++) {
+        var calendar = calendars[c];
+        var items = calendar.document ? calendar.document.items : calendar.records || [];
+        for (var i = 0; i < items.length; i++) existing.push(items[i]);
+    }
+    return countDuplicates(feedRecords, existing);
+}
+
 /** { "YYYY-MM-DD": [Occurrence] } for days from..to. Shared events show once. */
 function occurrencesByDay(items, fromKey, toKey, names) {
     var all = [];
@@ -235,7 +246,7 @@ function pruneColorOverrides(overrides, items) {
 
 function pruneRecordColorOverrides(overrides, records) {
     var live = {};
-    for (var i = 0; i < records.length; i++) live[Format.expandCompactItem(records[i]).uid] = true;
+    for (var i = 0; i < records.length; i++) live[records[i].uid] = true;
     var out = {};
     for (var uid in overrides || {}) {
         var color = Items.cleanColor(overrides[uid]);
@@ -319,10 +330,13 @@ function storedItemsInMonth(projection, year, month) {
         var records = feed.records;
         for (var i = 0; i < records.length; i++) {
             var r = records[i];
-            if (r.slice(0, 10) > last) break;
+            if (r.date > last) break;
+            if (r.repeat === "none" && (r.endDate || r.date) < first) continue;
+            if (r.repeat !== "none" && r.until) {
+                var spanDays = r.time === null && r.endDate ? Times.dayNum(r.endDate) - Times.dayNum(r.date) : 0;
+                if (r.until < Items.addDays(first, -spanDays)) continue;
+            }
             var item = Format.expandCompactItem(r);
-            if (item.repeat === "none" && (item.endDate || item.date) < first) continue;
-            if (item.repeat !== "none" && item.until && item.until < first) continue;
             item.calendarId = feed.id;
             item.readOnly = true;
             var own = Items.cleanColor(feed.colorOverrides && feed.colorOverrides[item.uid]);

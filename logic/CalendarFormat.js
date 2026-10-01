@@ -423,29 +423,40 @@ function readCompactCalendar(text, localZone) {
         }
     }
     if (pending) accept(pending);
-    records.sort(function (a, b) { return a[3] < b[3] ? -1 : a[3] > b[3] ? 1 : 0; });
-    // JSON makes one independent string per event. Parsed fields can refer to
-    // slices of the complete feed text, which would otherwise stay in memory.
+    records.sort(function (a, b) {
+        if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+        var first = a.time || "", second = b.time || "";
+        return first < second ? -1 : first > second ? 1 : 0;
+    });
+    // Copy strings out of the source text before the caller drops it.
     return { name: name, records: records.map(function (record) {
-        return (record[3] || "0000-00-00") + "\t" + JSON.stringify(record);
+        return JSON.parse(JSON.stringify(record));
     }) };
 }
 
-/** Fixed field order for the stored event text. */
+/** Fields needed to show a subscription event and open its details. */
 function compactItem(item) {
-    return [item.uid, item.kind, item.title, item.date, item.time, item.end, item.endDate,
-        item.color, item.repeat, item.interval, item.byDay.length ? item.byDay : null,
-        item.until, item.count, item.exdates.length ? item.exdates : null,
-        item.doneDates.length ? item.doneDates : null, item.alarmMinutes, item.status];
+    var location = "";
+    for (var i = 0; i < item.raw.length; i++) {
+        var property = parseLine(item.raw[i]);
+        if (property.name === "LOCATION") { location = unescapeText(property.value); break; }
+    }
+    return { uid: item.uid, kind: item.kind, title: item.title, location: location,
+        date: item.date, time: item.time, end: item.end, endDate: item.endDate,
+        color: item.color, repeat: item.repeat, interval: item.interval,
+        byDay: item.byDay.length ? item.byDay : null, until: item.until, count: item.count,
+        exdates: item.exdates.length ? item.exdates : null,
+        doneDates: item.doneDates.length ? item.doneDates : null,
+        alarmMinutes: item.alarmMinutes, status: item.status };
 }
 
 function expandCompactItem(record) {
-    if (typeof record === "string") record = JSON.parse(record.slice(11));
-    return { uid: record[0], kind: record[1], title: record[2], date: record[3],
-        time: record[4], end: record[5], endDate: record[6], color: record[7],
-        repeat: record[8], interval: record[9], byDay: record[10] || [],
-        until: record[11], count: record[12], exdates: record[13] || [],
-        doneDates: record[14] || [], alarmMinutes: record[15], status: record[16] };
+    return { uid: record.uid, kind: record.kind, title: record.title, location: record.location,
+        date: record.date, time: record.time, end: record.end, endDate: record.endDate,
+        color: record.color, repeat: record.repeat, interval: record.interval,
+        byDay: record.byDay || [], until: record.until, count: record.count,
+        exdates: record.exdates || [], doneDates: record.doneDates || [],
+        alarmMinutes: record.alarmMinutes, status: record.status };
 }
 
 function icsDate(key) {
