@@ -1,0 +1,17 @@
+#!/bin/sh
+# Runs all tests before a push. A failing test stops the push.
+# One-time setup in each clone: git config core.hooksPath .githooks
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+log=$(mktemp) || exit 1
+trap 'rm -f "$log"' EXIT
+
+if node --test tests/ >"$log" 2>&1 \
+  && (cd scripts && python3 -m unittest test-recent-answers.py) >>"$log" 2>&1; then
+  echo "pre-push: all tests passed"
+else
+  cat "$log"
+  echo "pre-push: tests failed, push stopped"
+  exit 1
+fi
