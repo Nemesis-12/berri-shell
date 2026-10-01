@@ -64,7 +64,7 @@ Item {
     /** The bars of the strip return with the shrinking. */
     readonly property int stripCloseAtMs: narrowCloseAtMs + (paletteStrip.spanMs - narrowMs)
     /** The time at which every step of the close is at rest. */
-    readonly property int closeEndMs: Math.min(narrowCloseAtMs - riseMs, narrowCloseAtMs - narrowMs, stripCloseAtMs - paletteStrip.spanMs)
+    readonly property int closeEndMs: Math.min(Timeline.closeEnd(narrowCloseAtMs, riseMs), Timeline.closeEnd(narrowCloseAtMs, narrowMs), stripCloseAtMs - paletteStrip.spanMs)
 
     // Picker layout (see pickerHeader and headerRow below); named here too so
     // the strip's vertical offset can be computed to land exactly on the

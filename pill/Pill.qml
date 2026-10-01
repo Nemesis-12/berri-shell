@@ -57,7 +57,7 @@ Item {
     /** The clock returns when the pill has narrowed 3/5. */
     readonly property int clockCloseAtMs: widenCloseAtMs - Math.round(widenMs * 0.6)
     /** The time at which every step of the close is at rest. */
-    readonly property int closeEndMs: Math.min(widenCloseAtMs - widenMs, clockCloseAtMs - clockFadeMs, iconFlight.closeEndMs)
+    readonly property int closeEndMs: Math.min(Timeline.closeEnd(widenCloseAtMs, widenMs), Timeline.closeEnd(clockCloseAtMs, clockFadeMs), iconFlight.closeEndMs)
 
     /** True while a fullscreen window owns this monitor and the pill is not revealed; hides the pill. */
     property bool suppressed: false
@@ -494,25 +494,38 @@ Item {
         }
     }
 
-    // The icon flight sits above pillRect and outside its clip: its row spans
-    // the bar's full open width before the pill has finished widening.
-    IconFlight {
-        id: iconFlight
-        anchors.fill: parent
-        tabs: root.tabs
-        activeTab: root.activeTab
-        elapsedMs: root.elapsedMs
-        closing: root.closing
-        startMs: root.widenMs
-        dpr: root.dpr
-        barHeight: root.pillHeight
-        barCenterX: PixelGrid.snap(root.width / 2, root.dpr)
-        // The spine's left edge and top edge once the pill is at full size (dashboard inset 1px).
-        spineX: barCenterX + root.panelWidth / 2 - 1 - spine.width
-        spineY: 1
-        spineWidth: spine.width
-        buttonSize: spine.buttonSize
-        dashboardSlide: dashboardSlide.y
+    // The icon flight sits above pillRect. It is clipped to the pill's own shape,
+    // so no icon is ever seen outside the bar while the bar narrows or shrinks.
+    Item {
+        id: iconClip
+        // Keeps the flying icons inside the bar.
+        x: pillRect.x
+        y: pillRect.y
+        width: pillRect.width
+        height: pillRect.height
+        clip: true
+
+        IconFlight {
+            id: iconFlight
+            x: -iconClip.x
+            y: -iconClip.y
+            width: root.width
+            height: root.height
+            tabs: root.tabs
+            activeTab: root.activeTab
+            elapsedMs: root.elapsedMs
+            closing: root.closing
+            startMs: root.widenMs
+            dpr: root.dpr
+            barHeight: root.pillHeight
+            barCenterX: PixelGrid.snap(root.width / 2, root.dpr)
+            // The spine's left edge and top edge once the pill is at full size (dashboard inset 1px).
+            spineX: barCenterX + root.panelWidth / 2 - 1 - spine.width
+            spineY: 1
+            spineWidth: spine.width
+            buttonSize: spine.buttonSize
+            dashboardSlide: dashboardSlide.y
+        }
     }
 
     // ---- Tab bodies, one per entry of `tabs`. ----
