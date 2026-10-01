@@ -9,6 +9,10 @@ Scope {
 
     required property string folder
     readonly property string parser: Quickshell.shellPath("tools/feed-to-records/feed-to-records")
+    // Exit codes of the download and parse scripts. Calendar.qml turns them into text.
+    readonly property int exitParserMissing: 127
+    readonly property int exitNotCalendar: 70
+    readonly property int exitSaveFailed: 71
     property bool active: false
     property var paths: []
     property bool folderReady: false
@@ -49,7 +53,7 @@ Scope {
     function removeFile(path: string): void {
         removedPaths[path] = true;
         if (path.indexOf(root.folder + "/subscriptions/") === 0)
-            Quickshell.execDetached(["rm", "-f", path, path.replace(/\.ics$/, ".json")]);
+            Quickshell.execDetached(["rm", "-f", path, recordPath(path)]);
         else Quickshell.execDetached(["rm", "-f", path]);
     }
 
@@ -60,6 +64,11 @@ Scope {
 
     property var freshening: ({})
 
+    /** The compact record file that goes with a subscription's .ics file. */
+    function recordPath(icsPath: string): string {
+        return icsPath.replace(/\.ics$/, ".json");
+    }
+
     /** True when a path is the compact record file of a subscription. */
     function isRecordFile(path: string): bool {
         return path.indexOf(root.folder + "/subscriptions/") === 0;
@@ -67,7 +76,8 @@ Scope {
 
     /**
      * Starts reading one calendar file. A subscription first gets its records
-     * made again when the record file is missing or older than its .ics file.
+     * made again from its .ics file, so a changed system time zone or a newer
+     * .ics file never leaves old clock times. Reading waits for that.
      */
     function openReader(path: string): void {
         if (!isRecordFile(path)) { calendarPaths.append({ filePath: path }); return; }
@@ -140,22 +150,17 @@ Scope {
         }
     }
 
-    Process {
-        running: root.active
-        command: ["test", "-x", root.parser]
-        onExited: (code, status) => { if (code !== 0) root.parserMissing(); }
-    }
-
     Component {
         id: recordFreshener
         Process {
             required property string jsonPath
             running: true
             command: ["sh", "-c",
-                'if [ -f "$2" ] && { [ ! -s "$3" ] || [ "$2" -nt "$3" ]; }; then "$1" "$2" "$3"; fi',
+                '[ -f "$2" ] || exit 0; [ -x "$1" ] || exit ' + root.exitParserMissing + '; "$1" "$2" "$3"',
                 "sh", root.parser, jsonPath.replace(/\.json$/, ".ics"), jsonPath]
             onExited: (code, status) => {
                 delete root.freshening[jsonPath];
+                if (code === root.exitParserMissing) root.parserMissing();
                 if (root.paths.indexOf(jsonPath) >= 0) calendarPaths.append({ filePath: jsonPath });
                 destroy();
             }
@@ -220,11 +225,12 @@ Scope {
             required property var request
             running: true
             command: ["sh", "-c",
-                'if [ ! -x "$2" ]; then exit 127; fi; d=$(mktemp -d "$4/.feed.XXXXXX") || exit 1; ' +
+                'if [ ! -x "$2" ]; then exit ' +
+                root.exitParserMissing + '; fi; d=$(mktemp -d "$4/.feed.XXXXXX") || exit 1; ' +
                 'curl -fsSL --max-time 15 --max-filesize 10485760 -o "$d/feed.ics" "$1" || { c=$?; rm -f "$d/feed.ics"; rmdir "$d"; exit $c; }; ' +
                 '[ "$(wc -c <"$d/feed.ics")" -gt 10485760 ] && { rm -f "$d/feed.ics"; rmdir "$d"; exit 63; }; ' +
-                '"$2" "$d/feed.ics" "$d/feed.json" || { rm -f "$d/feed.ics" "$d/feed.json"; rmdir "$d"; exit 70; }; ' +
-                'if [ -n "$3" ]; then mv "$d/feed.ics" "$3.ics" && mv "$d/feed.json" "$3.json" || { rm -f "$d/feed.ics" "$d/feed.json"; rmdir "$d"; exit 71; }; rmdir "$d"; printf "%s\\n" "$3.json"; ' +
+                '"$2" "$d/feed.ics" "$d/feed.json" || { rm -f "$d/feed.ics" "$d/feed.json"; rmdir "$d"; exit ' + root.exitNotCalendar + '; }; ' +
+                'if [ -n "$3" ]; then mv "$d/feed.ics" "$3.ics" && mv "$d/feed.json" "$3.json" || { rm -f "$d/feed.ics" "$d/feed.json"; rmdir "$d"; exit ' + root.exitSaveFailed + '; }; rmdir "$d"; printf "%s\\n" "$3.json"; ' +
                 'else printf "%s\\n" "$d/feed.json"; fi',
                 "sh", request.url, root.parser, request.purpose === "check" ? "" : root.folder + "/subscriptions/" + request.calendarId, root.folder + "/subscriptions"]
             stdout: StdioCollector { id: outputPath }

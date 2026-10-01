@@ -76,7 +76,6 @@ var parseRule = Format.parseRule;
 var parseAlarm = Format.parseAlarm;
 var parseItem = Format.parseItem;
 var readCalendar = Format.readCalendar;
-var readCompactCalendar = Format.readCompactCalendar;
 var expandCompactItem = Format.expandCompactItem;
 var icsDate = Format.icsDate;
 var icsDateTime = Format.icsDateTime;

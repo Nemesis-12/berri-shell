@@ -40,6 +40,32 @@ struct Record {
     override_event: bool,
 }
 
+/// One VALARM block while it is read. Only the simple form berri writes is used.
+#[derive(Default)]
+struct Alarm {
+    trigger: Option<(Vec<(String, String)>, String)>,
+    action: Option<String>,
+    has_other_property: bool,
+}
+
+impl Alarm {
+    // Same rules as parseAlarm in logic/CalendarFormat.js: a display alarm with one
+    // duration trigger before (or at) the start gives minutes. Anything else gives None.
+    fn minutes(&self) -> Option<usize> {
+        if self.has_other_property || self.action.as_deref() != Some("DISPLAY") {
+            return None;
+        }
+        let (params, value) = self.trigger.as_ref()?;
+        let param = |name: &str| params.iter().rev().find(|(key, _)| key == name).map(|(_, v)| v);
+        if param("VALUE").is_some_and(|v| !v.eq_ignore_ascii_case("DURATION"))
+            || param("RELATED").is_some_and(|v| !v.eq_ignore_ascii_case("START"))
+        {
+            return None;
+        }
+        alarm_minutes(value.trim())
+    }
+}
+
 #[derive(Default)]
 struct Feed {
     name: String,
@@ -205,36 +231,38 @@ fn repeat_rule(record: &mut Record, value: &str) {
     }
 }
 
-// Reads a simple display alarm that runs before the event.
+// Takes "<digits><unit>" from the front of the text. Leaves the text alone when it does not fit.
+fn take_amount(rest: &mut &str, unit: char) -> Option<usize> {
+    let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+    if digits == 0 || !rest[digits..].starts_with(unit) {
+        return None;
+    }
+    let amount = rest[..digits].parse().ok()?;
+    *rest = &rest[digits + 1..];
+    Some(amount)
+}
+
+// Reads a trigger duration such as -PT15M. Returns None for a trigger after the start.
 fn alarm_minutes(value: &str) -> Option<usize> {
-    let rest = value.strip_prefix("-P")?;
-    let mut number = String::new();
-    let mut total = 0;
-    for ch in rest.chars() {
-        if ch == 'T' {
-            continue;
-        }
-        if ch.is_ascii_digit() {
-            number.push(ch);
-            continue;
-        }
-        let amount = number.parse::<usize>().ok()?;
-        number.clear();
-        total += amount
-            * match ch {
-                'W' => 10080,
-                'D' => 1440,
-                'H' => 60,
-                'M' => 1,
-                'S' => 0,
-                _ => return None,
-            };
+    let (before_start, mut rest) = match value.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, value),
+    };
+    rest = rest.strip_prefix('P')?;
+    let weeks = take_amount(&mut rest, 'W').unwrap_or(0);
+    let days = take_amount(&mut rest, 'D').unwrap_or(0);
+    let (mut hours, mut minutes) = (0, 0);
+    if let Some(time) = rest.strip_prefix('T') {
+        rest = time;
+        hours = take_amount(&mut rest, 'H').unwrap_or(0);
+        minutes = take_amount(&mut rest, 'M').unwrap_or(0);
+        take_amount(&mut rest, 'S');
     }
-    if number.is_empty() {
-        Some(total)
-    } else {
-        None
+    if !rest.is_empty() {
+        return None;
     }
+    let total = weeks * 10080 + days * 1440 + hours * 60 + minutes;
+    (before_start || total == 0).then_some(total)
 }
 
 // Reads events and tasks from one calendar feed.
@@ -242,9 +270,12 @@ fn read_feed(text: &str) -> Feed {
     let mut feed = Feed::default();
     let mut stack: Vec<String> = Vec::new();
     let mut event: Option<Record> = None;
-    let mut alarm = (None::<usize>, false);
+    let mut alarm = Alarm::default();
     for line in unfold(text) {
         let Some((name, params, value)) = property(&line) else {
+            if stack.len() == 3 && stack[2] == "VALARM" {
+                alarm.has_other_property = true;
+            }
             continue;
         };
         if name == "BEGIN" {
@@ -268,16 +299,14 @@ fn read_feed(text: &str) -> Feed {
                 });
             }
             if stack.len() == 3 && stack[2] == "VALARM" {
-                alarm = (None, false);
+                alarm = Alarm::default();
             }
             continue;
         }
         if name == "END" {
             if stack.len() == 3 && stack[2] == "VALARM" {
-                if !alarm.1 {
-                    if let Some(record) = event.as_mut() {
-                        record.alarm_minutes = alarm.0;
-                    }
+                if let Some(record) = event.as_mut().filter(|r| r.alarm_minutes.is_none()) {
+                    record.alarm_minutes = alarm.minutes();
                 }
             } else if stack.len() == 2 {
                 if let Some(mut record) = event.take() {
@@ -306,12 +335,11 @@ fn read_feed(text: &str) -> Feed {
             feed.name = text_value(value).trim().to_owned();
         }
         if stack.len() == 3 && stack[2] == "VALARM" {
-            if name == "TRIGGER" {
-                alarm.0 = alarm_minutes(value);
-            } else if name == "ACTION" && !value.eq_ignore_ascii_case("DISPLAY") {
-                alarm.1 = true;
-            } else if name != "DESCRIPTION" {
-                alarm.1 = true;
+            match name.as_str() {
+                "TRIGGER" => alarm.trigger = Some((params.clone(), value.to_owned())),
+                "ACTION" => alarm.action = Some(value.to_ascii_uppercase()),
+                "DESCRIPTION" => {}
+                _ => alarm.has_other_property = true,
             }
         }
         if stack.len() != 2 {
@@ -362,7 +390,7 @@ fn read_feed(text: &str) -> Feed {
             _ => {}
         }
     }
-    feed.records.sort_by_key(source_sort_key);
+    feed.records.sort_by_cached_key(source_sort_key);
     feed
 }
 
@@ -403,56 +431,71 @@ fn clean_color(value: &str) -> Option<String> {
     Some(full)
 }
 
+// Sets TZ for the life of the guard and puts the old value back when it drops,
+// on every return path.
+struct ZoneGuard(Option<std::ffi::OsString>);
+
+impl ZoneGuard {
+    fn set(zone: &str) -> Self {
+        let guard = ZoneGuard(env::var_os("TZ"));
+        env::set_var("TZ", zone);
+        unsafe { tzset() };
+        guard
+    }
+}
+
+impl Drop for ZoneGuard {
+    fn drop(&mut self) {
+        match self.0.take() {
+            Some(zone) => env::set_var("TZ", zone),
+            None => env::remove_var("TZ"),
+        }
+        unsafe { tzset() };
+    }
+}
+
 // Converts a source clock through the Linux time-zone database to local time.
 fn local_clock(date: &CalendarDate) -> Option<(String, Option<String>)> {
-    match date {
-        CalendarDate::Date(value) => Some((
-            format!("{}-{}-{}", &value[..4], &value[4..6], &value[6..8]),
-            None,
-        )),
-        CalendarDate::DateTime { value, zone, utc } => {
-            let source_zone = if *utc { Some("UTC") } else { zone.as_deref() };
-            let original_zone = env::var_os("TZ");
-            if let Some(zone) = source_zone {
-                env::set_var("TZ", zone);
-                unsafe {
-                    tzset();
-                }
-            }
-            let mut clock = Clock {
-                year: value[..4].parse::<i32>().ok()? - 1900,
-                month: value[4..6].parse::<i32>().ok()? - 1,
-                day: value[6..8].parse().ok()?,
-                hour: value[9..11].parse().ok()?,
-                minute: value[11..13].parse().ok()?,
-                second: value[13..15].parse().ok()?,
-                daylight: -1,
-                ..Clock::default()
-            };
-            let instant = unsafe { mktime(&mut clock) };
-            if let Some(zone) = original_zone {
-                env::set_var("TZ", zone);
-            } else {
-                env::remove_var("TZ");
-            }
-            unsafe {
-                tzset();
-            }
-            let mut local = Clock::default();
-            if unsafe { localtime_r(&instant, &mut local) }.is_null() {
-                return None;
-            }
-            Some((
-                format!(
-                    "{:04}-{:02}-{:02}",
-                    local.year + 1900,
-                    local.month + 1,
-                    local.day
-                ),
-                Some(format!("{:02}:{:02}", local.hour, local.minute)),
+    let (value, zone, utc) = match date {
+        CalendarDate::Date(value) => {
+            return Some((
+                format!("{}-{}-{}", &value[..4], &value[4..6], &value[6..8]),
+                None,
             ))
         }
+        CalendarDate::DateTime { value, zone, utc } => (value, zone, utc),
+    };
+    let mut clock = Clock {
+        year: value[..4].parse::<i32>().ok()? - 1900,
+        month: value[4..6].parse::<i32>().ok()? - 1,
+        day: value[6..8].parse().ok()?,
+        hour: value[9..11].parse().ok()?,
+        minute: value[11..13].parse().ok()?,
+        second: value[13..15].parse().ok()?,
+        daylight: -1,
+        ..Clock::default()
+    };
+    let instant = {
+        let source_zone = if *utc { Some("UTC") } else { zone.as_deref() };
+        let _restore = source_zone.map(ZoneGuard::set);
+        unsafe { mktime(&mut clock) }
+    };
+    if instant == -1 {
+        return None;
     }
+    let mut local = Clock::default();
+    if unsafe { localtime_r(&instant, &mut local) }.is_null() {
+        return None;
+    }
+    Some((
+        format!(
+            "{:04}-{:02}-{:02}",
+            local.year + 1900,
+            local.month + 1,
+            local.day
+        ),
+        Some(format!("{:02}:{:02}", local.hour, local.minute)),
+    ))
 }
 
 // Moves an ISO date one day backward for exclusive all-day event ends.
@@ -522,8 +565,8 @@ fn number(output: &mut String, name: &str, value: Option<usize>) {
     output.push(',');
 }
 
-// Appends a named list or null when the list is empty.
-fn list<T: ToString>(output: &mut String, name: &str, values: &[T], strings: bool) {
+// Appends a named list of already-written JSON values, or null when the list is empty.
+fn list(output: &mut String, name: &str, values: &[String]) {
     json_string(output, name);
     output.push(':');
     if values.is_empty() {
@@ -531,17 +574,27 @@ fn list<T: ToString>(output: &mut String, name: &str, values: &[T], strings: boo
         return;
     }
     output.push('[');
-    for (index, value) in values.iter().enumerate() {
-        if index > 0 {
-            output.push(',');
-        }
-        if strings {
-            json_string(output, &value.to_string());
-        } else {
-            output.push_str(&value.to_string());
-        }
-    }
+    output.push_str(&values.join(","));
     output.push_str("],");
+}
+
+// Appends a named list of strings, or null when the list is empty.
+fn string_list(output: &mut String, name: &str, values: &[String]) {
+    let quoted: Vec<String> = values
+        .iter()
+        .map(|value| {
+            let mut text = String::new();
+            json_string(&mut text, value);
+            text
+        })
+        .collect();
+    list(output, name, &quoted);
+}
+
+// Appends a named list of numbers, or null when the list is empty.
+fn number_list(output: &mut String, name: &str, values: &[usize]) {
+    let numbers: Vec<String> = values.iter().map(usize::to_string).collect();
+    list(output, name, &numbers);
 }
 
 // Writes one record with the field names used by CalendarFormat.js.
@@ -612,11 +665,11 @@ fn record_json(output: &mut String, record: &Record) {
     field(output, "color", Some(&record.color));
     field(output, "repeat", Some(&record.repeat));
     number(output, "interval", Some(record.interval));
-    list(output, "byDay", &record.by_day, false);
+    number_list(output, "byDay", &record.by_day);
     field(output, "until", until.as_deref());
     number(output, "count", record.count);
-    list(output, "exdates", &exdates, true);
-    list(output, "doneDates", &done_dates, true);
+    string_list(output, "exdates", &exdates);
+    string_list(output, "doneDates", &done_dates);
     number(output, "alarmMinutes", record.alarm_minutes);
     let status = record
         .status

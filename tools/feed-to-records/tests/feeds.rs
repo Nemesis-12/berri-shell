@@ -134,3 +134,44 @@ fn bad_input_fails_without_output() {
     fs::remove_file(input).unwrap();
     assert_eq!(run("/nonexistent/berri-feed.ics"), (false, None));
 }
+
+// Wraps alarm blocks in one all-day event and returns the alarm field of its record.
+fn alarm_field(name: &str, alarms: &[&str]) -> String {
+    let text = format!(
+        "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART;VALUE=DATE:20261005\r\nSUMMARY:S\r\n{}END:VEVENT\r\nEND:VCALENDAR\r\n",
+        alarms.concat()
+    );
+    let json = convert_text(name, &text);
+    let start = json.find("\"alarmMinutes\":").unwrap() + "\"alarmMinutes\":".len();
+    json[start..].split([',', '}']).next().unwrap().to_owned()
+}
+
+const DISPLAY_15: &str = "BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT15M\r\nDESCRIPTION:x\r\nEND:VALARM\r\n";
+
+// A display alarm with a description is a simple alarm.
+#[test]
+fn alarm_with_description_gives_minutes() {
+    assert_eq!(alarm_field("alarm-display", &[DISPLAY_15]), "15");
+}
+
+// An alarm without ACTION is not a simple alarm.
+#[test]
+fn alarm_without_action_is_ignored() {
+    assert_eq!(alarm_field("alarm-noaction", &["BEGIN:VALARM\r\nTRIGGER:-PT15M\r\nEND:VALARM\r\n"]), "null");
+}
+
+// A trigger at the start time is 0 minutes, not "no alarm".
+#[test]
+fn alarm_at_start_is_zero() {
+    assert_eq!(alarm_field("alarm-zero", &["BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:PT0S\r\nEND:VALARM\r\n"]), "0");
+}
+
+// The first simple alarm wins. Later alarms are ignored.
+#[test]
+fn first_simple_alarm_wins() {
+    let second = "BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT5M\r\nEND:VALARM\r\n";
+    let first = "BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT10M\r\nEND:VALARM\r\n";
+    assert_eq!(alarm_field("alarm-two", &[first, second]), "10");
+    let email = "BEGIN:VALARM\r\nACTION:EMAIL\r\nTRIGGER:-PT10M\r\nEND:VALARM\r\n";
+    assert_eq!(alarm_field("alarm-skip", &[email, second]), "5");
+}

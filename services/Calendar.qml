@@ -48,6 +48,8 @@ Singleton {
     property string lastError: ""
     /** An installation error shown in the Calendar source view. */
     property string parserError: ""
+    readonly property string parserMissingText: "Calendar parser is missing. Build tools/feed-to-records"
+    readonly property string recordsErrorText: "Could not read subscription records"
     /** How many items of the last importFile were already in other calendars (0 after a failed import). */
     property int lastImportDuplicates: 0
 
@@ -413,7 +415,7 @@ Singleton {
     function _idOfPath(path: string): string {
         for (var i = 0; i < _order.length; i++)
             if (_calendars[_order[i]].path === path ||
-                _calendars[_order[i]].kind === "link" && _calendars[_order[i]].path.replace(/\.ics$/, ".json") === path) return _order[i];
+                _calendars[_order[i]].kind === "link" && files.recordPath(_calendars[_order[i]].path) === path) return _order[i];
         return "";
     }
 
@@ -466,32 +468,33 @@ Singleton {
         return Date.fromLocaleString(Qt.locale("C"), value + " " + zone, "yyyyMMdd'T'HHmmss tttt").getTime();
     }
 
+    // Parses a subscription record file. Null when it is not valid records.
+    function _parseRecords(json: string): var {
+        var parsed;
+        try { parsed = JSON.parse(json); } catch (e) { return null; }
+        return parsed && Array.isArray(parsed.records) ? parsed : null;
+    }
+
+    // Shows an error for a subscription whose records could not be read. The calendar counts as loaded.
+    function _recordsFailed(calendar: var, message: string): void {
+        calendar.error = message;
+        console.error("Calendar: " + message + " for " + calendar.name);
+        calendar.loaded = true;
+        _rebuild();
+        _checkReady();
+    }
+
     function _ingest(path: string, text: string, failed: bool): void {
         var id = _idOfPath(path);
         if (!id) return;
         var calendar = _calendars[id];
         var signature = text.length + ":" + Ics.shortHash(text);
-        if (failed && calendar.kind === "link") {
-            calendar.error = parserError || "Could not read subscription records";
-            console.error("Calendar: " + calendar.error + " for " + calendar.name);
-            calendar.loaded = true;
-            _rebuild();
-            _checkReady();
-            return;
-        }
+        if (failed && calendar.kind === "link") { _recordsFailed(calendar, parserError || recordsErrorText); return; }
         if ((!calendar.document && !calendar.records) || !failed && calendar.signature !== signature) {
             var unnamed = !calendar.name;
             if (calendar.kind === "link") {
-                var parsed;
-                try { parsed = JSON.parse(text); } catch (e) { parsed = null; }
-                if (!parsed || !Array.isArray(parsed.records)) {
-                    calendar.error = "Could not read subscription records";
-                    console.error("Calendar: " + calendar.error + " for " + calendar.name);
-                    calendar.loaded = true;
-                    _rebuild();
-                    _checkReady();
-                    return;
-                }
+                var parsed = _parseRecords(text);
+                if (!parsed) { _recordsFailed(calendar, recordsErrorText); return; }
                 calendar.records = parsed.records;
                 calendar.signature = signature;
                 if (unnamed) calendar.name = parsed.name || calendar.file.replace(/\.ics$/i, "");
@@ -554,22 +557,22 @@ Singleton {
     }
 
     function _downloaded(purpose: string, shownUrl: string, url: string, id: string, code: int, jsonPath: string, color: string, requestId: int): void {
-        var error = code === 127 ? "Calendar parser is missing. Build tools/feed-to-records" :
-            code === 70 ? "Not a calendar feed or parser failed" :
-            code === 71 ? "Could not save calendar" : code !== 0 ? Ics.curlError(code) : "";
+        var error = code === files.exitParserMissing ? parserMissingText :
+            code === files.exitNotCalendar ? "Not a calendar feed or parser failed" :
+            code === files.exitSaveFailed ? "Could not save calendar" : code !== 0 ? Ics.curlError(code) : "";
         var doc = null;
         var json = "";
         if (!error) {
             json = files.readNow(jsonPath) || "";
-            try { doc = JSON.parse(json); } catch (e) { doc = null; }
-            if (!doc || !Array.isArray(doc.records)) { doc = null; error = "Could not read subscription records"; }
+            doc = _parseRecords(json);
+            if (!doc) error = recordsErrorText;
         }
         if (purpose === "check" && jsonPath) Quickshell.execDetached(["sh", "-c",
             'rm -f "$1" "$2"; rmdir "$3"', "sh", jsonPath,
             jsonPath.replace(/feed\.json$/, "feed.ics"), jsonPath.slice(0, jsonPath.lastIndexOf("/"))]);
         if (error) {
             console.error("Calendar: " + error);
-            if (code === 127) parserError = error;
+            if (code === files.exitParserMissing) parserError = error;
         } else parserError = "";
         var name = doc ? doc.name || Ics.linkHost(url) : "";
         if (purpose === "check") {
@@ -676,7 +679,7 @@ Singleton {
         onDownloaded: (request, code, text) => root._downloaded(request.purpose, request.shownUrl,
             request.url, request.calendarId, code, text, request.color, request.requestId)
         onParserMissing: {
-            root.parserError = "Calendar parser is missing. Build tools/feed-to-records";
+            root.parserError = root.parserMissingText;
             console.error("Calendar: " + root.parserError);
         }
     }
@@ -707,7 +710,7 @@ Singleton {
     function _syncPaths(): void {
         files.paths = _order.map(function (id) {
             var calendar = _calendars[id];
-            return calendar.kind === "link" ? calendar.path.replace(/\.ics$/, ".json") : calendar.path;
+            return calendar.kind === "link" ? files.recordPath(calendar.path) : calendar.path;
         });
         _checkReady();
     }
