@@ -17,6 +17,10 @@ if [ -n "$pids" ]; then
     pgrep -f "$pattern" >/dev/null || break
     sleep 0.3
   done
+  if pgrep -f "$pattern" >/dev/null; then
+    echo "restart-berri: old instance still running, not starting a new one" >&2
+    exit 1
+  fi
 fi
 
 QSG_RENDER_LOOP=basic QS_DISABLE_FILE_WATCHER=1 \
