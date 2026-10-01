@@ -64,7 +64,7 @@ Singleton {
         return unitF ? Math.round(c * 9 / 5 + 32) + "°" : Math.round(c) + "°";
     }
 
-    // Parsed model from WeatherParse.parse(); backs dayDetail() and hoursFor().
+    // Parsed model from WeatherParse.parse(); backs dayDetail() and stripHours().
     property var model: null
 
     /** Readouts for day `index` (0 = now). Same field names as the current properties, plus tempC, minC, maxC, code. */
@@ -73,7 +73,7 @@ Singleton {
     }
 
     /** Hours for the strip of day `index`; for 0, the next 24 hours (they cross midnight). */
-    function hoursFor(index) {
+    function stripHours(index) {
         return model ? WeatherParse.stripHours(model, index) : [];
     }
 

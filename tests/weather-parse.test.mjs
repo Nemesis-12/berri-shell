@@ -67,8 +67,10 @@ test("hours strip for today keeps going after midnight", () => {
   const model = lib.parse(late);
   const strip = lib.stripHours(model, 0);
   assert.equal(strip.length, 24);
-  assert.deepEqual([strip[0].time.getHours(), strip[1].time.getHours(), strip[1].time.getDate()], [23, 0, 1]);
-  assert.equal(lib.stripHours(model, 1).length, 24); // other days: whole day
+  assert.deepEqual(Array.from(strip.slice(0, 6), (h) => h.time.getHours()), [23, 0, 1, 2, 3, 4]);
+  const tomorrow = lib.stripHours(model, 1);
+  assert.equal(tomorrow.length, 24); // other days: whole day
+  assert.ok(tomorrow.every((h) => h.time.getDate() === 1));
 });
 
 test("day detail", () => {
