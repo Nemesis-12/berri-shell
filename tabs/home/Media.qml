@@ -151,13 +151,10 @@ Item {
 
             Rectangle {
                 height: parent.height
-                width: parent.width * (root.length > 0 ? Math.min(1, root.displayPosition / root.length) : 0)
+                // Snapped to device pixels: the window redraws only when the bar grows by a
+                // full pixel (no width animation, which redrew every frame for sub-pixel change).
+                width: PixelGrid.snap(parent.width * (root.length > 0 ? Math.min(1, root.displayPosition / root.length) : 0), root.dpr)
                 color: Theme.accent
-
-                Behavior on width {
-                    enabled: root.isPlaying
-                    NumberAnimation { duration: 1000; easing.type: Easing.Linear }
-                }
             }
         }
 
