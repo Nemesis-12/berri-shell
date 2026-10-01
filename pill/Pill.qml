@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Window
-import QtQuick.Effects
 import Quickshell.Services.SystemTray
 import "../logic/PixelGrid.js" as PixelGrid
 import "../logic/Timeline.js" as Timeline
@@ -222,27 +221,21 @@ Item {
         }
     }
 
-    MultiEffect {
-        source: pillRect
-        anchors.fill: pillRect
-        shadowEnabled: true
-        shadowColor: "black"
-        shadowHorizontalOffset: 0
-        blurMax: 32
-
-        // The shadow of the pill at rest or under the pointer; the open motion deepens it.
-        property real restOffset: root.pointerInside ? 10 : 4
-        property real restOpacity: root.pointerInside ? 0.38 : 0.28
-        property real restBlur: root.pointerInside ? 0.8 : 0.44
-        Behavior on restOffset { NumberAnimation { duration: root.shadowMs } }
-        Behavior on restOpacity { NumberAnimation { duration: root.shadowMs } }
-        Behavior on restBlur { NumberAnimation { duration: root.shadowMs } }
-
-        readonly property real deepen: Timeline.fadeSlice(root.elapsedMs, root.widenMs, root.shadowMs, root.closing, root.growCloseAtMs)
-
-        shadowVerticalOffset: restOffset + (24 - restOffset) * deepen
-        shadowOpacity: restOpacity + (0.45 - restOpacity) * deepen
-        shadowBlur: restBlur + (1.0 - restBlur) * deepen
+    // The shadow of the pill; the open motion deepens it.
+    PanelShadow {
+        target: pillRect
+        hovered: root.pointerInside
+        hoverMs: root.shadowMs
+        openProgress: Timeline.fadeSlice(root.elapsedMs, root.widenMs, root.shadowMs, root.closing, root.growCloseAtMs)
+        restOffset: 4
+        restStrength: 0.28
+        restBlur: 14
+        hoverOffset: 10
+        hoverStrength: 0.38
+        hoverBlur: 26
+        openOffset: 24
+        openStrength: 0.45
+        openBlur: 32
     }
 
     Rectangle {

@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import Quickshell.Hyprland
 import "../logic/Times.js" as Times
 import "../logic/PixelGrid.js" as PixelGrid
@@ -188,30 +187,16 @@ Item {
         + (actionCount > 0 ? 10 + 30 : 0)
     readonly property real fullHeight: PixelGrid.snap(2 + 2 * cardPadding + contentHeight, dpr)
 
-    // Plain body with the card's shape: the shadow source (a source with wide content would leak it past the card).
-    Rectangle {
-        id: shadowBody
-        x: card.x
-        y: card.y
-        width: card.width
-        height: card.height
-        radius: card.radius
-        color: Theme.shell
+    PanelShadow {
+        target: card
+        visible: card.visible
         opacity: card.opacity
-        visible: card.visible
-    }
-
-    MultiEffect {
-        source: shadowBody
-        anchors.fill: shadowBody
-        visible: card.visible
-        shadowEnabled: true
-        shadowColor: "black"
-        shadowHorizontalOffset: 0
-        blurMax: 32
-        shadowVerticalOffset: 4 + 20 * root.progress
-        shadowOpacity: 0.45 * root.progress
-        shadowBlur: 0.44 + 0.56 * root.progress
+        openProgress: root.progress
+        restOffset: 4
+        restBlur: 14
+        openOffset: 24
+        openStrength: 0.45
+        openBlur: 32
     }
 
     Rectangle {
