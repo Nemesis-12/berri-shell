@@ -186,6 +186,7 @@ Item {
     readonly property date today: Clock.minute
 
     WhileVisible { service: Clock }
+    WhileVisible { service: Calendar }
 
     // Shows the month that contains `day` and selects it.
     function pick(day) {

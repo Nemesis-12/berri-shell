@@ -10,8 +10,9 @@ import qs.common
  * MediaTab.qml only read this. The choice follows player changes and needs
  * no timer. Only the play position needs a 1 s timer, because Mpris does not
  * push the position while a track plays. That timer runs only while a view is
- * visible (`viewers` > 0). When a view opens, the current player and position
- * are read at once, so a change made while all views were hidden shows right.
+ * visible (`viewers` > 0) and a track plays. When a view opens, the current
+ * player and position are read at once, so a change made while all views were
+ * hidden shows right. When a track pauses, the position is read once more.
  */
 Singleton {
     id: root
@@ -89,13 +90,14 @@ Singleton {
 
     Timer {
         interval: 1000
-        running: root.viewers > 0
+        running: root.viewers > 0 && root.isPlaying
         repeat: true
-        onTriggered: {
-            root.refreshPlayer();
-            if (root.isPlaying) root.refreshPosition();
-        }
+        triggeredOnStart: true
+        onTriggered: root.refreshPosition()
     }
+
+    // The timer stops on pause, so read the position once for the last second.
+    onIsPlayingChanged: if (!isPlaying && viewers > 0) refreshPosition()
 
     // A seek or a track change moves the position at once.
     Connections {

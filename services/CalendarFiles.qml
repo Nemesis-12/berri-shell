@@ -18,6 +18,10 @@ Scope {
     property bool folderReady: false
     property var removedPaths: ({})
     property bool listingAgain: false
+    /** Time between safety scans, in ms. */
+    readonly property int safetyScanMs: 300000
+    /** How many views of the calendar are visible now (see WhileVisible.qml). A scan runs when the first one opens. */
+    property int viewers: 0
 
     signal listed(var paths)
     signal read(string path, string text, bool failed)
@@ -213,12 +217,16 @@ Scope {
             }
         }
     }
+    // The folder watch reports changes. This check only covers a lost watch, so
+    // it is rare: a file removed outside the app shows within 5 minutes.
+    // A scan also runs when the Calendar tab opens (see viewers).
     Timer {
-        interval: 60000
+        interval: root.safetyScanMs
         repeat: true
         running: root.active && root.folderReady
         onTriggered: root.checkFolder()
     }
+    onViewersChanged: if (viewers === 1) checkFolder()
 
     // Download and convert in a child process. No ICS text enters QML.
     Component {

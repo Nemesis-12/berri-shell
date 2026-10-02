@@ -40,9 +40,8 @@ Item {
      *  bubbled up to Pill/shell.qml so the overlay layer can grab it. */
     readonly property bool wifiPasswordActive: wifiList.passwordActive
 
-    // The Quickshell.Networking Wi-Fi device, resolved once: device presence
-    // does not change at runtime on this machine, so a live binding is not
-    // worth the complexity.
+    // The Quickshell.Networking Wi-Fi device. It is taken when the device list
+    // changes, with a limited retry while this item is visible (see below).
     property var wifiDevice: null
 
     function findWifiDevice() {
@@ -95,14 +94,31 @@ Item {
     }
 
     // Networking.devices can still be empty right after startup (NetworkManager
-    // backend populates it asynchronously), so retry until the Wi-Fi device
-    // shows up instead of resolving it once too early.
+    // backend populates it asynchronously). The Wi-Fi device is taken when the
+    // device list changes. The retry timer is a fallback: it runs only while
+    // this item is visible, stops after wifiDeviceRetryLimit tries, and gets
+    // its tries back each time this item is shown again.
+    readonly property int wifiDeviceRetryLimit: 20
+    property int wifiDeviceTries: 0
+
+    Connections {
+        target: Networking.devices
+        function onValuesChanged() {
+            if (root.wifiDevice === null) root.wifiDevice = root.findWifiDevice();
+        }
+    }
+
+    onVisibleChanged: if (visible) wifiDeviceTries = 0
+
     Timer {
         id: wifiDevicePoll
         interval: 500
         repeat: true
-        running: root.wifiDevice === null
-        onTriggered: root.wifiDevice = root.findWifiDevice()
+        running: root.wifiDevice === null && root.visible && root.wifiDeviceTries < root.wifiDeviceRetryLimit
+        onTriggered: {
+            root.wifiDeviceTries += 1;
+            root.wifiDevice = root.findWifiDevice();
+        }
     }
 
     Component.onCompleted: {

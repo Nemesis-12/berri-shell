@@ -19,7 +19,7 @@ Item {
     /** Filter in use: "all", "unread" or an app name. */
     property string filter: "all"
 
-    /** Clock for the relative times; ticks every 30 s. */
+    /** Clock for the relative times; set when the tab is shown, then every 30 s while it stays shown. */
     property real now: Date.now()
 
     readonly property int gap: 1
@@ -123,10 +123,13 @@ Item {
         function onItemsChanged() { Qt.callLater(root.rebuild); }
     }
 
+    // Runs only while this tab is shown. It fires once when it starts, so the
+    // first age labels on reopen are right.
     Timer {
         interval: 30000
-        running: true
+        running: root.visible
         repeat: true
+        triggeredOnStart: true
         onTriggered: root.now = Date.now()
     }
 
