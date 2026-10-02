@@ -53,6 +53,26 @@ test("one item edit keeps other months cached and leaves their views unchanged",
   assert.equal(ics.cachedItemsInMonth(months, 2026, 10)["2026-10-05"][0].title, "After");
 });
 
+test("editing the later duplicate's title separates its copy and changing it back joins the first copy", () => {
+  const b = calendar([item({ uid: "b-event" })], { id: "b", name: "B", kind: "file" });
+  const a = calendar([item({ uid: "a-event" })], { id: "a", name: "A", kind: "file" });
+  const months = ics.createMonthCache([b, a]);
+  const shown = () => plain(ics.cachedItemsInMonth(months, 2026, 10)["2026-10-05"]
+    .map(o => ({ calendarId: o.calendarId, sourceUid: o.sourceUid, title: o.title, alsoIn: o.alsoIn })));
+  assert.deepEqual(shown(), [{ calendarId: "b", sourceUid: "b-event", title: "Before", alsoIn: ["A"] }]);
+
+  a.document.items[0] = ics.applyChanges(a.document.items[0], { title: "After" });
+  ics.editMonthCache(months, a, ["a-event"]);
+  assert.deepEqual(shown(), [
+    { calendarId: "a", sourceUid: "a-event", title: "After", alsoIn: [] },
+    { calendarId: "b", sourceUid: "b-event", title: "Before", alsoIn: [] }
+  ]);
+
+  a.document.items[0] = ics.applyChanges(a.document.items[0], { title: "Before" });
+  ics.editMonthCache(months, a, ["a-event"]);
+  assert.deepEqual(shown(), [{ calendarId: "b", sourceUid: "b-event", title: "Before", alsoIn: ["A"] }]);
+});
+
 test("the service save updates the edited month and retains the other month objects", () => {
   const shell = service([item({})]);
   const september = shell.itemsInMonth(2026, 9);
