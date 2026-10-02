@@ -193,9 +193,9 @@ function newCalendarColor(wanted, used) {
 
 /**
  * Joins several calendars into one item list for the views.
- * calendars: [{ id, color, hidden, readOnly, items }]. Every stored item gets
- * calendarId and readOnly. The result holds copies of the items of calendars
- * that are not hidden. An item keeps its own color; an item with the default
+ * calendars: [{ id, color, hidden, readOnly, items }]. The result holds
+ * projected items (copies with calendarId and readOnly) of the calendars
+ * that are not hidden. The stored items are not changed. An item keeps its own color; an item with the default
  * color ("accent", not written to the file) takes the color of its calendar.
  * calendar.colorOverrides ({ uid: color }, links only) gives single items a
  * color of their own. hasOwnColor tells if the item has its own color.
@@ -204,17 +204,12 @@ function mergeCalendars(calendars) {
     var out = [];
     for (var c = 0; c < calendars.length; c++) {
         var cal = calendars[c];
+        if (cal.hidden) continue;
         for (var i = 0; i < cal.items.length; i++) {
-            var item = cal.items[i];
-            item.calendarId = cal.id;
-            item.readOnly = !!cal.readOnly;
-            item.hasOwnColor = cal.readOnly ? false : item.color !== "accent";
-            if (cal.hidden) continue;
-            var copy = {};
-            for (var k in item) copy[k] = item[k];
-            var own = cal.readOnly && cal.colorOverrides ? Items.cleanColor(cal.colorOverrides[item.uid]) : null;
+            var copy = Items.projectedItem(cal.items[i], cal.id, cal.readOnly);
+            var own = cal.readOnly && cal.colorOverrides ? Items.cleanColor(cal.colorOverrides[copy.uid]) : null;
             if (own) { copy.color = own; copy.hasOwnColor = true; }
-            else if (item.color === "accent") copy.color = cal.color || "accent";
+            else if (copy.color === "accent") copy.color = cal.color || "accent";
             out.push(copy);
         }
     }
@@ -362,9 +357,7 @@ function storedItemsInMonth(projection, year, month) {
                 var spanDays = r.time === null && r.endDate ? Times.dayNum(r.endDate) - Times.dayNum(r.date) : 0;
                 if (r.until < Items.addDays(first, -spanDays)) continue;
             }
-            var item = Format.expandCompactItem(r);
-            item.calendarId = feed.id;
-            item.readOnly = true;
+            var item = Items.projectedItem(Format.expandCompactItem(r), feed.id, true);
             var own = Items.cleanColor(feed.colorOverrides && feed.colorOverrides[item.uid]);
             item.hasOwnColor = !!own;
             if (own) item.color = own;

@@ -91,16 +91,13 @@ Singleton {
         void root.revision;
         var found = _locate(uid, false);
         if (!found) return null;
-        return Ics.withItemIdentity(Ics.withColorOverride(_storedItem(found), found.meta.colorOverrides));
+        return Ics.shownItem(Ics.withColorOverride(_storedItem(found), found.meta.colorOverrides));
     }
 
-    /** Reads the selected stored item and adds link details when needed. */
+    /** The selected item as a projected item: a copy with its calendarId and readOnly. Link records become stored items first. */
     function _storedItem(found: var): var {
-        if (found.doc) return found.doc.items[found.index];
-        var item = Ics.expandCompactItem(found.meta.records[found.index]);
-        item.calendarId = found.meta.id;
-        item.readOnly = true;
-        return item;
+        if (found.doc) return Ics.projectedItem(found.doc.items[found.index], found.meta.id, false);
+        return Ics.projectedItem(Ics.expandCompactItem(found.meta.records[found.index]), found.meta.id, true);
     }
 
     /**
@@ -382,11 +379,7 @@ Singleton {
             var doc = meta.document;
             var items = doc ? doc.items : meta.records || [];
             for (var i = 0; i < items.length; i++) {
-                var copy = {};
-                var item = doc ? items[i] : Ics.expandCompactItem(items[i]);
-                for (var k in item) copy[k] = item[k];
-                copy.calendarId = id;
-                out.push(copy);
+                out.push(Ics.projectedItem(doc ? items[i] : Ics.expandCompactItem(items[i]), id, !doc));
             }
         }
         return out;

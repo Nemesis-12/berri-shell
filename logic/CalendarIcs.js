@@ -1,5 +1,4 @@
 .pragma library
-.import "Times.js" as Times
 .import "CalendarFormat.js" as Format
 .import "CalendarItems.js" as Items
 .import "CalendarQueries.js" as Queries
@@ -7,6 +6,9 @@
 
 /*
  * iCalendar (RFC 5545) subset used by berri's calendar. Pure functions, no QML.
+ *
+ * This file lists only the names that QML calls. Tests import the module they test
+ * (CalendarFormat.js, CalendarItems.js, CalendarQueries.js, CalendarMonths.js).
  *
  * Calendar shape:  { prodid, raw: [line], rawComponents: [[line]], items: [Item] }
  *
@@ -23,7 +25,9 @@
  *   ruleRest (RRULE parts berri ignores, written back unchanged),
  *   raw (unknown property lines, kept as is), rawChildren (unknown nested components),
  *   sourceDates (imported DTSTART, DTEND/DUE, UNTIL and EXDATE source forms).
- *   Calendar.qml gives view copies a pair key in uid and the file UID in sourceUid.
+ *   This is the stored item. CalendarItems.js checks it when it is built (storedItem).
+ *   A projected item is a copy with calendarId, readOnly and hasOwnColor (projectedItem).
+ *   A shown item is a copy for QML with a pair key in uid and the file UID in sourceUid (shownItem).
  *
  * Occurrence shape (what day and month queries return):
  *   uid, kind, title, color, date (the day shown), occurrenceDate (start day of
@@ -49,98 +53,42 @@
  * RECURRENCE-ID overrides, BYMONTHDAY and other rule parts stay raw but are ignored.
  */
 
-// Keep one calendar import for QML callers and tests.
-var FREQS = Format.repeatNames;
-var WEEKDAYS = Format.weekdays;
-var PRODID = Format.calendarProduct;
-var COLOR_PRESETS = Items.itemColors;
-var OLD_TAG_COLORS = Format.oldTagColors;
+// Names for QML callers.
 
-var dayNum = Times.dayNum;
-var keyOfDayNum = Times.keyOfDayNum;
-
-var utf8Length = Format.utf8Length;
-var foldLine = Format.foldLine;
-var unfold = Format.unfold;
-var escapeText = Format.escapeText;
-var splitUnescaped = Format.splitUnescaped;
-var unescapeText = Format.unescapeText;
-var parseLine = Format.parseLine;
-var parseComponents = Format.parseComponents;
-var utcClock = Format.utcClock;
-var clockMs = Format.clockMs;
-var zoneInstant = Format.zoneInstant;
-var zoneClock = Format.zoneClock;
-var parseDateValue = Format.parseDateValue;
-var parseDateProperty = Format.parseDateProperty;
-var parseRule = Format.parseRule;
-var parseAlarm = Format.parseAlarm;
-var parseItem = Format.parseItem;
-var readCalendar = Format.readCalendar;
-var expandCompactItem = Format.expandCompactItem;
-var icsDate = Format.icsDate;
-var icsDateTime = Format.icsDateTime;
-var dateProp = Format.dateProp;
-var ruleText = Format.ruleText;
-var itemLines = Format.itemLines;
-var writeCalendar = Format.writeCalendar;
-var emptyCalendar = Format.emptyCalendar;
-
-var weekdayOf = Items.weekdayOf;
-var daysInMonth = Items.daysInMonth;
 var toKey = Items.toKey;
-var addDays = Items.addDays;
 var cleanColor = Items.cleanColor;
 var itemKey = Items.itemKey;
 var itemIdentity = Items.itemIdentity;
-var itemIndex = Items.itemIndex;
-var withItemIdentity = Items.withItemIdentity;
-var newUid = Items.newUid;
-var stampNow = Items.stampNow;
-var normalize = Items.normalize;
 var makeItem = Items.makeItem;
 var applyChanges = Items.applyChanges;
 var withDone = Items.withDone;
 var withoutOccurrence = Items.withoutOccurrence;
 var moveOccurrence = Items.moveOccurrence;
 var snoozeTarget = Items.snoozeTarget;
-var startDays = Items.startDays;
-var occurrenceOf = Items.occurrenceOf;
-var expand = Items.expand;
 var dueBetween = Items.dueBetween;
 var nextDueMs = Items.nextDueMs;
 var clearItemColors = Items.clearItemColors;
+var projectedItem = Items.projectedItem;
+var shownItem = Items.shownItem;
 
-var dayRank = Queries.dayRank;
-var compareOccurrences = Queries.compareOccurrences;
-var titleKey = Queries.titleKey;
-var startTitleKey = Queries.startTitleKey;
-var duplicateGroups = Queries.duplicateGroups;
-var keptCopy = Queries.keptCopy;
-var dropDuplicates = Queries.dropDuplicates;
-var dropDuplicateOccurrences = Queries.dropDuplicateOccurrences;
-var itemKeys = Queries.itemKeys;
-var dropDuplicateItems = Queries.dropDuplicateItems;
+var readCalendar = Format.readCalendar;
+var writeCalendar = Format.writeCalendar;
+var emptyCalendar = Format.emptyCalendar;
+var expandCompactItem = Format.expandCompactItem;
+
 var countDuplicates = Queries.countDuplicates;
 var countStoredDuplicates = Queries.countStoredDuplicates;
-var occurrencesByDay = Queries.occurrencesByDay;
-var itemsOn = Queries.itemsOn;
-var itemsInMonth = Queries.itemsInMonth;
 var calendarName = Queries.calendarName;
 var looksLikeCalendar = Queries.looksLikeCalendar;
 var feedUrl = Queries.feedUrl;
 var linkHost = Queries.linkHost;
 var shortHash = Queries.shortHash;
-var unusedColor = Queries.unusedColor;
 var newCalendarColor = Queries.newCalendarColor;
-var mergeCalendars = Queries.mergeCalendars;
 var withColorOverride = Queries.withColorOverride;
 var pruneColorOverrides = Queries.pruneColorOverrides;
 var pruneRecordColorOverrides = Queries.pruneRecordColorOverrides;
 var curlError = Queries.curlError;
-var projectCalendars = Queries.projectCalendars;
-var projectStoredCalendars = Queries.projectStoredCalendars;
-var storedItemsInMonth = Queries.storedItemsInMonth;
+
 var createMonthCache = Months.createMonthCache;
 var cachedItemsInMonth = Months.cachedItemsInMonth;
 var editMonthCache = Months.editMonthCache;

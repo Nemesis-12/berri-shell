@@ -374,13 +374,9 @@ function readCalendar(text, localZone) {
     return cal;
 }
 
+/** A stored item from one stored link record. Malformed record fields take their defaults. */
 function expandCompactItem(record) {
-    return { uid: record.uid, kind: record.kind, title: record.title, location: record.location,
-        date: record.date, time: record.time, end: record.end, endDate: record.endDate,
-        color: record.color, repeat: record.repeat, interval: record.interval,
-        byDay: record.byDay || [], until: record.until, count: record.count,
-        exdates: record.exdates || [], doneDates: record.doneDates || [],
-        alarmMinutes: record.alarmMinutes, status: record.status };
+    return Items.storedItem(record);
 }
 
 function icsDate(key) {

@@ -50,24 +50,44 @@ function itemIdentity(key) {
     return null;
 }
 
-/** Finds only the requested calendar copy. Read-only copies cannot be changed. */
+/** Finds only the requested calendar copy. Read-only copies cannot be changed. Rows without a usable identity never match. */
 function itemIndex(items, key, forEdit) {
     var identity = itemIdentity(key);
     if (!identity) return -1;
     for (var i = 0; i < items.length; i++) {
         var item = items[i];
-        if (item.calendarId === identity.calendarId && item.uid === identity.uid)
+        if (item && item.calendarId === identity.calendarId && item.uid === identity.uid)
             return forEdit && item.readOnly ? -1 : i;
     }
     return -1;
 }
 
-/** View copies use the pair as uid. sourceUid keeps the UID written in the file. */
-function withItemIdentity(item) {
+/**
+ * Item forms, from the file to the screen:
+ *   stored item     what a calendar file or a link record holds (storedItem).
+ *   projected item  a copy with the calendar it sits in: calendarId, readOnly, hasOwnColor (projectedItem).
+ *   occurrence      one shown day of a projected item (expand).
+ *   shown item      a copy for QML whose uid is the item key and whose sourceUid is the file UID (shownItem).
+ * A stored item is checked when it comes in from a file, a record or an edit. A shown item is checked when it goes out to a view.
+ */
+
+/** A copy of a stored item with the calendar it sits in. The stored item is not changed. */
+function projectedItem(stored, calendarId, readOnly) {
+    var copy = {};
+    for (var k in stored) copy[k] = stored[k];
+    copy.calendarId = typeof calendarId === "string" && calendarId !== "" ? calendarId : "berri";
+    copy.readOnly = !!readOnly;
+    copy.hasOwnColor = copy.readOnly ? false : stored.color !== "accent";
+    return copy;
+}
+
+/** The view form of an item or occurrence. uid is the item key, sourceUid keeps the UID written in the file. */
+function shownItem(item) {
     var copy = {};
     for (var k in item) copy[k] = item[k];
-    copy.sourceUid = item.uid;
-    copy.uid = itemKey(item.calendarId, item.uid);
+    var calendarId = typeof item.calendarId === "string" && item.calendarId !== "" ? item.calendarId : "berri";
+    copy.sourceUid = typeof item.uid === "string" ? item.uid : "";
+    copy.uid = itemKey(calendarId, copy.sourceUid);
     return copy;
 }
 
@@ -97,31 +117,104 @@ function normalize(item) {
     return item;
 }
 
-/** Builds a complete item from partial fields. CalendarIcs.js describes the fields. */
-function makeItem(fields) {
+var KINDS = ["event", "task", "reminder"];
+var REPEATS = ["none", "daily", "weekly", "monthly", "yearly"];
+
+function isText(v) { return typeof v === "string"; }
+function isDayKey(v) { return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v); }
+function isClock(v) { return typeof v === "string" && /^\d{2}:\d{2}$/.test(v); }
+function isWhole(v, min) { return typeof v === "number" && isFinite(v) && Math.floor(v) === v && v >= min; }
+function orNull(check) { return function (v) { return v === null || check(v); }; }
+function listOf(check) {
+    return function (v) {
+        if (v === null || v === undefined) return [];
+        if (!Array.isArray(v)) return undefined;
+        return v.filter(check);
+    };
+}
+
+/**
+ * How each stored field is checked. A check returns the clean value, or
+ * undefined when the value is not usable. List fields keep only their usable
+ * entries and treat null as an empty list.
+ */
+var fieldChecks = {
+    uid: function (v) { return isText(v) && v !== "" ? v : undefined; },
+    kind: function (v) { return KINDS.indexOf(v) >= 0 ? v : undefined; },
+    title: function (v) { return isText(v) ? v : undefined; },
+    date: function (v) { return v === null || isDayKey(v) ? v : undefined; },
+    time: function (v) { return v === null || isClock(v) ? v : undefined; },
+    end: function (v) { return v === null || isClock(v) ? v : undefined; },
+    endDate: function (v) { return v === null || isDayKey(v) ? v : undefined; },
+    color: function (v) { return cleanColor(v) || undefined; },
+    repeat: function (v) { return REPEATS.indexOf(v) >= 0 ? v : undefined; },
+    interval: function (v) { return isWhole(v, 1) ? v : undefined; },
+    byDay: listOf(function (d) { return isWhole(d, 0) && d <= 6; }),
+    until: function (v) { return v === null || isDayKey(v) ? v : undefined; },
+    count: function (v) { return v === null || isWhole(v, 1) ? v : undefined; },
+    exdates: listOf(isDayKey),
+    doneDates: listOf(isDayKey),
+    alarmMinutes: function (v) { return v === null || isWhole(v, 0) ? v : undefined; },
+    status: function (v) { return v === null || isText(v) ? v : undefined; },
+    stamp: function (v) { return v === null || isText(v) ? v : undefined; },
+    ruleRest: function (v) { return v === null || isText(v) ? v : undefined; },
+    raw: listOf(isText),
+    rawChildren: listOf(function (c) { return Array.isArray(c); })
+};
+
+/** Copies the usable values of `fields` over `item`. Fields that fail their check keep the value already in `item`. */
+function takeCheckedFields(item, fields) {
+    for (var name in fieldChecks) {
+        if (fields[name] === undefined) continue;
+        var clean = fieldChecks[name](fields[name]);
+        if (clean !== undefined) item[name] = clean;
+    }
+    return item;
+}
+
+/**
+ * The stored form of an item, from a file, a link record or the edit form.
+ * Fields that are missing or malformed get their default. The result is
+ * the same for the same fields, except for a missing uid, which gets a new one.
+ * location (links) and sourceDates (imports) pass through. CalendarIcs.js describes the fields.
+ */
+function storedItem(fields) {
     var item = {
-        uid: newUid(), kind: "event", title: "",
+        uid: "", kind: "event", title: "",
         date: null, time: null, end: null, endDate: null,
         color: "accent", repeat: "none", interval: 1, byDay: [], until: null, count: null,
-        exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: stampNow(), ruleRest: null,
+        exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: null, ruleRest: null,
         raw: [], rawChildren: []
     };
-    for (var k in fields) if (fields[k] !== undefined) item[k] = fields[k];
+    takeCheckedFields(item, fields);
+    if (item.uid === "") item.uid = newUid();
+    if (fields.location !== undefined) item.location = fields.location;
+    if (fields.sourceDates !== undefined) item.sourceDates = fields.sourceDates;
     return normalize(item);
 }
 
-/** Returns a copy of the item with the given fields changed. */
+/** A new item from the edit form: the stored form, with a stamp of now when the fields give none. */
+function makeItem(fields) {
+    var item = storedItem(fields);
+    if (item.stamp === null) item.stamp = stampNow();
+    return item;
+}
+
+/** Returns a copy of the item with the usable changes applied. A malformed change keeps the old value. */
 function applyChanges(item, changes) {
     var next = {};
     for (var k in item) next[k] = item[k];
+    var allowed = {};
     for (var c in changes) {
         if (c === "uid" || c === "calendarId" || c === "readOnly" || c === "sourceUid" || c === "sourceDates" || changes[c] === undefined) continue;
-        next[c] = changes[c];
+        allowed[c] = changes[c];
     }
-    if (changes.repeat !== undefined && changes.repeat !== item.repeat) {
+    takeCheckedFields(next, allowed);
+    for (var extra in allowed) if (!(extra in fieldChecks)) next[extra] = allowed[extra];
+    if (allowed.repeat !== undefined && next.repeat !== item.repeat) {
         next.raw = next.raw.filter(function (l) { return !/^RRULE[;:]/i.test(l); });
         next.ruleRest = null;
-        if (changes.repeat === "none") next.exdates = [];
+        if (next.repeat === "none") next.exdates = [];
     }
     next.stamp = stampNow();
     return normalize(next);
