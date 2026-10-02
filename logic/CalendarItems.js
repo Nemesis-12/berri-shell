@@ -50,16 +50,20 @@ function itemIdentity(key) {
     return null;
 }
 
-/** Finds only the requested calendar copy. Read-only copies cannot be changed. Rows without a usable identity never match. */
-function itemIndex(items, key, forEdit) {
+/** Index of the item that `key` names in the list of calendar `calendarId`, or -1. Rows without a usable uid never match. */
+function itemIndex(items, key, calendarId) {
     var identity = itemIdentity(key);
-    if (!identity) return -1;
-    for (var i = 0; i < items.length; i++) {
-        var item = items[i];
-        if (item && item.calendarId === identity.calendarId && item.uid === identity.uid)
-            return forEdit && item.readOnly ? -1 : i;
-    }
+    if (!identity || identity.calendarId !== calendarId) return -1;
+    for (var i = 0; i < items.length; i++)
+        if (items[i] && items[i].uid === identity.uid) return i;
     return -1;
+}
+
+/** Short stable id text for a string (used for calendar ids and for link records without a uid). */
+function shortHash(text) {
+    var h = 5381;
+    for (var i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+    return h.toString(36);
 }
 
 /**
@@ -68,7 +72,9 @@ function itemIndex(items, key, forEdit) {
  *   projected item  a copy with the calendar it sits in: calendarId, readOnly, hasOwnColor (projectedItem).
  *   occurrence      one shown day of a projected item (expand).
  *   shown item      a copy for QML whose uid is the item key and whose sourceUid is the file UID (shownItem).
- * A stored item is checked when it comes in from a file, a record or an edit. A shown item is checked when it goes out to a view.
+ * A stored item is checked when it is built from a link record (expandCompactItem), a new item or an edit (makeItem, applyChanges).
+ * Items read from a calendar file (parseItem) are built by the file reader and are not checked again, so a file round trip stays exact.
+ * A shown item is checked when it goes out to a view.
  */
 
 /** A copy of a stored item with the calendar it sits in. The stored item is not changed. */
@@ -105,7 +111,8 @@ function normalize(item) {
     item.color = cleanColor(item.color) || "accent";
     if (item.kind !== "event") item.end = item.kind === "task" ? item.end : null;
     if (item.time === null) item.end = null;
-    if (item.kind === "event" && item.time === null && item.endDate && Times.dayNum(item.endDate) <= Times.dayNum(item.date)) item.endDate = null;
+    if (item.kind === "event" && item.time === null && item.endDate &&
+        Times.dayNum(item.endDate) <= Times.dayNum(item.date)) item.endDate = null;
     if (item.kind === "reminder") {
         if (item.time === null) item.time = "09:00";
         if (item.alarmMinutes === null) item.alarmMinutes = 0;
@@ -175,7 +182,7 @@ function takeCheckedFields(item, fields) {
 /**
  * The stored form of an item, from a file, a link record or the edit form.
  * Fields that are missing or malformed get their default. The result is
- * the same for the same fields, except for a missing uid, which gets a new one.
+ * the same for the same fields. A missing uid stays "": makeItem gives a new item its uid.
  * location (links) and sourceDates (imports) pass through. CalendarIcs.js describes the fields.
  */
 function storedItem(fields) {
@@ -187,15 +194,15 @@ function storedItem(fields) {
         raw: [], rawChildren: []
     };
     takeCheckedFields(item, fields);
-    if (item.uid === "") item.uid = newUid();
     if (fields.location !== undefined) item.location = fields.location;
     if (fields.sourceDates !== undefined) item.sourceDates = fields.sourceDates;
     return normalize(item);
 }
 
-/** A new item from the edit form: the stored form, with a stamp of now when the fields give none. */
+/** A new item from the edit form: the stored form, with a new uid and a stamp of now when the fields give none. */
 function makeItem(fields) {
     var item = storedItem(fields);
+    if (item.uid === "") item.uid = newUid();
     if (item.stamp === null) item.stamp = stampNow();
     return item;
 }
@@ -206,7 +213,8 @@ function applyChanges(item, changes) {
     for (var k in item) next[k] = item[k];
     var allowed = {};
     for (var c in changes) {
-        if (c === "uid" || c === "calendarId" || c === "readOnly" || c === "sourceUid" || c === "sourceDates" || changes[c] === undefined) continue;
+        if (c === "uid" || c === "calendarId" || c === "readOnly" || c === "sourceUid" || c === "sourceDates" ||
+            changes[c] === undefined) continue;
         allowed[c] = changes[c];
     }
     takeCheckedFields(next, allowed);
@@ -392,7 +400,8 @@ function dueBetween(items, fromMs, toMs) {
             var dueMs = new Date(+occ.date.slice(0, 4), +occ.date.slice(5, 7) - 1, +occ.date.slice(8, 10),
                 +occ.time.slice(0, 2), +occ.time.slice(3, 5)).getTime() - alarm * 60000;
             if (dueMs > fromMs && dueMs <= toMs)
-                out.push({ calendarId: occ.calendarId, uid: occ.uid, occurrenceDate: occ.occurrenceDate, title: occ.title, time: occ.time, dueMs: dueMs });
+                out.push({ calendarId: occ.calendarId, uid: occ.uid, occurrenceDate: occ.occurrenceDate,
+                    title: occ.title, time: occ.time, dueMs: dueMs });
         }
     }
     out.sort(function (a, b) { return a.dueMs - b.dueMs; });

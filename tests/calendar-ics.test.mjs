@@ -462,14 +462,14 @@ test("calendar item keys select each copy and reject edits to read-only copies",
   for (const [index, calendarId] of ["a", "b", "link"].entries()) {
     const key = Items.itemKey(calendarId, "same");
     assert.deepEqual(plain(Items.itemIdentity(key)), { calendarId, uid: "same" });
-    assert.equal(Items.itemIndex(copies, key, false), index);
-    assert.equal(Items.itemIndex(copies, key, true), calendarId === "link" ? -1 : index);
+    assert.equal(Items.itemIndex([copies[index]], key, calendarId), 0);
+    assert.equal(Items.itemIndex([copies[index]], key, "other"), -1);
     const shown = Items.shownItem(Items.expand(copies[index], "2026-10-05", "2026-10-05")[0]);
     assert.equal(shown.uid, key);
     assert.equal(shown.sourceUid, "same");
     assert.equal(shown.calendarId, calendarId);
   }
-  assert.equal(Items.itemIndex(copies, "same", false), -1);
+  assert.equal(Items.itemIndex(copies, "same", "a"), -1);
   assert.notEqual(Items.itemKey("a|b", "c"), Items.itemKey("a", "b|c"));
 });
 

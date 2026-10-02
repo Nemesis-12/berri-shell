@@ -397,7 +397,7 @@ Singleton {
         if (!meta || forEdit && meta.kind === "link") return null;
         var doc = meta.document;
         var items = doc ? doc.items : meta.records || [];
-        var index = items.findIndex(function (item) { return item.uid === identity.uid; });
+        var index = Ics.itemIndex(items, uid, meta.id);
         return index < 0 ? null : { path: meta.path, doc: doc, meta: meta, index: index };
     }
 

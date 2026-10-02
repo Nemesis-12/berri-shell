@@ -93,7 +93,10 @@ function dropDuplicateItems(items) {
     return dropDuplicates(items, itemKeys, null);
 }
 
-/** How many items of `feedItems` already exist in `existingItems` (items with a calendarId). Duplicates inside the feed count as one each. */
+/**
+ * How many items of `feedItems` already exist in `existingItems` (items with a calendarId).
+ * Duplicates inside the feed count as one each.
+ */
 function countDuplicates(feedItems, existingItems) {
     var seen = {};
     for (var i = 0; i < existingItems.length; i++) {
@@ -142,7 +145,8 @@ function itemsOn(items, dateKey) {
 /** Same as occurrencesByDay for the whole calendar month (month 1 to 12). */
 function itemsInMonth(items, year, month, names) {
     var last = Items.daysInMonth(year, month);
-    return occurrencesByDay(items, Times.pad(year, 4) + "-" + Times.pad(month) + "-01", Times.pad(year, 4) + "-" + Times.pad(month) + "-" + Times.pad(last), names);
+    var prefix = Times.pad(year, 4) + "-" + Times.pad(month) + "-";
+    return occurrencesByDay(items, prefix + "01", prefix + Times.pad(last), names);
 }
 
 /** Name of a parsed calendar (X-WR-CALNAME), or "". */
@@ -172,12 +176,7 @@ function linkHost(url) {
     return m ? m[1].replace(/^.*@/, "") : "";
 }
 
-/** Short stable id text for a string (used for calendar ids). */
-function shortHash(text) {
-    var h = 5381;
-    for (var i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
-    return h.toString(36);
-}
+var shortHash = Items.shortHash;
 
 /** The first preset color that no calendar uses yet (used = list of colors); repeats when all are taken. */
 function unusedColor(used) {
@@ -189,6 +188,16 @@ function unusedColor(used) {
 /** The color for a new calendar: `wanted` (preset key or "#rrggbb") when valid, else the first unused preset. */
 function newCalendarColor(wanted, used) {
     return Items.cleanColor(wanted) || unusedColor(used);
+}
+
+/**
+ * Sets the color of a projected copy: a color override of its uid (links only) wins,
+ * else its own color stays, else it takes the color of its calendar.
+ */
+function applyCalendarColor(copy, calendarColor, overrides) {
+    var own = overrides ? Items.cleanColor(overrides[copy.uid]) : null;
+    if (own) { copy.color = own; copy.hasOwnColor = true; }
+    else if (copy.color === "accent") copy.color = calendarColor || "accent";
 }
 
 /**
@@ -207,9 +216,7 @@ function mergeCalendars(calendars) {
         if (cal.hidden) continue;
         for (var i = 0; i < cal.items.length; i++) {
             var copy = Items.projectedItem(cal.items[i], cal.id, cal.readOnly);
-            var own = cal.readOnly && cal.colorOverrides ? Items.cleanColor(cal.colorOverrides[copy.uid]) : null;
-            if (own) { copy.color = own; copy.hasOwnColor = true; }
-            else if (copy.color === "accent") copy.color = cal.color || "accent";
+            applyCalendarColor(copy, cal.color, cal.readOnly ? cal.colorOverrides : null);
             out.push(copy);
         }
     }
@@ -227,7 +234,10 @@ function withColorOverride(item, overrides) {
     return copy;
 }
 
-/** The overrides ({ uid: color }) whose uid is still in items (null items keeps every uid). Bad colors are dropped too. Returns a new object. */
+/**
+ * The overrides ({ uid: color }) whose uid is still in items (null items keeps every uid).
+ * Bad colors are dropped too. Returns a new object.
+ */
 function pruneColorOverrides(overrides, items) {
     var live = {};
     for (var i = 0; items && i < items.length; i++) live[items[i].uid] = true;
@@ -358,10 +368,7 @@ function storedItemsInMonth(projection, year, month) {
                 if (r.until < Items.addDays(first, -spanDays)) continue;
             }
             var item = Items.projectedItem(Format.expandCompactItem(r), feed.id, true);
-            var own = Items.cleanColor(feed.colorOverrides && feed.colorOverrides[item.uid]);
-            item.hasOwnColor = !!own;
-            if (own) item.color = own;
-            else if (item.color === "accent") item.color = feed.color || "accent";
+            applyCalendarColor(item, feed.color, feed.colorOverrides);
             shown.push(item);
         }
     }

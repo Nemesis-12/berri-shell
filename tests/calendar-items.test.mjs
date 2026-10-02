@@ -16,12 +16,12 @@ test("an item key round trips and malformed keys name no item", () => {
     assert.equal(Items.itemIdentity(bad), null, String(bad));
 });
 
-test("an item lookup skips rows with malformed fields and refuses read-only edits", () => {
-  const rows = [null, {}, { calendarId: "a", uid: 7 }, { calendarId: "a", uid: "x", readOnly: true }, { calendarId: "b", uid: "x" }];
-  assert.equal(Items.itemIndex(rows, Items.itemKey("b", "x"), true), 4);
-  assert.equal(Items.itemIndex(rows, Items.itemKey("a", "x"), false), 3);
-  assert.equal(Items.itemIndex(rows, Items.itemKey("a", "x"), true), -1);
-  assert.equal(Items.itemIndex(rows, "garbage", false), -1);
+test("an item lookup finds the uid in the named calendar and skips malformed rows", () => {
+  const rows = [null, {}, { uid: 7 }, { uid: "x" }];
+  assert.equal(Items.itemIndex(rows, Items.itemKey("b", "x"), "b"), 3);
+  assert.equal(Items.itemIndex(rows, Items.itemKey("a", "x"), "b"), -1);
+  assert.equal(Items.itemIndex(rows, Items.itemKey("b", "y"), "b"), -1);
+  assert.equal(Items.itemIndex(rows, "garbage", "b"), -1);
 });
 
 // ---- stored items
@@ -38,9 +38,7 @@ test("a stored item replaces each malformed field with its default", () => {
   const item = Items.storedItem({ uid: 5, kind: "meeting", title: null, date: "tomorrow", time: "9am", end: 900,
     endDate: "x", color: "bogus", repeat: "hourly", interval: "x", byDay: [1, "x", 9, 6], until: 3, count: -2,
     exdates: ["2026-10-01", "nope", 4], doneDates: "2026-10-01", alarmMinutes: -5, status: 7, raw: "x" });
-  assert.equal(typeof item.uid, "string");
-  assert.notEqual(item.uid, "");
-  assert.deepEqual(plain({ ...item, uid: "", stamp: null }), { uid: "", kind: "event", title: "",
+  assert.deepEqual(plain({ ...item, stamp: null }), { uid: "", kind: "event", title: "",
     date: null, time: null, end: null, endDate: null, color: "accent", repeat: "none", interval: 1, byDay: [],
     until: null, count: null, exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: null,
     ruleRest: null, raw: [], rawChildren: [] });
@@ -55,9 +53,20 @@ test("a stored item from a stored record accepts null lists", () => {
 test("a new item gets its own uid and stamp unless the fields give them", () => {
   const made = Items.makeItem({ date: "2026-10-05" });
   assert.match(made.uid, /@berri-shell$/);
+  assert.match(Items.makeItem({ uid: "" }).uid, /@berri-shell$/);
   assert.match(made.stamp, /^\d{8}T\d{6}Z$/);
   assert.equal(Items.makeItem({ uid: "mine", stamp: "20260101T000000Z" }).uid, "mine");
   assert.equal(Items.makeItem({ uid: "mine", stamp: "20260101T000000Z" }).stamp, "20260101T000000Z");
+});
+
+test("a link record without a usable uid keeps the same uid on every read", () => {
+  const record = { uid: "", title: "Same", date: "2026-10-05", time: "09:00" };
+  const first = Format.expandCompactItem(record).uid;
+  assert.notEqual(first, "");
+  assert.equal(Format.expandCompactItem(record).uid, first);
+  assert.equal(Format.expandCompactItem({ ...record, uid: 5 }).uid, first);
+  assert.notEqual(Format.expandCompactItem({ ...record, title: "Other" }).uid, first);
+  assert.equal(Format.expandCompactItem({ ...record, uid: "kept" }).uid, "kept");
 });
 
 test("a link record expands to a stored item with checked fields", () => {

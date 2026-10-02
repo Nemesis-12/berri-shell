@@ -374,9 +374,14 @@ function readCalendar(text, localZone) {
     return cal;
 }
 
-/** A stored item from one stored link record. Malformed record fields take their defaults. */
+/**
+ * A stored item from one stored link record. Malformed record fields take their defaults.
+ * A record without a usable uid gets one made from its own fields, so every read gives the same uid.
+ */
 function expandCompactItem(record) {
-    return Items.storedItem(record);
+    var item = Items.storedItem(record);
+    if (item.uid === "") item.uid = "record-" + Items.shortHash([item.date, item.time, item.end, item.title, item.repeat].join("|"));
+    return item;
 }
 
 function icsDate(key) {

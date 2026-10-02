@@ -35,7 +35,7 @@
  *   allDay, repeat, recurring, done, alarmMinutes, calendarId, readOnly,
  *   hasOwnColor, alsoIn (names of the other calendars that hold the same
  *   event, [] when none), alsoInIds (their ids).
- *   (calendarId and readOnly come from mergeCalendars; items of several calendars.)
+ *   (calendarId, readOnly and hasOwnColor come from projectedItem.)
  *   Subscription detail items also include location from LOCATION.
  *
  * Duplicates: an event in several calendars shows once. Two entries of
@@ -59,6 +59,7 @@ var toKey = Items.toKey;
 var cleanColor = Items.cleanColor;
 var itemKey = Items.itemKey;
 var itemIdentity = Items.itemIdentity;
+var itemIndex = Items.itemIndex;
 var makeItem = Items.makeItem;
 var applyChanges = Items.applyChanges;
 var withDone = Items.withDone;
