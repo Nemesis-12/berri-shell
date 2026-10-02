@@ -40,9 +40,8 @@ Item {
      *  bubbled up to Pill/shell.qml so the overlay layer can grab it. */
     readonly property bool wifiPasswordActive: wifiList.passwordActive
 
-    // The Quickshell.Networking Wi-Fi device, resolved once: device presence
-    // does not change at runtime on this machine, so a live binding is not
-    // worth the complexity.
+    // The Quickshell.Networking Wi-Fi device. It is taken when the device list
+    // changes, with a limited retry while this item is visible (see below).
     property var wifiDevice: null
 
     function findWifiDevice() {
