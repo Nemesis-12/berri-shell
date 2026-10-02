@@ -310,11 +310,37 @@ function projectStoredCalendars(calendars) {
             var shown = mergeCalendars([{ id: cal.id, color: cal.color, hidden: cal.hidden,
                 readOnly: false, items: items }]);
             for (var i = 0; i < shown.length; i++) local.push(shown[i]);
-            if (!cal.hidden) sources.push({ items: shown });
+            if (!cal.hidden) sources.push({ id: cal.id, items: shown });
         }
     }
     return { calendars: rows, sources: sources, names: names,
         reminders: dropDuplicateItems(local.filter(function (item) { return item.kind === "reminder"; })) };
+}
+
+/** Reprojects one edited calendar. Other calendar rows and month inputs stay shared. */
+function updateStoredCalendar(projection, calendar) {
+    var changed = projectStoredCalendars([calendar]);
+    var sources = projection.sources.filter(function (source) { return source.id !== calendar.id; });
+    var rows = projection.calendars.map(function (row) {
+        return row.id === calendar.id ? changed.calendars[0] : row;
+    });
+    // Keep calendar order because it decides which duplicate copy is shown.
+    var byId = {};
+    for (var s = 0; s < sources.length; s++) byId[sources[s].id] = sources[s];
+    if (changed.sources.length) byId[calendar.id] = changed.sources[0];
+    sources = [];
+    var reminders = [];
+    for (var c = 0; c < rows.length; c++) {
+        var source = byId[rows[c].id];
+        if (!source) continue;
+        sources.push(source);
+        if (source.items) {
+            for (var i = 0; i < source.items.length; i++)
+                if (source.items[i].kind === "reminder") reminders.push(source.items[i]);
+        }
+    }
+    return { calendars: rows, sources: sources, names: projection.names,
+        reminders: dropDuplicateItems(reminders) };
 }
 
 function storedItemsInMonth(projection, year, month) {
