@@ -31,6 +31,9 @@ import qs.notifications
 Singleton {
     id: root
 
+    /** How many calendar views are visible now (see WhileVisible.qml). The folder is scanned when the first one opens. */
+    property alias viewers: files.viewers
+
     readonly property string dir: (Quickshell.env("HOME") || "") + "/.local/share/berri-shell/calendar"
     readonly property string defaultPath: dir + "/berri.ics"
 
