@@ -2,14 +2,6 @@
 
 berri is a Quickshell desktop shell for Omarchy and Hyprland. A top pill opens a dashboard with Home, Media, System, Code, Calendar, Weather and Alerts tabs. It also draws wallpapers, a theme and wallpaper picker, a system tray and notification pop-ups. berri is a notification server.
 
-### Screenshots
-
-The maintainer will add these images after checking them for personal data.
-
-![Pill at rest](docs/screenshots/pill.png)
-![Dashboard tabs](docs/screenshots/dashboard.png)
-![Theme and wallpaper picker](docs/screenshots/picker.png)
-
 ## Requirements
 
 - Linux with a Wayland session. Hyprland is the current compositor. The shell uses its Quickshell integration.
@@ -147,7 +139,7 @@ cargo test --manifest-path tools/feed-to-records/Cargo.toml --offline
 
 You can also test the parser with `cargo test --manifest-path tools/feed-to-records/Cargo.toml`. The pre-push hook runs all three groups and stops a push if any group fails.
 
-Existing QML files reload when their content changes. After adding or moving QML files, the maintainer must run `tools/restart-berri.sh` from the daily clone. Worktree agents must not run it or start another instance. Keep temporary files in `scratchpad/`.
+Existing QML files reload when their content changes. After adding or moving QML files, run `tools/restart-berri.sh` from the daily clone. Do not start a second instance. Keep temporary files in `scratchpad/`.
 
 ## License and credits
 
