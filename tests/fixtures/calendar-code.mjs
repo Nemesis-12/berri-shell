@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import vm from "node:vm";
 
-// Read the calendar code and its QML imports into separate test contexts.
-export function calendarCode() {
+// Read one calendar module and its QML imports into separate test contexts.
+// A test names the module it tests, for example calendarModule("CalendarItems.js").
+export function calendarModule(name) {
   const files = new Map();
   function readCode(path) {
     if (files.has(path.href)) return files.get(path.href);
@@ -16,5 +17,5 @@ export function calendarCode() {
     files.set(path.href, code);
     return code;
   }
-  return readCode(new URL("../../logic/CalendarIcs.js", import.meta.url));
+  return readCode(new URL(`../../logic/${name}`, import.meta.url));
 }

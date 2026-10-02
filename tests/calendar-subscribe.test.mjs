@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import { calendarCode } from "./fixtures/calendar-code.mjs";
+import { calendarModule } from "./fixtures/calendar-code.mjs";
 
 // Exercise the view's request functions without starting the desktop shell.
 function functionText(source, name) {
@@ -71,13 +71,13 @@ test("reset cancels a subscribe result before another request starts", () => {
 });
 
 test("subscribe carries distinct request ids through downloads and immediate results", () => {
-  const ics = calendarCode();
+  const Queries = calendarModule("CalendarQueries.js");
   const later = [];
   const downloads = [];
   const results = [];
   const subscribed = (...result) => results.push(result);
   const calendar = vm.createContext({
-    Ics: ics, Qt: { callLater(action) { later.push(action); } },
+    Ics: calendarModule("CalendarIcs.js"), Qt: { callLater(action) { later.push(action); } },
     root: { subscribed }, subscribed, _nextSubscription: 0, _calendars: {},
     files: { download(request) { downloads.push(request); } },
   });
@@ -96,7 +96,7 @@ test("subscribe carries distinct request ids through downloads and immediate res
     calendar._downloaded(request.purpose, request.shownUrl, request.url, request.calendarId, 28, "", request.color, request.requestId);
   }
   assert.deepEqual(results.map((result) => result[3]), [1, 3, 2]);
-  calendar._calendars["l-" + ics.shortHash("https://example.test/a")] = { id: "existing" };
+  calendar._calendars["l-" + Queries.shortHash("https://example.test/a")] = { id: "existing" };
   const existing = calendar.subscribe("https://example.test/a", "blue");
   later.shift()();
   assert.equal(results.at(-1)[3], existing);

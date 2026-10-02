@@ -93,7 +93,10 @@ function dropDuplicateItems(items) {
     return dropDuplicates(items, itemKeys, null);
 }
 
-/** How many items of `feedItems` already exist in `existingItems` (items with a calendarId). Duplicates inside the feed count as one each. */
+/**
+ * How many items of `feedItems` already exist in `existingItems` (items with a calendarId).
+ * Duplicates inside the feed count as one each.
+ */
 function countDuplicates(feedItems, existingItems) {
     var seen = {};
     for (var i = 0; i < existingItems.length; i++) {
@@ -142,7 +145,8 @@ function itemsOn(items, dateKey) {
 /** Same as occurrencesByDay for the whole calendar month (month 1 to 12). */
 function itemsInMonth(items, year, month, names) {
     var last = Items.daysInMonth(year, month);
-    return occurrencesByDay(items, Times.pad(year, 4) + "-" + Times.pad(month) + "-01", Times.pad(year, 4) + "-" + Times.pad(month) + "-" + Times.pad(last), names);
+    var prefix = Times.pad(year, 4) + "-" + Times.pad(month) + "-";
+    return occurrencesByDay(items, prefix + "01", prefix + Times.pad(last), names);
 }
 
 /** Name of a parsed calendar (X-WR-CALNAME), or "". */
@@ -172,12 +176,7 @@ function linkHost(url) {
     return m ? m[1].replace(/^.*@/, "") : "";
 }
 
-/** Short stable id text for a string (used for calendar ids). */
-function shortHash(text) {
-    var h = 5381;
-    for (var i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
-    return h.toString(36);
-}
+var shortHash = Items.shortHash;
 
 /** The first preset color that no calendar uses yet (used = list of colors); repeats when all are taken. */
 function unusedColor(used) {
@@ -192,10 +191,20 @@ function newCalendarColor(wanted, used) {
 }
 
 /**
+ * Sets the color of a projected copy: a color override of its uid (links only) wins,
+ * else its own color stays, else it takes the color of its calendar.
+ */
+function applyCalendarColor(copy, calendarColor, overrides) {
+    var own = overrides ? Items.cleanColor(overrides[copy.uid]) : null;
+    if (own) { copy.color = own; copy.hasOwnColor = true; }
+    else if (copy.color === "accent") copy.color = calendarColor || "accent";
+}
+
+/**
  * Joins several calendars into one item list for the views.
- * calendars: [{ id, color, hidden, readOnly, items }]. Every stored item gets
- * calendarId and readOnly. The result holds copies of the items of calendars
- * that are not hidden. An item keeps its own color; an item with the default
+ * calendars: [{ id, color, hidden, readOnly, items }]. The result holds
+ * projected items (copies with calendarId and readOnly) of the calendars
+ * that are not hidden. The stored items are not changed. An item keeps its own color; an item with the default
  * color ("accent", not written to the file) takes the color of its calendar.
  * calendar.colorOverrides ({ uid: color }, links only) gives single items a
  * color of their own. hasOwnColor tells if the item has its own color.
@@ -204,17 +213,10 @@ function mergeCalendars(calendars) {
     var out = [];
     for (var c = 0; c < calendars.length; c++) {
         var cal = calendars[c];
+        if (cal.hidden) continue;
         for (var i = 0; i < cal.items.length; i++) {
-            var item = cal.items[i];
-            item.calendarId = cal.id;
-            item.readOnly = !!cal.readOnly;
-            item.hasOwnColor = cal.readOnly ? false : item.color !== "accent";
-            if (cal.hidden) continue;
-            var copy = {};
-            for (var k in item) copy[k] = item[k];
-            var own = cal.readOnly && cal.colorOverrides ? Items.cleanColor(cal.colorOverrides[item.uid]) : null;
-            if (own) { copy.color = own; copy.hasOwnColor = true; }
-            else if (item.color === "accent") copy.color = cal.color || "accent";
+            var copy = Items.projectedItem(cal.items[i], cal.id, cal.readOnly);
+            applyCalendarColor(copy, cal.color, cal.readOnly ? cal.colorOverrides : null);
             out.push(copy);
         }
     }
@@ -232,7 +234,10 @@ function withColorOverride(item, overrides) {
     return copy;
 }
 
-/** The overrides ({ uid: color }) whose uid is still in items (null items keeps every uid). Bad colors are dropped too. Returns a new object. */
+/**
+ * The overrides ({ uid: color }) whose uid is still in items (null items keeps every uid).
+ * Bad colors are dropped too. Returns a new object.
+ */
 function pruneColorOverrides(overrides, items) {
     var live = {};
     for (var i = 0; items && i < items.length; i++) live[items[i].uid] = true;
@@ -362,13 +367,8 @@ function storedItemsInMonth(projection, year, month) {
                 var spanDays = r.time === null && r.endDate ? Times.dayNum(r.endDate) - Times.dayNum(r.date) : 0;
                 if (r.until < Items.addDays(first, -spanDays)) continue;
             }
-            var item = Format.expandCompactItem(r);
-            item.calendarId = feed.id;
-            item.readOnly = true;
-            var own = Items.cleanColor(feed.colorOverrides && feed.colorOverrides[item.uid]);
-            item.hasOwnColor = !!own;
-            if (own) item.color = own;
-            else if (item.color === "accent") item.color = feed.color || "accent";
+            var item = Items.projectedItem(Format.expandCompactItem(r), feed.id, true);
+            applyCalendarColor(item, feed.color, feed.colorOverrides);
             shown.push(item);
         }
     }

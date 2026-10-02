@@ -2,23 +2,25 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import { calendarCode } from "./fixtures/calendar-code.mjs";
+import { calendarModule } from "./fixtures/calendar-code.mjs";
 
-const ics = calendarCode();
+const Format = calendarModule("CalendarFormat.js");
+const Items = calendarModule("CalendarItems.js");
+const Months = calendarModule("CalendarMonths.js");
 const save = vm.createContext({});
 vm.runInContext(fs.readFileSync(new URL("../logic/CalendarSave.js", import.meta.url), "utf8")
   .replace(/^\.pragma library.*$/m, ""), save);
 const plain = value => JSON.parse(JSON.stringify(value));
-const item = fields => ics.makeItem({ uid: "edited", title: "Before", date: "2026-10-05", ...fields });
+const item = fields => Items.makeItem({ uid: "edited", title: "Before", date: "2026-10-05", ...fields });
 const calendar = (items, fields = {}) => ({ id: "berri", name: "berri", kind: "local",
   color: "accent", hidden: false, document: { items }, ...fields });
 
 // Execute the service's functions. Only file writes, saved settings and signals are test boundaries.
 function service(items, extras = []) {
   const local = calendar(items, { path: "/copy/berri.ics", file: "berri.ics" });
-  local.document = { ...ics.emptyCalendar(), items };
-  local.text = ics.writeCalendar(local.document);
-  const lib = vm.createContext({ Ics: ics, Save: save,
+  local.document = { ...Format.emptyCalendar(), items };
+  local.text = Format.writeCalendar(local.document);
+  const lib = vm.createContext({ Ics: calendarModule("CalendarIcs.js"), Save: save,
     dir: "/copy", defaultPath: local.path, revision: 0, lastError: "", failed: "", failWrite: false,
     ready: false, _stateRead: false,
     _calendars: Object.fromEntries([local, ...extras].map(cal => [cal.id, cal])),
@@ -39,37 +41,37 @@ function service(items, extras = []) {
 
 test("one item edit keeps other months cached and leaves their views unchanged", () => {
   const local = calendar([item({}), item({ uid: "other", title: "Other", date: "2026-11-05" })]);
-  const months = ics.createMonthCache([local]);
-  const september = ics.cachedItemsInMonth(months, 2026, 9);
-  const october = ics.cachedItemsInMonth(months, 2026, 10);
-  const november = ics.cachedItemsInMonth(months, 2026, 11);
+  const months = Months.createMonthCache([local]);
+  const september = Months.cachedItemsInMonth(months, 2026, 9);
+  const october = Months.cachedItemsInMonth(months, 2026, 10);
+  const november = Months.cachedItemsInMonth(months, 2026, 11);
   const before = plain(november);
-  local.document.items[0] = ics.applyChanges(local.document.items[0], { title: "After" });
-  ics.editMonthCache(months, local, ["edited"]);
-  assert.strictEqual(ics.cachedItemsInMonth(months, 2026, 9), september);
-  assert.strictEqual(ics.cachedItemsInMonth(months, 2026, 11), november);
+  local.document.items[0] = Items.applyChanges(local.document.items[0], { title: "After" });
+  Months.editMonthCache(months, local, ["edited"]);
+  assert.strictEqual(Months.cachedItemsInMonth(months, 2026, 9), september);
+  assert.strictEqual(Months.cachedItemsInMonth(months, 2026, 11), november);
   assert.deepEqual(plain(november), before);
-  assert.notStrictEqual(ics.cachedItemsInMonth(months, 2026, 10), october);
-  assert.equal(ics.cachedItemsInMonth(months, 2026, 10)["2026-10-05"][0].title, "After");
+  assert.notStrictEqual(Months.cachedItemsInMonth(months, 2026, 10), october);
+  assert.equal(Months.cachedItemsInMonth(months, 2026, 10)["2026-10-05"][0].title, "After");
 });
 
 test("editing the later duplicate's title separates its copy and changing it back joins the first copy", () => {
   const b = calendar([item({ uid: "b-event" })], { id: "b", name: "B", kind: "file" });
   const a = calendar([item({ uid: "a-event" })], { id: "a", name: "A", kind: "file" });
-  const months = ics.createMonthCache([b, a]);
-  const shown = () => plain(ics.cachedItemsInMonth(months, 2026, 10)["2026-10-05"]
+  const months = Months.createMonthCache([b, a]);
+  const shown = () => plain(Months.cachedItemsInMonth(months, 2026, 10)["2026-10-05"]
     .map(o => ({ calendarId: o.calendarId, sourceUid: o.sourceUid, title: o.title, alsoIn: o.alsoIn })));
   assert.deepEqual(shown(), [{ calendarId: "b", sourceUid: "b-event", title: "Before", alsoIn: ["A"] }]);
 
-  a.document.items[0] = ics.applyChanges(a.document.items[0], { title: "After" });
-  ics.editMonthCache(months, a, ["a-event"]);
+  a.document.items[0] = Items.applyChanges(a.document.items[0], { title: "After" });
+  Months.editMonthCache(months, a, ["a-event"]);
   assert.deepEqual(shown(), [
     { calendarId: "a", sourceUid: "a-event", title: "After", alsoIn: [] },
     { calendarId: "b", sourceUid: "b-event", title: "Before", alsoIn: [] }
   ]);
 
-  a.document.items[0] = ics.applyChanges(a.document.items[0], { title: "Before" });
-  ics.editMonthCache(months, a, ["a-event"]);
+  a.document.items[0] = Items.applyChanges(a.document.items[0], { title: "Before" });
+  Months.editMonthCache(months, a, ["a-event"]);
   assert.deepEqual(shown(), [{ calendarId: "b", sourceUid: "b-event", title: "Before", alsoIn: ["A"] }]);
 });
 
@@ -78,12 +80,12 @@ test("the service save updates the edited month and retains the other month obje
   const september = shell.itemsInMonth(2026, 9);
   const october = shell.itemsInMonth(2026, 10);
   const november = shell.itemsInMonth(2026, 11);
-  assert.equal(shell.update(ics.itemKey("berri", "edited"), { title: "Saved" }), true);
+  assert.equal(shell.update(Items.itemKey("berri", "edited"), { title: "Saved" }), true);
   assert.strictEqual(shell.itemsInMonth(2026, 9), september);
   assert.strictEqual(shell.itemsInMonth(2026, 11), november);
   assert.notStrictEqual(shell.itemsInMonth(2026, 10), october);
   assert.equal(shell.itemsOn("2026-10-05")[0].title, "Saved");
-  assert.equal(ics.readCalendar(shell._calendars.berri.text).items[0].title, "Saved");
+  assert.equal(Format.readCalendar(shell._calendars.berri.text).items[0].title, "Saved");
 });
 
 test("an unbounded repeat edit updates every cached occurrence month but keeps earlier months", () => {
@@ -91,7 +93,7 @@ test("an unbounded repeat edit updates every cached occurrence month but keeps e
   const september = shell.itemsInMonth(2026, 9);
   const october = shell.itemsInMonth(2026, 10);
   const future = shell.itemsInMonth(2036, 10);
-  assert.equal(shell.update(ics.itemKey("berri", "edited"), { title: "Series" }), true);
+  assert.equal(shell.update(Items.itemKey("berri", "edited"), { title: "Series" }), true);
   assert.strictEqual(shell.itemsInMonth(2026, 9), september);
   assert.notStrictEqual(shell.itemsInMonth(2026, 10), october);
   assert.notStrictEqual(shell.itemsInMonth(2036, 10), future);
@@ -104,13 +106,13 @@ test("a repeat rule change clears old and new occurrence months and keeps gaps c
   const february = shell.itemsInMonth(2026, 2);
   const march = shell.itemsInMonth(2026, 3);
   const nextYear = shell.itemsInMonth(2027, 1);
-  assert.equal(shell.update(ics.itemKey("berri", "edited"), { repeat: "yearly" }), true);
+  assert.equal(shell.update(Items.itemKey("berri", "edited"), { repeat: "yearly" }), true);
   assert.notStrictEqual(shell.itemsInMonth(2026, 2), february);
   assert.deepEqual(plain(shell.itemsInMonth(2026, 2)), {});
   assert.strictEqual(shell.itemsInMonth(2026, 3), march);
   assert.notStrictEqual(shell.itemsInMonth(2027, 1), nextYear);
   assert.equal(shell.itemsOn("2027-01-05")[0].title, "Before");
-  assert.equal(shell.update(ics.itemKey("berri", "edited"), { repeat: "none" }), true);
+  assert.equal(shell.update(Items.itemKey("berri", "edited"), { repeat: "none" }), true);
   assert.deepEqual(plain(shell.itemsInMonth(2027, 1)), {});
   assert.equal(shell.itemsOn("2026-01-05")[0].recurring, false);
 });
@@ -120,7 +122,7 @@ test("moving a single item clears its old and new months and keeps the month bet
   const september = shell.itemsInMonth(2026, 9);
   const october = shell.itemsInMonth(2026, 10);
   const november = shell.itemsInMonth(2026, 11);
-  assert.equal(shell.move(ics.itemKey("berri", "edited"), "2026-09-05", "2026-11-05", {}), true);
+  assert.equal(shell.move(Items.itemKey("berri", "edited"), "2026-09-05", "2026-11-05", {}), true);
   assert.notStrictEqual(shell.itemsInMonth(2026, 9), september);
   assert.deepEqual(plain(shell.itemsInMonth(2026, 9)), {});
   assert.strictEqual(shell.itemsInMonth(2026, 10), october);
@@ -133,7 +135,7 @@ test("moving one repeat occurrence updates both spans and keeps the remaining se
   const october = shell.itemsInMonth(2026, 10);
   const november = shell.itemsInMonth(2026, 11);
   const december = shell.itemsInMonth(2026, 12);
-  assert.equal(shell.move(ics.itemKey("berri", "edited"), "2026-09-30", "2026-12-30", {}), true);
+  assert.equal(shell.move(Items.itemKey("berri", "edited"), "2026-09-30", "2026-12-30", {}), true);
   assert.notStrictEqual(shell.itemsInMonth(2026, 10), october);
   assert.deepEqual(plain(shell.itemsOn("2026-10-01")), []);
   assert.equal(shell.itemsOn("2026-10-30")[0].recurring, true);
@@ -149,7 +151,7 @@ test("a repeat delete clears its occurrence months, including a final multi-day 
   const september = shell.itemsInMonth(2026, 9);
   const october = shell.itemsInMonth(2026, 10);
   const november = shell.itemsInMonth(2026, 11);
-  assert.equal(shell.remove(ics.itemKey("berri", "edited")), true);
+  assert.equal(shell.remove(Items.itemKey("berri", "edited")), true);
   assert.notStrictEqual(shell.itemsInMonth(2026, 9), september);
   assert.notStrictEqual(shell.itemsInMonth(2026, 10), october);
   assert.strictEqual(shell.itemsInMonth(2026, 11), november);
@@ -164,7 +166,7 @@ test("ticking or deleting one repeat occurrence keeps its other occurrence month
   const october = shell.itemsInMonth(2026, 10);
   const november = shell.itemsInMonth(2026, 11);
   const december = shell.itemsInMonth(2026, 12);
-  const uid = ics.itemKey("berri", "edited");
+  const uid = Items.itemKey("berri", "edited");
   assert.equal(shell.setDone(uid, true, "2026-10-05"), true);
   assert.notStrictEqual(shell.itemsInMonth(2026, 10), october);
   assert.equal(shell.itemsOn("2026-10-05")[0].done, true);
@@ -181,7 +183,7 @@ test("COUNT and a skipped monthly date limit the months affected by a series edi
   const february = shell.itemsInMonth(2026, 2);
   const march = shell.itemsInMonth(2026, 3);
   const april = shell.itemsInMonth(2026, 4);
-  assert.equal(shell.update(ics.itemKey("berri", "edited"), { title: "Limited" }), true);
+  assert.equal(shell.update(Items.itemKey("berri", "edited"), { title: "Limited" }), true);
   assert.strictEqual(shell.itemsInMonth(2026, 2), february);
   assert.notStrictEqual(shell.itemsInMonth(2026, 3), march);
   assert.equal(shell.itemsOn("2026-03-31")[0].title, "Limited");
@@ -194,7 +196,7 @@ test("shortening UNTIL clears a final span without rebuilding earlier unchanged 
   const august = shell.itemsInMonth(2026, 8);
   const september = shell.itemsInMonth(2026, 9);
   const october = shell.itemsInMonth(2026, 10);
-  assert.equal(shell.update(ics.itemKey("berri", "edited"), { until: "2026-09-29" }), true);
+  assert.equal(shell.update(Items.itemKey("berri", "edited"), { until: "2026-09-29" }), true);
   assert.strictEqual(shell.itemsInMonth(2026, 8), august);
   assert.notStrictEqual(shell.itemsInMonth(2026, 9), september);
   assert.notStrictEqual(shell.itemsInMonth(2026, 10), october);
@@ -211,7 +213,7 @@ test("a link item's own color changes the kept duplicate in every affected month
   const october = shell.itemsInMonth(2026, 10);
   const november = shell.itemsInMonth(2026, 11);
   assert.equal(october["2026-10-05"][0].calendarId, "berri");
-  assert.equal(shell.setItemColor(ics.itemKey("feed", "edited"), "red"), true);
+  assert.equal(shell.setItemColor(Items.itemKey("feed", "edited"), "red"), true);
   assert.strictEqual(shell.itemsInMonth(2026, 9), september);
   assert.notStrictEqual(shell.itemsInMonth(2026, 10), october);
   assert.notStrictEqual(shell.itemsInMonth(2026, 11), november);
@@ -220,7 +222,7 @@ test("a link item's own color changes the kept duplicate in every affected month
   assert.equal(shown[0].calendarId, "feed");
   assert.equal(shown[0].color, "red");
   assert.deepEqual(plain(shown[0].alsoInIds), ["berri"]);
-  assert.equal(shell.setItemColor(ics.itemKey("feed", "edited"), null), true);
+  assert.equal(shell.setItemColor(Items.itemKey("feed", "edited"), null), true);
   assert.equal(shell.itemsOn("2026-11-05")[0].calendarId, "berri");
 });
 
@@ -229,10 +231,10 @@ test("a failed item save restores the item and retains unchanged cached views", 
   const october = shell.itemsInMonth(2026, 10);
   const november = shell.itemsInMonth(2026, 11);
   shell.failWrite = true;
-  assert.equal(shell.update(ics.itemKey("berri", "edited"), { date: "2027-01-05", title: "Lost" }), false);
+  assert.equal(shell.update(Items.itemKey("berri", "edited"), { date: "2027-01-05", title: "Lost" }), false);
   assert.strictEqual(shell.itemsInMonth(2026, 10), october);
   assert.strictEqual(shell.itemsInMonth(2026, 11), november);
-  assert.equal(shell.getItem(ics.itemKey("berri", "edited")).title, "Before");
+  assert.equal(shell.getItem(Items.itemKey("berri", "edited")).title, "Before");
   assert.equal(shell.failed, "Could not save berri: Permission denied");
   assert.equal(shell.lastError, shell.failed);
 });
@@ -241,7 +243,7 @@ test("a file import keeps the full rebuild and exposes the imported month", () =
   const shell = service([item({})]);
   const september = shell.itemsInMonth(2026, 9);
   const october = shell.itemsInMonth(2026, 10);
-  shell.files.readNow = () => ics.writeCalendar({ ...ics.emptyCalendar(),
+  shell.files.readNow = () => Format.writeCalendar({ ...Format.emptyCalendar(),
     items: [item({ uid: "imported", date: "2026-09-12", title: "Imported" })] });
   const id = shell.importFile("/outside/copied.ics", "blue");
   assert.notEqual(id, "");
@@ -272,7 +274,7 @@ test("moving a whole repeat series to a new start clears its old and new ranges"
   const september = shell.itemsInMonth(2026, 9);
   const december = shell.itemsInMonth(2026, 12);
   const february = shell.itemsInMonth(2027, 2);
-  assert.equal(shell.update(ics.itemKey("berri", "edited"), { date: "2026-12-05" }), true);
+  assert.equal(shell.update(Items.itemKey("berri", "edited"), { date: "2026-12-05" }), true);
   assert.notStrictEqual(shell.itemsInMonth(2026, 9), september);
   assert.deepEqual(plain(shell.itemsInMonth(2026, 9)), {});
   assert.notStrictEqual(shell.itemsInMonth(2026, 12), december);
@@ -288,7 +290,7 @@ test("item edits update reminder inputs and leave other calendars' month inputs 
   const shell = service([item({ kind: "reminder", title: "First" })], [second]);
   const source = shell._months.projection.sources[1];
   const row = shell._months.projection.calendars[1];
-  assert.equal(shell.update(ics.itemKey("berri", "edited"), { title: "Changed", time: "10:00" }), true);
+  assert.equal(shell.update(Items.itemKey("berri", "edited"), { title: "Changed", time: "10:00" }), true);
   assert.deepEqual(plain(shell.allItems().map(it => [it.title, it.time])), [["Changed", "10:00"], ["Second", "09:00"]]);
   assert.strictEqual(shell._months.projection.sources[1], source);
   assert.strictEqual(shell._months.projection.calendars[1], row);
@@ -300,8 +302,8 @@ test("item edits update reminder inputs and leave other calendars' month inputs 
 test("outside file changes and bulk item colors clear all month caches", () => {
   const second = calendar([item({ color: "red" })],
     { id: "second", name: "Second", kind: "file", path: "/copy/second.ics", file: "second.ics" });
-  second.document = { ...ics.emptyCalendar(), items: second.document.items };
-  second.text = ics.writeCalendar(second.document);
+  second.document = { ...Format.emptyCalendar(), items: second.document.items };
+  second.text = Format.writeCalendar(second.document);
   const shell = service([], [second]);
   const september = shell.itemsInMonth(2026, 9);
   const october = shell.itemsInMonth(2026, 10);
@@ -310,7 +312,7 @@ test("outside file changes and bulk item colors clear all month caches", () => {
   assert.notStrictEqual(shell.itemsInMonth(2026, 10), october);
   assert.equal(shell.itemsOn("2026-10-05")[0].color, "blue");
   const colored = shell.itemsInMonth(2026, 10);
-  shell._ingest("/copy/second.ics", ics.writeCalendar({ ...ics.emptyCalendar(),
+  shell._ingest("/copy/second.ics", Format.writeCalendar({ ...Format.emptyCalendar(),
     items: [item({ date: "2026-10-05", title: "Outside" })] }), false);
   assert.notStrictEqual(shell.itemsInMonth(2026, 10), colored);
   assert.equal(shell.itemsOn("2026-10-05")[0].title, "Outside");
@@ -318,16 +320,16 @@ test("outside file changes and bulk item colors clear all month caches", () => {
 
 test("selective edits keep the three-month cache limit", () => {
   const local = calendar([item({})]);
-  const months = ics.createMonthCache([local]);
-  const september = ics.cachedItemsInMonth(months, 2026, 9);
-  ics.cachedItemsInMonth(months, 2026, 10);
-  const november = ics.cachedItemsInMonth(months, 2026, 11);
-  local.document.items[0] = ics.applyChanges(local.document.items[0], { title: "After" });
-  ics.editMonthCache(months, local, ["edited"]);
-  assert.strictEqual(ics.cachedItemsInMonth(months, 2026, 9), september);
-  assert.equal(ics.cachedItemsInMonth(months, 2026, 10)["2026-10-05"][0].title, "After");
-  ics.cachedItemsInMonth(months, 2026, 12);
-  assert.strictEqual(ics.cachedItemsInMonth(months, 2026, 11), november);
-  assert.notStrictEqual(ics.cachedItemsInMonth(months, 2026, 9), september);
-  assert.deepEqual(plain(ics.cachedItemsInMonth(months, 2026, 9)), {});
+  const months = Months.createMonthCache([local]);
+  const september = Months.cachedItemsInMonth(months, 2026, 9);
+  Months.cachedItemsInMonth(months, 2026, 10);
+  const november = Months.cachedItemsInMonth(months, 2026, 11);
+  local.document.items[0] = Items.applyChanges(local.document.items[0], { title: "After" });
+  Months.editMonthCache(months, local, ["edited"]);
+  assert.strictEqual(Months.cachedItemsInMonth(months, 2026, 9), september);
+  assert.equal(Months.cachedItemsInMonth(months, 2026, 10)["2026-10-05"][0].title, "After");
+  Months.cachedItemsInMonth(months, 2026, 12);
+  assert.strictEqual(Months.cachedItemsInMonth(months, 2026, 11), november);
+  assert.notStrictEqual(Months.cachedItemsInMonth(months, 2026, 9), september);
+  assert.deepEqual(plain(Months.cachedItemsInMonth(months, 2026, 9)), {});
 });

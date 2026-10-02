@@ -25,7 +25,7 @@ function cachedItemsInMonth(cache, year, month) {
     var id = monthId(year, month);
     if (!cache.days[id]) {
         var days = Queries.storedItemsInMonth(cache.projection, year, month);
-        for (var day in days) days[day] = days[day].map(Items.withItemIdentity);
+        for (var day in days) days[day] = days[day].map(Items.shownItem);
         cache.days[id] = days;
         cache.order.push(id);
         if (cache.order.length > MONTH_CACHE_LIMIT) delete cache.days[cache.order.shift()];
