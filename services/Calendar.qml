@@ -20,7 +20,8 @@ import qs.notifications
  *
  * Views read Calendar.itemsOn(date) or Calendar.itemsInMonth(year, month) inside
  * a binding. Both read `revision`, so the binding runs again after every change.
- * Up to three months are cached until the next change: do not edit the arrays.
+ * Up to three months are cached. Item edits keep unchanged months; imports and
+ * calendar-wide settings clear them. Do not edit the arrays.
  * The same event in several calendars shows once (see CalendarIcs.js): the copy
  * of the calendar added first, or the copy with its own color. It has `alsoIn`
  * and `alsoInIds`.
@@ -43,7 +44,7 @@ Singleton {
      * Every calendar: { id, name, kind ("local" | "file" | "link"), color (preset key or "#rrggbb"),
      * hidden, itemCount, source (link host or file name), updatedAt (ms, 0 = never), readOnly (links), error ("" or text) }.
      */
-    readonly property var calendars: _projection.calendars
+    readonly property var calendars: { void root.revision; return _months.projection.calendars; }
     /** Short text of the last failed importFile, "" after a good one. */
     property string lastError: ""
     /** An installation error shown in the Calendar source view. */
@@ -78,15 +79,7 @@ Singleton {
     /** { "YYYY-MM-DD": [occurrence] } for one month. Each occurrence has a `color` (a preset key or "#rrggbb"), `hasOwnColor`, `calendarId`, `readOnly`, `alsoIn` (names of the calendars with a duplicate) and `alsoInIds`. Hidden calendars give nothing. */
     function itemsInMonth(year: int, month: int): var {
         void root.revision;
-        var id = year * 12 + month;
-        if (!_cache[id]) {
-            var days = Ics.storedItemsInMonth(_projection, year, month);
-            for (var day in days) days[day] = days[day].map(Ics.withItemIdentity);
-            _cache[id] = days;
-            _cacheOrder.push(id);
-            if (_cacheOrder.length > 3) delete _cache[_cacheOrder.shift()];
-        }
-        return _cache[id];
+        return Ics.cachedItemsInMonth(_months, year, month);
     }
 
     /** The selected item for the detail form, or null. Editable items keep their full document fields. */
@@ -128,7 +121,7 @@ Singleton {
         else delete overrides[item.uid];
         meta.colorOverrides = overrides;
         _saveState();
-        _rebuild();
+        _rebuildItem(meta, [item.uid]);
         return true;
     }
 
@@ -145,7 +138,7 @@ Singleton {
         var item = Ics.makeItem(_cleanDates(fields));
         doc.items.push(item);
         calendar.document = doc;
-        return _commit(path);
+        return _commit(path, [item.uid]);
     }
 
     /** Changes fields of the whole item (all occurrences of a repeating one). */
@@ -153,7 +146,7 @@ Singleton {
         var found = _locate(uid, true);
         if (!found) return false;
         found.doc.items[found.index] = Ics.applyChanges(found.doc.items[found.index], _cleanDates(changes));
-        return _commit(found.path);
+        return _commit(found.path, [found.doc.items[found.index].uid]);
     }
 
     /** Deletes an item, or only one occurrence when occurrenceDate is given for a repeating item. */
@@ -165,7 +158,7 @@ Singleton {
         var kept = day ? Ics.withoutOccurrence(item, day) : null;
         if (kept) found.doc.items[found.index] = kept;
         else found.doc.items.splice(found.index, 1);
-        return _commit(found.path);
+        return _commit(found.path, [item.uid]);
     }
 
     /** Ticks an item off. For a repeating item only that occurrence (occurrenceDate). */
@@ -174,7 +167,7 @@ Singleton {
         if (!found) return false;
         var item = found.doc.items[found.index];
         found.doc.items[found.index] = Ics.withDone(item, _optionalKey(occurrenceDate) || item.date, done);
-        return _commit(found.path);
+        return _commit(found.path, [item.uid]);
     }
 
     /**
@@ -188,7 +181,7 @@ Singleton {
         var moved = Ics.moveOccurrence(found.doc.items[found.index], Ics.toKey(fromDate), Ics.toKey(toDate), _cleanDates(changes || {}));
         found.doc.items[found.index] = moved.item;
         if (moved.created) found.doc.items.push(moved.created);
-        return _commit(found.path);
+        return _commit(found.path, moved.created ? [moved.item.uid, moved.created.uid] : [moved.item.uid]);
     }
 
     /**
@@ -215,7 +208,7 @@ Singleton {
     /** Items that can alert: from calendars that are not hidden, links left out, duplicates once. Used by ReminderNotifier. Do not edit the array. */
     function allItems(): var {
         void root.revision;
-        return _projection.reminders;
+        return _months.projection.reminders;
     }
 
     // ---- calendars
@@ -356,9 +349,7 @@ Singleton {
     // Editable calendars keep documents and text; links keep compact records.
     property var _calendars: ({})
     property var _order: []
-    property var _projection: ({ calendars: [], sources: [], reminders: [], names: {} })
-    property var _cache: ({})
-    property var _cacheOrder: []
+    property var _months: Ics.createMonthCache([])
     property bool _stateRead: false
     property int _nextSubscription: 0
 
@@ -457,10 +448,13 @@ Singleton {
 
     // Replace every derived list together before notifying the views.
     function _rebuild(): void {
-        var projection = Ics.projectStoredCalendars(_order.map(function (id) { return _calendars[id]; }));
-        _cache = ({});
-        _cacheOrder = [];
-        _projection = projection;
+        _months = Ics.createMonthCache(_order.map(function (id) { return _calendars[id]; }));
+        revision++;
+    }
+
+    // Reproject one calendar and keep months whose edited occurrences did not change.
+    function _rebuildItem(calendar: var, uids: var): void {
+        Ics.editMonthCache(_months, calendar, uids);
         revision++;
     }
 
@@ -533,8 +527,9 @@ Singleton {
      * Saves a changed calendar document. On a failed write the document goes
      * back to the text before the edit, the views rebuild, and `saveFailed`
      * and `lastError` carry the error. Returns whether the file was saved.
+     * Item actions pass their changed UIDs; bulk actions omit them for a full rebuild.
      */
-    function _commit(path: string): bool {
+    function _commit(path: string, uids: var): bool {
         var calendar = _calendars[_idOfPath(path)];
         var nextText = Ics.writeCalendar(calendar.document, _localZone);
         var written = _write(path, nextText, calendar.text, "Could not save " + calendar.name);
@@ -546,7 +541,8 @@ Singleton {
             calendar.document = Ics.readCalendar(written.text, _localZone);
         }
         lastError = written.error;
-        _rebuild();
+        if (uids) _rebuildItem(calendar, uids);
+        else _rebuild();
         if (!written.saved) saveFailed(written.error);
         return written.saved;
     }

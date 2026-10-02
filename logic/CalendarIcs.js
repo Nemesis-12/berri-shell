@@ -3,6 +3,7 @@
 .import "CalendarFormat.js" as Format
 .import "CalendarItems.js" as Items
 .import "CalendarQueries.js" as Queries
+.import "CalendarMonths.js" as Months
 
 /*
  * iCalendar (RFC 5545) subset used by berri's calendar. Pure functions, no QML.
@@ -140,3 +141,6 @@ var curlError = Queries.curlError;
 var projectCalendars = Queries.projectCalendars;
 var projectStoredCalendars = Queries.projectStoredCalendars;
 var storedItemsInMonth = Queries.storedItemsInMonth;
+var createMonthCache = Months.createMonthCache;
+var cachedItemsInMonth = Months.cachedItemsInMonth;
+var editMonthCache = Months.editMonthCache;
