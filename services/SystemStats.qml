@@ -3,14 +3,12 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.services
-import "../logic/MemoryUse.js" as MemoryUse
 import "../logic/SystemReadings.js" as Readings
 
 /**
  * Live numbers for the System tab. Nothing runs until a SystemTab is
- * visible (`viewers` > 0): FileViews read /proc and /sys each second,
- * `ps` lists processes and /proc supplies their CPU time every 5 s;
- * `df` reads disks every 30 s.
+ * visible (`viewers` > 0). Sensors, frequency and network refresh each second.
+ * Processes refresh every 5 s. SystemUsage supplies memory, disks and uptime.
  * The dGPU is asked only when its runtime power state is "active", so this
  * never wakes it. When it sleeps, the iGPU temperature stands in.
  */
@@ -24,19 +22,20 @@ Singleton {
     // CPU: total percent, per-core percent (SMT threads merged), average GHz, temperature.
     readonly property real cpuPercent: CpuLoad.percent
     readonly property var coreLoads: CpuLoad.coreLoads
-    property real cpuGhz: 0
-    property real cpuTempC: 0
+    readonly property int threadCount: CpuLoad.threadCount
+    property var cpuGhz: null
+    property var cpuTempC: null
 
     // Sensors. gpuTempC is the dGPU when awake, else the iGPU.
-    property real gpuTempC: 0
-    property real igpuTempC: 0
-    property int fanRpm: 0
+    property var gpuTempC: null
+    property var igpuTempC: null
+    property var fanRpm: null
 
     // Memory in GiB.
-    property real ramUsedGb: 0
-    property real ramTotalGb: 0
-    property real swapUsedGb: 0
-    property real swapTotalGb: 0
+    readonly property real ramUsedGb: SystemUsage.ramUsedGb
+    readonly property real ramTotalGb: SystemUsage.ramTotalGb
+    readonly property real swapUsedGb: SystemUsage.swapUsedGb
+    readonly property real swapTotalGb: SystemUsage.swapTotalGb
 
     // Network: default-route interface, MB/s.
     property string netName: ""
@@ -44,7 +43,9 @@ Singleton {
     property real upMBs: 0
 
     /** [{ mount, device, usedGb, totalGb }] for up to two big disks. */
-    property var disks: []
+    readonly property var disks: SystemUsage.disks.filter(function (disk) {
+        return disk.mount === "/" || disk.totalGb >= 20;
+    }).slice(0, 2)
 
     /** [{ name, cpu, mem }] up to 8 rows, busiest first. */
     property var processes: []
@@ -52,7 +53,7 @@ Singleton {
     property string hostName: ""
     property string kernelName: ""
     property string distroName: ""
-    property real uptimeSeconds: 0
+    readonly property real uptimeSeconds: SystemUsage.uptimeSeconds
 
     // Sensor file paths, found once by the probe.
     property string cpuTempPath: ""
@@ -61,9 +62,8 @@ Singleton {
     property string dgpuPath: ""
     property bool probed: false
 
-    /** CPU threads from the same /proc/stat read as the total load. */
-    readonly property int threadCount: CpuLoad.threadCount
-    property real dgpuTempC: -1
+    property var dgpuTempC: null
+    property var sensorWarnings: ({})
 
     // Previous network counters for rate calculation.
     property var prevNet: null
@@ -71,18 +71,23 @@ Singleton {
 
     onActiveChanged: {
         if (active) {
-            if (!probed) probeProc.running = true;
-            else kickAll();
+            SystemUsage.viewers++;
+            kickAll();
+            if (!probed && !probeProc.running) probeProc.running = true;
         } else {
+            SystemUsage.viewers--;
+            frequencyReader.running = false;
+            processReader.running = false;
+            gpuReader.running = false;
             prevNet = null;
             prevProcessSample = null;
             processes = [];
         }
     }
 
+    // Starts the first process and fast samples as soon as the tab opens.
     function kickAll() {
         if (!processReader.running) processReader.running = true;
-        if (!diskReader.running) diskReader.running = true;
         reloadFast();
         runtimeStatus.reload();
     }
@@ -90,97 +95,93 @@ Singleton {
     // Finds sensor paths and static text once.
     Process {
         id: probeProc
-        command: ["sh", "-c",
-            "for d in /sys/class/hwmon/hwmon*; do echo \"H $(cat $d/name) $d\"; done;"
-            + " for d in /sys/bus/pci/devices/*; do case \"$(cat $d/class)\" in 0x03*) [ \"$(cat $d/vendor)\" = 0x10de ] && echo \"D $d\";; esac; done;"
-            + " echo \"O $(. /etc/os-release; echo $NAME)\"; echo \"K $(cat /proc/sys/kernel/osrelease)\"; echo \"N $(cat /proc/sys/kernel/hostname)\""]
+        command: ["sh", "-c", "sh \"$1\" sensors;"
+            + " echo \"O $(. /etc/os-release; echo $NAME)\"; echo \"K $(cat /proc/sys/kernel/osrelease)\"; echo \"N $(cat /proc/sys/kernel/hostname)\"",
+            "system-probe", Quickshell.shellPath("scripts/system-hardware.sh")]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: {
-                var lines = text.split("\n");
-                for (var i = 0; i < lines.length; i++) {
-                    var l = lines[i];
-                    var p = l.split(" ");
-                    if (p[0] === "H") {
-                        if (p[1] === "k10temp") root.cpuTempPath = p[2] + "/temp1_input";
-                        else if (p[1] === "amdgpu") root.igpuTempPath = p[2] + "/temp1_input";
-                        else if (p[1] === "asus") root.fanPath = p[2] + "/fan1_input";
-                    } else if (p[0] === "D") root.dgpuPath = p[1];
-                    else if (p[0] === "O") root.distroName = l.slice(2);
-                    else if (p[0] === "K") root.kernelName = l.slice(2);
-                    else if (p[0] === "N") root.hostName = l.slice(2);
-                }
-                root.probed = true;
-                if (root.active) root.kickAll();
-            }
+            onStreamFinished: root.readProbe(text)
         }
     }
 
-    FileView {
-        id: memoryFile
-        path: "/proc/meminfo"
-        printErrors: false
-        onLoaded: if (root.active) root.readMemory(text())
+    // Publishes available sensor paths and reports missing sensors once.
+    function readProbe(text) {
+        var sensors = Readings.readSensors(text);
+        cpuTempPath = sensors.cpuTempPath;
+        igpuTempPath = sensors.igpuTempPath;
+        fanPath = sensors.fanPath;
+        dgpuPath = sensors.dgpuPath;
+        sensors.missing.forEach(function (name) { root.sensorUnavailable(name); });
+        var lines = text.split("\n");
+        for (var i = 0; i < lines.length; i++) {
+            if (lines[i].indexOf("O ") === 0) distroName = lines[i].slice(2);
+            else if (lines[i].indexOf("K ") === 0) kernelName = lines[i].slice(2);
+            else if (lines[i].indexOf("N ") === 0) hostName = lines[i].slice(2);
+        }
+        probed = true;
     }
+
+    // A missing sensor or a failed read produces only one warning per session.
+    function sensorUnavailable(name) {
+        if (sensorWarnings[name]) return;
+        sensorWarnings[name] = true;
+        console.warn("SystemStats: " + name + " sensor is unavailable");
+    }
+
+    // Clears failed sensor readings instead of retaining a stale or false value.
+    function readSensorSample(name, text, divisor) {
+        var value = Readings.readSensor(text, divisor);
+        if (name === "CPU temperature") cpuTempC = value;
+        else if (name === "GPU temperature") {
+            igpuTempC = value;
+            if (dgpuTempC === null) gpuTempC = value;
+        } else fanRpm = value;
+        if (value === null) sensorUnavailable(name);
+    }
+
     FileView {
         id: routeFile
         path: "/proc/net/route"
         printErrors: false
     }
+
     FileView {
         id: networkFile
         path: "/proc/net/dev"
         printErrors: false
         onLoaded: if (root.active) root.readNetwork()
     }
-    FileView {
-        id: uptimeFile
-        path: "/proc/uptime"
-        printErrors: false
-        onLoaded: if (root.active) {
-            var seconds = Readings.readUptime(text());
-            if (seconds !== null) root.uptimeSeconds = seconds;
-        }
-    }
+
     FileView {
         id: cpuTempFile
         path: root.cpuTempPath
         printErrors: false
-        onLoaded: if (root.active) {
-            var value = Readings.readSensor(text(), 1000);
-            if (value !== null) root.cpuTempC = value;
-        }
+        onLoaded: if (root.active) root.readSensorSample("CPU temperature", text(), 1000)
+        onLoadFailed: if (root.active && root.cpuTempPath) root.readSensorSample("CPU temperature", "", 1000)
     }
+
     FileView {
         id: igpuTempFile
         path: root.igpuTempPath
         printErrors: false
-        onLoaded: if (root.active) {
-            var value = Readings.readSensor(text(), 1000);
-            if (value !== null) {
-                root.igpuTempC = value;
-                if (root.dgpuTempC < 0) root.gpuTempC = value;
-            }
-        }
+        onLoaded: if (root.active) root.readSensorSample("GPU temperature", text(), 1000)
+        onLoadFailed: if (root.active && root.igpuTempPath) root.readSensorSample("GPU temperature", "", 1000)
     }
+
     FileView {
         id: fanFile
         path: root.fanPath
         printErrors: false
-        onLoaded: if (root.active) {
-            var value = Readings.readSensor(text(), 1);
-            if (value !== null) root.fanRpm = value;
-        }
+        onLoaded: if (root.active) root.readSensorSample("fan speed", text(), 1)
+        onLoadFailed: if (root.active && root.fanPath) root.readSensorSample("fan speed", "", 1)
     }
 
-    Instantiator {
-        id: frequencyFiles
-        model: root.threadCount
-        delegate: FileView {
-            required property int index
-            path: "/sys/devices/system/cpu/cpu" + index + "/cpufreq/scaling_cur_freq"
-            printErrors: false
-            onLoaded: if (root.active) root.readFrequency()
+    Process {
+        id: frequencyReader
+        command: ["sh", Quickshell.shellPath("scripts/system-hardware.sh"), "frequency"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: if (root.active) root.readFrequency(text)
         }
     }
 
@@ -202,15 +203,6 @@ Singleton {
         }
     }
 
-    Process {
-        id: diskReader
-        command: ["df", "-P", "-x", "tmpfs", "-x", "devtmpfs", "-x", "efivarfs", "-x", "squashfs"]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.disks = Readings.readDisks(text)
-        }
-    }
-
     FileView {
         id: runtimeStatus
         path: root.dgpuPath ? root.dgpuPath + "/power/runtime_status" : ""
@@ -225,8 +217,10 @@ Singleton {
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
+                if (!root.active) return;
                 var value = Readings.readSensor(text, 1);
-                root.dgpuTempC = value === null ? -1 : value;
+                root.dgpuTempC = value;
+                if (value === null) root.sensorUnavailable("GPU temperature");
                 root.gpuTempC = value === null ? root.igpuTempC : value;
             }
         }
@@ -234,41 +228,26 @@ Singleton {
 
     Timer {
         interval: 1000
-        running: root.active && root.probed
+        running: root.active
         repeat: true
         onTriggered: root.reloadFast()
     }
 
     Timer {
         interval: 5000
-        running: root.active && root.probed
+        running: root.active
         repeat: true
         onTriggered: if (!processReader.running) processReader.running = true
     }
 
     Timer {
-        interval: 30000
-        running: root.active && root.probed
-        repeat: true
-        onTriggered: if (!diskReader.running) diskReader.running = true
-    }
-
-    Timer {
         interval: 5000
-        running: root.active && root.probed && root.dgpuPath !== ""
+        running: root.active && root.dgpuPath !== ""
         repeat: true
         onTriggered: runtimeStatus.reload()
     }
 
-    function readMemory(text) {
-        var memory = MemoryUse.readMemoryUse(text);
-        if (!memory) return;
-        ramTotalGb = memory.totalGb;
-        ramUsedGb = memory.usedGb;
-        swapTotalGb = memory.swapTotalGb;
-        swapUsedGb = memory.swapUsedGb;
-    }
-
+    // Derives transfer rates from consecutive byte counters for the same interface.
     function readNetwork() {
         var next = Readings.readNetwork(routeFile.text(), networkFile.text());
         var now = Date.now();
@@ -281,35 +260,29 @@ Singleton {
         if (next.rx >= 0) prevNet = { name: next.name, rx: next.rx, tx: next.tx, time: now };
     }
 
-    function readFrequency() {
-        var values = [];
-        for (var i = 0; i < frequencyFiles.count; i++) {
-            var file = frequencyFiles.objectAt(i);
-            if (file) values.push(file.text());
-        }
-        var ghz = Readings.readFrequency(values);
-        if (ghz !== null) cpuGhz = ghz;
+    // Called once after all thread frequency files have been read.
+    function readFrequency(text) {
+        var ghz = Readings.readFrequency(text.split("\n"));
+        cpuGhz = ghz;
+        if (ghz === null) sensorUnavailable("CPU frequency");
     }
 
+    // Starts one completed frequency sample and refreshes available sensors.
     function reloadFast() {
-        memoryFile.reload();
         routeFile.reload();
         networkFile.reload();
-        uptimeFile.reload();
         if (cpuTempPath) cpuTempFile.reload();
         if (igpuTempPath) igpuTempFile.reload();
         if (fanPath) fanFile.reload();
-        for (var i = 0; i < frequencyFiles.count; i++) {
-            var file = frequencyFiles.objectAt(i);
-            if (file) file.reload();
-        }
+        if (!frequencyReader.running) frequencyReader.running = true;
     }
 
+    // Queries NVIDIA only while its runtime power state is active.
     function readGpuState(text) {
         if (text.trim() === "active") {
             if (!gpuReader.running) gpuReader.running = true;
         } else {
-            dgpuTempC = -1;
+            dgpuTempC = null;
             gpuTempC = igpuTempC;
         }
     }

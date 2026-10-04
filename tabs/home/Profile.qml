@@ -5,6 +5,7 @@ import Quickshell.Io
 import qs.common
 import qs.picker
 import qs.services
+import "../../logic/SystemFormat.js" as Fmt
 
 /**
  * Profile cell (ticket 13): account picture on the left, username and
@@ -12,8 +13,8 @@ import qs.services
  * v2.dc.html, ~line 342). Picture source, in order: AccountsService's icon
  * for this user, then ~/.face, then a solid Theme.accent square. Both files
  * are re-checked every minute so a newly added ~/.face appears without a
- * restart. Uptime comes from /proc/uptime, also refreshed every minute.
- * Both refresh only while the cell is visible, and once when it shows again.
+ * restart. SystemUsage supplies the same uptime snapshot as the System tab.
+ * Picture checks run only while visible, and once when it shows again.
  *
  * Clicking the picture (ticket 13a) opens ImagePicker's portable chooser to
  * ~/.face, then reloads it at once. Pill closes the panel first via
@@ -31,7 +32,7 @@ Item {
 
     /** "" means no picture file was found; show the solid fallback square. */
     property string pictureSource: ""
-    property string uptimeText: ""
+    readonly property string uptimeText: Fmt.uptime(SystemUsage.uptimeSeconds)
 
     /** Output scale of the screen this cell is on; used to decode images at native sharpness. */
     readonly property real dpr: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
@@ -91,51 +92,24 @@ Item {
         }
     }
 
-    function readUptime() {
-        uptimeProc.running = true;
-    }
-
-    Process {
-        id: uptimeProc
-        command: ["cat", "/proc/uptime"]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.uptimeText = root.formatUptime(parseFloat(text))
-        }
-    }
-
-    /** Seconds to "UP <d>D <h>H" (days, once at least 1) or "UP <h>H <m>M". */
-    function formatUptime(seconds) {
-        if (isNaN(seconds)) return "";
-        var totalMinutes = Math.floor(seconds / 60);
-        var days = Math.floor(totalMinutes / 1440);
-        var hours = Math.floor((totalMinutes % 1440) / 60);
-        var minutes = totalMinutes % 60;
-        if (days >= 1) return "UP " + days + "D " + hours + "H";
-        return "UP " + hours + "H " + minutes + "M";
-    }
-
     Component.onCompleted: {
         checkPicture();
-        readUptime();
     }
 
     WhileVisible { service: Clock }
 
-    /** Refreshes the picture and the uptime on each new minute, while visible. */
+    /** Refreshes the picture on each new minute, while visible. */
     Connections {
         target: Clock
         enabled: root.visible
         function onMinuteChanged() {
             root.checkPicture();
-            root.readUptime();
         }
     }
 
     onVisibleChanged: {
         if (!visible) return;
         checkPicture();
-        readUptime();
     }
 
     Row {

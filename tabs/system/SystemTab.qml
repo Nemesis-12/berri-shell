@@ -6,7 +6,7 @@ import qs.services
 
 /**
  * System tab body (mock 5C SPINE, Berri System v2.dc.html), 737 x 452:
- * CPU readout and eight per-core meters on top, process table beside memory
+ * CPU readout and detected core meters on top, process table beside memory
  * and disks in the middle, network and three sensor tiles below, and a
  * system line at the bottom. 1px gaps show the Theme.border backdrop. Live
  * numbers come from SystemStats, which samples only while this tab is
@@ -69,7 +69,7 @@ Item {
                 font.pixelSize: 10
                 font.letterSpacing: 10 * 0.06
                 color: Theme.dim
-                text: SystemStats.cpuGhz.toFixed(2) + " GHZ"
+                text: Fmt.sensor(SystemStats.cpuGhz, " GHZ", 2)
             }
 
             SystemText {
@@ -78,19 +78,19 @@ Item {
                 font.pixelSize: 10
                 font.letterSpacing: 10 * 0.06
                 color: Theme.dim
-                text: Math.round(SystemStats.cpuTempC) + "°C"
+                text: Fmt.sensor(SystemStats.cpuTempC, "°C", 0)
             }
         }
     }
 
     // ---- Per-core meters ----
     Repeater {
-        model: 8
+        model: SystemStats.coreLoads.length
 
         SystemCore {
             required property int index
 
-            readonly property real slot: (496 - 7) / 8 + 1
+            readonly property real slot: (496 + 1) / SystemStats.coreLoads.length
             x: PixelGrid.snap(241 + index * slot, root.dpr)
             y: 0
             width: PixelGrid.snap(241 + (index + 1) * slot - 1, root.dpr) - x
@@ -316,7 +316,7 @@ Item {
                     y: disk.rowY + 20
                     width: 191
                     height: 6
-                    value: disk.modelData.totalGb > 0 ? disk.modelData.usedGb / disk.modelData.totalGb : 0
+                    value: disk.modelData.percent / 100
                 }
             }
         }
@@ -401,9 +401,9 @@ Item {
     // ---- Sensor tiles ----
     Repeater {
         model: [
-            { label: "CPU TEMP", value: Math.round(SystemStats.cpuTempC) + "°" },
-            { label: "GPU TEMP", value: Math.round(SystemStats.gpuTempC) + "°" },
-            { label: "FAN RPM", value: String(SystemStats.fanRpm) }
+            { label: "CPU TEMP", value: Fmt.sensor(SystemStats.cpuTempC, "°", 0) },
+            { label: "GPU TEMP", value: Fmt.sensor(SystemStats.gpuTempC, "°", 0) },
+            { label: "FAN RPM", value: Fmt.sensor(SystemStats.fanRpm, "", 0) }
         ]
 
         Rectangle {

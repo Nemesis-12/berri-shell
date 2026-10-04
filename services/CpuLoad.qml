@@ -2,7 +2,6 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import qs.common
 import "../logic/SystemReadings.js" as Readings
 
 /**
@@ -25,8 +24,10 @@ Singleton {
 
     /** Load in percent between the last two samples. */
     property real percent: 0
-    property var coreLoads: [0, 0, 0, 0, 0, 0, 0, 0]
-    property int threadCount: 1
+    property var coreLoads: []
+    property int threadCount: 0
+    property var coreGroups: []
+    property bool topologyRead: false
 
     signal measured(real percent)
 
@@ -35,6 +36,20 @@ Singleton {
     // Without a timer running, the next sample has no earlier one to compare to.
     onActiveChanged: {
         if (!active) previousCounters = null;
+        else if (!topologyRead) topologyReader.running = true;
+    }
+
+    Process {
+        id: topologyReader
+        command: ["sh", Quickshell.shellPath("scripts/system-hardware.sh"), "cores"]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: {
+                root.coreGroups = Readings.readCoreGroups(text);
+                root.topologyRead = true;
+                if (root.active) root.readSample(statFile.text());
+            }
+        }
     }
 
     FileView {
@@ -44,14 +59,15 @@ Singleton {
         onLoaded: if (root.active) root.readSample(text())
     }
 
+    // Publishes total and core load from the same completed /proc/stat sample.
     function readSample(text) {
-        var sample = Readings.readCpuLoad(text, previousCounters);
+        var sample = Readings.readCpuLoad(text, previousCounters, coreGroups);
         if (!sample) return;
         previousCounters = sample.counters;
-        threadCount = Math.max(1, sample.threadCount);
+        threadCount = sample.threadCount;
+        coreLoads = sample.coreLoads;
         if (sample.percent === null) return;
         percent = sample.percent;
-        coreLoads = sample.coreLoads;
         measured(percent);
     }
 

@@ -1,5 +1,10 @@
 .pragma library
 
+/** Format a measured sensor value, or show a placeholder when unavailable. */
+function sensor(value, unit, decimals) {
+    return value === null ? "-" : value.toFixed(decimals) + unit;
+}
+
 /** "148 / 512 GB" or "1.2 / 2 TB": used over total, in TB from 1000 GB up. */
 function usedOfTotal(usedGb, totalGb) {
     var tb = totalGb >= 1000;
