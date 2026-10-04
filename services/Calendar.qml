@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import "../logic/CalendarIcs.js" as Ics
 import "../logic/CalendarSave.js" as Save
+import "../logic/CalendarZone.js" as Zone
 import "../logic/Times.js" as Times
 import qs.common
 import qs.notifications
@@ -457,7 +458,7 @@ Singleton {
 
     // Converts an IANA zone clock to an instant with the system zone database.
     function _localZone(value: string, zone: string): real {
-        return Date.fromLocaleString(Qt.locale("C"), value + " " + zone, "yyyyMMdd'T'HHmmss tttt").getTime();
+        return Zone.instant(value, zone);
     }
 
     // Parses a subscription record file. Null when it is not valid records.
