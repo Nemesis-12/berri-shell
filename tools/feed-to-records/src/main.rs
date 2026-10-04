@@ -169,23 +169,29 @@ fn calendar_date(value: &str, params: &[(String, String)]) -> Option<CalendarDat
     if bytes.len() == 8 && bytes.iter().all(u8::is_ascii_digit) {
         return Some(CalendarDate::Date(value.to_owned()));
     }
-    if (bytes.len() != 15 && bytes.len() != 16)
+    // The seconds are optional, as in the JavaScript reader. A missing seconds part is read as 00.
+    let (clock, utc) = match value.strip_suffix('Z') {
+        Some(clock) => (clock, true),
+        None => (value, false),
+    };
+    let bytes = clock.as_bytes();
+    if (bytes.len() != 13 && bytes.len() != 15)
         || bytes[8] != b'T'
         || !bytes[..8].iter().all(u8::is_ascii_digit)
-        || !bytes[9..15].iter().all(u8::is_ascii_digit)
-        || (bytes.len() == 16 && bytes[15] != b'Z')
+        || !bytes[9..].iter().all(u8::is_ascii_digit)
     {
         return None;
     }
+    let value = if bytes.len() == 13 {
+        format!("{clock}00{}", if utc { "Z" } else { "" })
+    } else {
+        value.to_owned()
+    };
     let zone = params
         .iter()
         .find(|(key, _)| key == "TZID")
         .map(|(_, value)| value.clone());
-    Some(CalendarDate::DateTime {
-        value: value.to_owned(),
-        zone,
-        utc: bytes.len() == 16,
-    })
+    Some(CalendarDate::DateTime { value, zone, utc })
 }
 
 // Reads one repeat rule into the fields that berri uses.
