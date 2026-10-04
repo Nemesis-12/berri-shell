@@ -92,3 +92,7 @@ Weather lookup is automatic. There is no off switch. berri reads the Omarchy loc
 berri-shell uses the [MIT license](LICENSE).
 
 Icons come from [Lucide](https://lucide.dev/) under the ISC license. The bundled [icon license](assets/icons/lucide/LICENSE) also includes the MIT notice for icons derived from Feather.
+
+## Development
+
+Development also needs `node` for the JavaScript tests and Qt's `qmltestrunner` with QtTest for offscreen QML tests. Set `QMLTESTRUNNER` if it is not at `/usr/lib/qt6/bin/qmltestrunner`. It also needs `qml6` for isolated weather service tests. These tests use Qt's offscreen platform, fake services or synthetic data. They do not start a shell instance or make network requests. Python tests use the standard library. The pre-push hook needs `node`, `qmltestrunner`, `qml6`, `python3` and `cargo`.

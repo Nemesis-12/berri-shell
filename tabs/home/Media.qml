@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Window
-import Quickshell.Services.Mpris
 import "../../logic/ArtUrl.js" as ArtUrl
 import "../../logic/Times.js" as Times
 import "../../logic/PixelGrid.js" as PixelGrid
@@ -25,8 +24,8 @@ Item {
     readonly property real displayPosition: MediaPlayer.displayPosition
     WhileVisible { service: MediaPlayer }
 
-    readonly property bool isPlaying: activePlayer !== null && activePlayer.playbackState === MprisPlaybackState.Playing
-    readonly property string titleText: activePlayer ? (activePlayer.trackTitle || "Unknown title") : "Nothing playing"
+    readonly property bool isPlaying: MediaPlayer.isPlaying
+    readonly property string titleText: MediaPlayer.titleText
     readonly property string artistText: activePlayer ? activePlayer.trackArtist.toUpperCase() : ""
     readonly property string artUrl: ArtUrl.safeArtUrl(activePlayer ? activePlayer.trackArtUrl : "")
     readonly property real length: activePlayer ? activePlayer.length : 0

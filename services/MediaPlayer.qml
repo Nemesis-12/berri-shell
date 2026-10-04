@@ -30,6 +30,7 @@ Singleton {
     property bool seeking: false
 
     readonly property bool isPlaying: activePlayer !== null && activePlayer.playbackState === MprisPlaybackState.Playing
+    readonly property string titleText: activePlayer ? (activePlayer.trackTitle || "Unknown title") : "Nothing playing"
 
     /** Moves the play position to `seconds` (seek bar). */
     function seekTo(seconds: real): void {
