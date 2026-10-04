@@ -44,7 +44,7 @@ function runWeather(scenario) {
     const result = spawnSync("qml6", [entry], { env, encoding: "utf8", timeout: 75000 });
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stdout + result.stderr);
-    assert.match(result.stderr, /Weather recovered with 18 degrees/);
+    assert.match(result.stderr, /Weather checks passed/);
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });
   }
@@ -52,4 +52,28 @@ function runWeather(scenario) {
 
 test("weather recovers within 70 seconds after the first location call fails", () => {
   runWeather("location");
+});
+
+test("weather recovers within 70 seconds after the first forecast call fails", () => {
+  runWeather("forecast");
+});
+
+test("weather resolves changed coordinates once on the fourth forecast tick", () => {
+  runWeather("move");
+});
+
+test("weather publishes one current temperature for all readers", () => {
+  runWeather("shared");
+});
+
+test("weather retries an invalid forecast response with a successful exit code", () => {
+  runWeather("bad-data");
+});
+
+test("weather retries an IP location response without usable coordinates", () => {
+  runWeather("invalid-location");
+});
+
+test("weather keeps the last good result during a failed refresh and then recovers", () => {
+  runWeather("retained");
 });

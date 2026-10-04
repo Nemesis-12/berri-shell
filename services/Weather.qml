@@ -7,10 +7,11 @@ import "../logic/WeatherParse.js" as WeatherParse
 /**
  * Weather data for the pill, the Home cell and the Weather tab. Location comes from Omarchy's own weather
  * settings file; if that is missing or invalid, falls back to wttr.in's IP
- * lookup. Actual conditions come from Open-Meteo. Refreshes every 15 min.
+ * lookup. Actual conditions come from Open-Meteo. Refreshes every 15 min,
+ * resolves location each hour, and retries failed calls after 45 seconds.
  * One Open-Meteo request per refresh gives current values, 7 days and hourly data.
  * On failure the last good data stays and `error` holds a short text.
- * Temperatures are in Celsius; use formatTemp() to honour `unitF`.
+ * Temperatures are in Celsius.
  * Times: `sunrise`, `sunset` are local "HH:MM" strings; `hours[].time` and `days[].date` are Dates.
  */
 Singleton {
@@ -20,12 +21,13 @@ Singleton {
 
     property real latitude: NaN
     property real longitude: NaN
+    property bool locationPending: false
 
     /** True once a real reading has been received at least once. */
-    property bool ready: false
-    property int temperatureC: 0
-    property int weatherCode: 3
-    property bool isDay: true
+    readonly property bool ready: current !== null
+    readonly property int temperatureC: current ? current.tempC : 0
+    readonly property int weatherCode: current ? current.code : 3
+    readonly property bool isDay: current ? current.isDay : true
 
     /** Short place name, "City, CC". Empty until known. */
     property string locationName: ""
@@ -36,36 +38,32 @@ Singleton {
     property string error: ""
 
     // Other current readouts (same names as dayDetail(0)).
-    property int feelsLikeC: 0
-    property int humidity: 0
-    property int dewPointC: 0
-    property int windKmh: 0
-    property string windDirection: ""
-    property int gustKmh: 0
+    readonly property int feelsLikeC: current ? current.feelsLikeC : 0
+    readonly property int humidity: current ? current.humidity : 0
+    readonly property int dewPointC: current ? current.dewPointC : 0
+    readonly property int windKmh: current ? current.windKmh : 0
+    readonly property string windDirection: current ? current.windDirection : ""
+    readonly property int gustKmh: current ? current.gustKmh : 0
     /** Expected precipitation for today, mm. */
-    property real precipMm: 0
-    property int precipProbability: 0
-    property real uvIndex: 0
-    property string uvLabel: "Low"
-    property int pressureHpa: 0
-    property string sunrise: ""
-    property string sunset: ""
-    property string daylight: ""
+    readonly property real precipMm: current ? current.precipMm : 0
+    readonly property int precipProbability: current ? current.precipProbability : 0
+    readonly property real uvIndex: current ? current.uvIndex : 0
+    readonly property string uvLabel: current ? current.uvLabel : "Low"
+    readonly property int pressureHpa: current ? current.pressureHpa : 0
+    readonly property string sunrise: current ? current.sunrise : ""
+    readonly property string sunset: current ? current.sunset : ""
+    readonly property string daylight: current ? current.daylight : ""
 
     /** Next 24 hours from the current hour: { time, code, isDay, tempC, precipProbability }. */
-    property var hours: []
+    readonly property var hours: model ? WeatherParse.nextHours(model) : []
     /** 7 days: { date, code, minC, maxC, precipProbability, precipMm, sunrise, sunset, uvMax,
      *  windMaxKmh, gustMaxKmh, humidityMean, dewPointMean, feelsLikeMax }. */
-    property var days: []
-
-    /** Not used yet; the settings page will set it. */
-    property bool unitF: false
-    function formatTemp(c) {
-        return unitF ? Math.round(c * 9 / 5 + 32) + "°" : Math.round(c) + "°";
-    }
+    readonly property var days: model ? model.days : []
 
     // Parsed model from WeatherParse.parse(); backs dayDetail() and stripHours().
     property var model: null
+    // Every current readout comes from this result.
+    readonly property var current: model ? model.current : null
 
     /** Readouts for day `index` (0 = now). Same field names as the current properties, plus tempC, minC, maxC, code. */
     function dayDetail(index) {
@@ -101,20 +99,24 @@ Singleton {
         return WeatherParse.labelForGroup(group);
     }
 
+    // Checks whether a location is available for the next forecast request.
     function hasCoords() {
         return !isNaN(root.latitude) && !isNaN(root.longitude);
     }
 
     /** Try the configured location file first; fall back to IP lookup. */
     function resolveLocation() {
+        root.locationPending = true;
         locationFile.reload();
     }
 
+    // Applies a location read and starts its name and forecast requests.
     function useCoords(lat, lon, name) {
         if (isNaN(lat) || isNaN(lon)) return false;
         var moved = lat !== root.latitude || lon !== root.longitude;
         root.latitude = lat;
         root.longitude = lon;
+        root.locationPending = false;
         if (name) root.locationName = name;
         else if (moved || root.locationName === "") lookupName();
         fetchWeather();
@@ -128,6 +130,7 @@ Singleton {
         nameProc.running = true;
     }
 
+    // Starts one forecast request and keeps the last result while it runs.
     function fetchWeather() {
         if (!hasCoords()) return;
         if (weatherProc.running) return;
@@ -171,10 +174,12 @@ Singleton {
                 try {
                     var data = JSON.parse(text);
                     var area = data.nearest_area[0];
-                    root.useCoords(parseFloat(area.latitude), parseFloat(area.longitude));
+                    if (!root.useCoords(parseFloat(area.latitude), parseFloat(area.longitude)))
+                        throw new Error("No coordinates");
                 } catch (e) {
                     // No location available; leave the placeholder showing.
                     root.error = "No location";
+                    retryTimer.restart();
                 }
             }
         }
@@ -222,33 +227,14 @@ Singleton {
             onStreamFinished: {
                 try {
                     var m = WeatherParse.parse(JSON.parse(text));
-                    var c = m.current;
                     root.model = m;
-                    root.temperatureC = c.tempC;
-                    root.weatherCode = c.code;
-                    root.isDay = c.isDay;
-                    root.feelsLikeC = c.feelsLikeC;
-                    root.humidity = c.humidity;
-                    root.dewPointC = c.dewPointC;
-                    root.windKmh = c.windKmh;
-                    root.windDirection = c.windDirection;
-                    root.gustKmh = c.gustKmh;
-                    root.precipMm = c.precipMm;
-                    root.precipProbability = c.precipProbability;
-                    root.uvIndex = c.uvIndex;
-                    root.uvLabel = c.uvLabel;
-                    root.pressureHpa = c.pressureHpa;
-                    root.sunrise = c.sunrise;
-                    root.sunset = c.sunset;
-                    root.daylight = c.daylight;
-                    root.hours = WeatherParse.nextHours(m);
-                    root.days = m.days;
                     root.updatedAt = Date.now();
                     root.error = "";
-                    root.ready = true;
+                    retryTimer.stop();
                 } catch (e) {
                     // Keep the last good data on failure.
                     root.error = "Bad data";
+                    retryTimer.restart();
                 }
                 root.loading = false;
             }
@@ -257,17 +243,33 @@ Singleton {
             if (code !== 0) {
                 root.error = "Offline";
                 root.loading = false;
+                retryTimer.restart();
             }
         }
     }
 
     Component.onCompleted: resolveLocation()
 
+    // Leaves time for a location call and a forecast call within 70 seconds.
+    Timer {
+        id: retryTimer
+        interval: 45 * 1000
+        onTriggered: root.locationPending || !root.hasCoords() ? root.resolveLocation() : root.fetchWeather()
+    }
+
     Timer {
         id: refreshTimer
+        property int forecastTicks: 0
         interval: 15 * 60 * 1000
         running: true
         repeat: true
-        onTriggered: root.hasCoords() ? root.fetchWeather() : root.resolveLocation()
+        onTriggered: {
+            forecastTicks++;
+            if (forecastTicks === 4) {
+                forecastTicks = 0;
+                root.resolveLocation();
+            } else if (root.hasCoords()) root.fetchWeather();
+            else root.resolveLocation();
+        }
     }
 }
