@@ -74,6 +74,24 @@ TestCase {
         compare(Calendar.lastError, "");
     }
 
+    function test_a_failed_reload_refuses_edits_until_a_read_succeeds() {
+        const original = savedText();
+        TestIo.texts[berriPath] = original;
+        startReading();
+        TestIo.deniedReads[berriPath] = true;
+        calendarFiles().read(berriPath, "", true);
+        compare(Calendar.add({ title: "New", date: "2026-10-06" }), false);
+        compare(TestIo.texts[berriPath], original);
+        compare(TestIo.writes.length, 0);
+        compare(failureSpy.count, 1);
+        compare(Calendar.lastError, "Could not read berri");
+        TestIo.deniedReads = ({});
+        calendarFiles().read(berriPath, original, false);
+        compare(Calendar.add({ title: "After read", date: "2026-10-07" }), true);
+        const saved = Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title).sort();
+        compare(saved, ["After read", "Kept"]);
+    }
+
     function test_a_missing_calendar_starts_empty_and_accepts_an_edit() {
         startReading();
         compare(Calendar.add({ title: "First", date: "2026-10-06" }), true);

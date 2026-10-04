@@ -480,9 +480,9 @@ Singleton {
     }
 
     /**
-     * True when an edit may write this calendar. A calendar whose first read
-     * failed has no document, so a write would replace the file with an empty
-     * one. Such a calendar reads the file again first. If that fails, the
+     * True when an edit may write this calendar. After a failed read, the
+     * file may hold changes berri never saw, so a write could overwrite them.
+     * Such a calendar reads the file again first. If that fails, the
      * edit is refused and `saveFailed` carries the read error.
      */
     function _canWrite(calendar: var): bool {
@@ -503,7 +503,8 @@ Singleton {
         var id = _idOfPath(path);
         if (!id) return;
         var calendar = _calendars[id];
-        if (failed && calendar.kind !== "link" && !calendar.document) {
+        if (failed && calendar.kind !== "link") {
+            // Keep any cached document for display, but refuse edits until a read succeeds.
             calendar.readFailed = true;
             calendar.error = readErrorText(calendar.name);
             calendar.loaded = true;
