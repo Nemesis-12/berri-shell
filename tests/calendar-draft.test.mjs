@@ -1,8 +1,7 @@
 // Run: node --test tests/calendar-draft.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import vm from "node:vm";
+import { calendarModule } from "./fixtures/calendar-code.mjs";
 
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const today = new Date(2026, 8, 29);
@@ -11,15 +10,8 @@ const opening = {
   color: "accent", repeat: "none", byDay: [],
 };
 
-const times = vm.createContext({});
-vm.runInContext(fs.readFileSync(new URL("../logic/Times.js", import.meta.url), "utf8")
-  .replace(/^\.pragma library.*$/m, ""), times);
-const parser = vm.createContext({ Times: times });
-vm.runInContext(fs.readFileSync(new URL("../logic/QuickAddParser.js", import.meta.url), "utf8")
-  .replace(/^\.(pragma|import).*$/gm, ""), parser);
-const calendar = vm.createContext({ QuickAdd: parser, Times: times });
-vm.runInContext(fs.readFileSync(new URL("../logic/CalendarDraft.js", import.meta.url), "utf8")
-  .replace(/^\.(pragma|import).*$/gm, ""), calendar);
+const calendar = calendarModule("CalendarDraft.js");
+const parser = calendar.QuickAdd;
 
 function fromText(text, { base = opening, touched = {}, current = base, clock24 = false, original = null } = {}) {
   const draft = calendar.fromText(base, touched, current, text, today, clock24);
