@@ -1,0 +1,128 @@
+"""Issue 70 checks use offscreen fixtures and files under scratchpad only."""
+import json
+import os
+from pathlib import Path
+import shutil
+import struct
+import subprocess
+import tempfile
+import unittest
+import zlib
+
+REPO = Path(__file__).resolve().parent.parent
+QS = shutil.which("qs")
+
+
+# Write a real PNG without adding an image package to the tests.
+def write_png(path, color=(90, 140, 190)):
+    def chunk(kind, data):
+        return struct.pack("!I", len(data)) + kind + data + struct.pack("!I", zlib.crc32(kind + data))
+
+    path.write_bytes(b"\x89PNG\r\n\x1a\n"
+                     + chunk(b"IHDR", struct.pack("!2I5B", 64, 36, 8, 2, 0, 0, 0))
+                     + chunk(b"IDAT", zlib.compress((b"\0" + bytes(color) * 64) * 36))
+                     + chunk(b"IEND", b""))
+
+
+@unittest.skipUnless(QS, "Quickshell is required for isolated QML tests")
+class PickerTests(unittest.TestCase):
+    # Copy the real components into an isolated config with a fixed test theme.
+    def setUp(self):
+        scratch = REPO / "scratchpad"
+        scratch.mkdir(exist_ok=True)
+        self.temporary = tempfile.TemporaryDirectory(prefix="picker-70-", dir=scratch)
+        self.addCleanup(self.temporary.cleanup)
+        self.folder = Path(self.temporary.name)
+        self.root = self.folder / "fixture"
+        for name in ("picker", "common", "logic", "scripts", "shaders"):
+            shutil.copytree(REPO / name, self.root / name,
+                            ignore=shutil.ignore_patterns("__pycache__"))
+        for path in ("tabs/home/Sticker.qml", "pill/PanelCoordinator.qml", "services/Wallpapers.qml"):
+            target = self.root / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(REPO / path, target)
+        shutil.copy(REPO / "tests/fixtures/picker/Theme.qml", self.root / "services/Theme.qml")
+        self.home = self.folder / "home"
+        self.config = self.home / ".config/berri-shell"
+        self.state = self.home / ".local/state/berri-shell"
+        self.config.mkdir(parents=True)
+        self.state.mkdir(parents=True)
+        self.env = dict(os.environ, QT_QPA_PLATFORM="offscreen", QT_QPA_PLATFORMTHEME="",
+                        QSG_RHI_BACKEND="software", HOME=str(self.home))
+        for name in ("LD_LIBRARY_PATH", "DISPLAY", "WAYLAND_DISPLAY", "QS_CONFIG_PATH",
+                     "QS_CONFIG_NAME", "QS_MANIFEST"):
+            self.env.pop(name, None)
+        for name in ("RUNTIME", "CONFIG", "CACHE", "STATE"):
+            target = self.folder / name.lower()
+            target.mkdir(mode=0o700)
+            self.env[f"XDG_{name}_DIR" if name == "RUNTIME" else f"XDG_{name}_HOME"] = str(target)
+
+    # Run only the supplied QML fixture, with no desktop shell or live input.
+    def run_qml(self, body):
+        qml = self.root / "shell.qml"
+        qml.write_text('''import QtQuick
+import Quickshell
+import qs.picker
+import qs.tabs.home
+import qs.services
+Scope {
+    function check(ok, message) {
+        if (!ok) { console.error("TEST FAIL", message); Qt.quit(); }
+        return ok;
+    }
+    function find(item, type) {
+        if (item.toString().indexOf(type + "_") !== -1) return item;
+        var children = item.children || [];
+        for (var i = 0; i < children.length; i++) {
+            var found = find(children[i], type);
+            if (found) return found;
+        }
+        return null;
+    }
+    function imageCount(item) {
+        var count = item.toString().indexOf("QQuickImage") !== -1 && item.source ? 1 : 0;
+        var children = item.children || [];
+        for (var i = 0; i < children.length; i++) count += imageCount(children[i]);
+        return count;
+    }
+    Timer { interval: 5000; running: true; onTriggered: { console.error("TEST TIMEOUT"); Qt.quit(); } }
+''' + body + "\n}")
+        result = subprocess.run([QS, "--no-color", "-p", str(qml)], env=self.env,
+                                capture_output=True, text=True, timeout=10)
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn("TEST PASS", output, output)
+        self.assertNotIn("TEST FAIL", output, output)
+        self.assertNotIn("TEST TIMEOUT", output, output)
+        # A long worktree path can exceed the Unix socket path limit. No IPC is used.
+        errors = [line for line in output.splitlines()
+                  if "ERROR" in line and "Failed to start IPC server" not in line]
+        self.assertEqual(errors, [], output)
+        return output
+
+    def test_closed_picker_creates_no_images_and_open_picker_loads_cards(self):
+        image = self.folder / "wallpaper.png"
+        write_png(image)
+        (self.state / "wallpapers.json").write_text(json.dumps({"library": [str(image)] * 10}))
+        self.run_qml('''
+    FloatingWindow {
+        implicitWidth: 1000; implicitHeight: 500
+        ThemeNotch { id: notch; anchors.centerIn: parent; pickerTab: "walls" }
+    }
+    property int stage: 0
+    Timer {
+        interval: 100; running: true; repeat: true
+        onTriggered: {
+            if (!Wallpapers.loaded) return;
+            if (stage === 0) {
+                if (!check(imageCount(notch) === 0, "closed picker loaded card images")) return;
+                notch.openPicker(); stage = 1;
+            } else if (stage === 1 && imageCount(notch) === 10) {
+                notch.closeAtOnce(); stage = 2;
+            } else if (stage === 2) {
+                if (!check(imageCount(notch) === 0, "closed picker kept card images")) return;
+                console.log("TEST PASS"); Qt.quit();
+            }
+        }
+    }
+''')
