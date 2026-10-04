@@ -79,6 +79,13 @@ def cached_buckets(entry: dict) -> dict:
     }
 
 
+class UsageRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Keep the bearer on the configured usage endpoint by refusing redirects."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def claude_usage(cache: dict) -> dict:
     """Session (5-hour) and weekly (7-day) usage, falling back to cache on any failure."""
     entry = cache.get("claude") or {}
@@ -112,7 +119,8 @@ def claude_usage(cache: dict) -> dict:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_S) as resp:
+        opener = urllib.request.build_opener(UsageRedirectHandler())
+        with opener.open(request, timeout=REQUEST_TIMEOUT_S) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as err:
         if err.code == 429:
