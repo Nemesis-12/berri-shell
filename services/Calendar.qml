@@ -135,6 +135,7 @@ Singleton {
         if (fields.calendarId && (!target || target.kind === "link")) return false;
         if (target) path = dir + "/" + target.file;
         var calendar = target || _calendars.berri;
+        if (!_canWrite(calendar)) return false;
         var doc = calendar.document || Ics.emptyCalendar();
         var item = Ics.makeItem(_cleanDates(fields));
         doc.items.push(item);
@@ -290,6 +291,7 @@ Singleton {
         var path = dir + "/" + meta.file;
         delete _calendars[id];
         _order = _order.filter(function (o) { return o !== id; });
+        files.cancelDownloads(id);
         files.removeFile(path);
         _finishAdd();
         return true;
@@ -395,6 +397,7 @@ Singleton {
         var identity = Ics.itemIdentity(uid);
         var meta = identity ? _calendars[identity.calendarId] : null;
         if (!meta || forEdit && meta.kind === "link") return null;
+        if (forEdit && !_canWrite(meta)) return null;
         var doc = meta.document;
         var items = doc ? doc.items : meta.records || [];
         var index = Ics.itemIndex(items, uid, meta.id);
@@ -422,7 +425,7 @@ Singleton {
     function _newMeta(id: string, kind: string, name: string, file: string, color): var {
         return { id: id, kind: kind, name: name, color: kind === "local" ? "accent" : Ics.newCalendarColor(color, _usedColors()),
             hidden: false, url: "", file: file, updatedAt: 0, colorOverrides: ({}),
-            path: dir + "/" + file, document: null, records: null, text: "", signature: "", error: "", convertError: "", refreshing: false, loaded: false };
+            path: dir + "/" + file, document: null, records: null, text: "", signature: "", error: "", convertError: "", refreshing: false, loaded: false, readFailed: false };
     }
 
     function _addCalendar(id: string, kind: string, name: string, file: string, url: string, color): var {
@@ -476,10 +479,39 @@ Singleton {
         _checkReady();
     }
 
+    /**
+     * True when an edit may write this calendar. A calendar whose first read
+     * failed has no document, so a write would replace the file with an empty
+     * one. Such a calendar reads the file again first. If that fails, the
+     * edit is refused and `saveFailed` carries the read error.
+     */
+    function _canWrite(calendar: var): bool {
+        if (!calendar.readFailed) return true;
+        var text = files.readNow(calendar.path);
+        if (text !== null) {
+            _ingest(calendar.path, text, false);
+            return true;
+        }
+        lastError = readErrorText(calendar.name);
+        saveFailed(lastError);
+        return false;
+    }
+
+    function readErrorText(name: string): string { return "Could not read " + name; }
+
     function _ingest(path: string, text: string, failed: bool): void {
         var id = _idOfPath(path);
         if (!id) return;
         var calendar = _calendars[id];
+        if (failed && calendar.kind !== "link" && !calendar.document) {
+            calendar.readFailed = true;
+            calendar.error = readErrorText(calendar.name);
+            calendar.loaded = true;
+            _rebuild();
+            _checkReady();
+            return;
+        }
+        if (!failed) { calendar.readFailed = false; if (calendar.kind !== "link") calendar.error = ""; }
         var signature = text.length + ":" + Ics.shortHash(text);
         if (failed && calendar.kind === "link") { _recordsFailed(calendar, calendar.convertError || parserError || recordsErrorText); return; }
         if ((!calendar.document && !calendar.records) || !failed && calendar.signature !== signature) {
@@ -646,7 +678,7 @@ Singleton {
             meta[s.id] = { id: s.id, kind: s.kind, name: String(s.name || ""), color: Ics.cleanColor(s.color) || "accent",
                 hidden: !!s.hidden, url: s.kind === "link" ? String(s.url || "") : "", file: s.file, updatedAt: +s.updatedAt || 0,
                 colorOverrides: s.kind === "link" ? Ics.pruneColorOverrides(s.colorOverrides, null) : ({}),
-                path: dir + "/" + s.file, document: null, records: null, text: "", signature: "", error: "", convertError: "", refreshing: false, loaded: false };
+                path: dir + "/" + s.file, document: null, records: null, text: "", signature: "", error: "", convertError: "", refreshing: false, loaded: false, readFailed: false };
             order.push(s.id);
         }
         meta.berri = local;
