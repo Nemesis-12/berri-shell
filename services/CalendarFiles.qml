@@ -65,7 +65,20 @@ Scope {
 
     /** Starts one bounded download. The request stays with its result. */
     function download(request: var): void {
-        feedDownload.createObject(root, { request: request });
+        var process = feedDownload.createObject(root, { request: request });
+        if (process) activeDownloads.push(process);
+    }
+
+    property var activeDownloads: []
+
+    /** Stops the downloads of one calendar. Their results are dropped, never reported. */
+    function cancelDownloads(calendarId: string): void {
+        for (var i = 0; i < activeDownloads.length; i++) {
+            var process = activeDownloads[i];
+            if (process.request.calendarId !== calendarId || process.request.purpose === "check") continue;
+            process.cancelled = true;
+            process.running = false;
+        }
     }
 
     property var freshening: ({})
@@ -148,7 +161,8 @@ Scope {
                 root.read(filePath, content === null ? "" : content, content === null || content === "");
             }
             onLoaded: root.read(filePath, text(), false)
-            onLoadFailed: root.read(filePath, "", true)
+            // A missing file is an empty calendar. Any other error is a failed read.
+            onLoadFailed: error => root.read(filePath, "", error !== FileViewError.FileNotFound)
             onFileChanged: {
                 if (isLink) readLink();
                 else reload();
@@ -234,6 +248,7 @@ Scope {
         Process {
             id: download
             required property var request
+            property bool cancelled: false
             running: true
             command: ["sh", Quickshell.shellPath("scripts/feed-download.sh"), request.url, root.parser,
                 request.purpose === "check" ? "" : root.folder + "/subscriptions/" + request.calendarId,
@@ -241,7 +256,8 @@ Scope {
                 String(root.exitParserMissing), String(root.exitNotCalendar), String(root.exitSaveFailed)]
             stdout: StdioCollector { id: outputPath }
             onExited: (code, status) => {
-                root.downloaded(download.request, code, outputPath.text.trim());
+                root.activeDownloads = root.activeDownloads.filter(function (other) { return other !== download; });
+                if (!download.cancelled) root.downloaded(download.request, code, outputPath.text.trim());
                 download.destroy();
             }
         }
