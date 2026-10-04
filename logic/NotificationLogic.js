@@ -8,6 +8,29 @@
  * The caller passes "now" so nothing here reads the clock.
  */
 
+// One policy for live senders, history, pop-ups and sender-controlled text.
+var limits = { history: 200, live: 200, queued: 20, id: 128, appName: 256,
+    appIcon: 1024, summary: 512, body: 4096, actions: 16, actionId: 128, actionLabel: 256 };
+
+/** Limits text at the sender and saved-state boundaries, in UTF-16 code units. */
+function boundedText(value, max) {
+    return String(value || "").slice(0, max);
+}
+
+/** Builds a bounded snapshot without retaining the sender's action objects. */
+function boundedItem(item) {
+    return Object.assign({}, item, {
+        id: boundedText(item.id, limits.id),
+        appName: boundedText(item.appName, limits.appName),
+        appIcon: boundedText(item.appIcon, limits.appIcon),
+        summary: boundedText(item.summary, limits.summary),
+        body: boundedText(item.body, limits.body),
+        actions: (item.actions || []).slice(0, limits.actions).map(function (action) {
+            return { id: boundedText(action.id, limits.actionId), label: boundedText(action.label, limits.actionLabel) };
+        })
+    });
+}
+
 /** Newest first. Equal times keep the later-listed item first. */
 function byNewest(a, b) {
     return b.time - a.time;
@@ -163,8 +186,8 @@ function readSaved(values) {
     out.dnd = values.dnd === true;
     if (Array.isArray(values.items)) {
         values.items.forEach(function (n) {
-            if (!n || typeof n.id !== "string" || typeof n.time !== "number") return;
-            out.items.push({
+            if (!n || typeof n.id !== "string" || typeof n.time !== "number" || !isFinite(n.time)) return;
+            out.items.push(boundedItem({
                 id: n.id,
                 serverId: typeof n.serverId === "number" ? n.serverId : undefined,
                 appName: String(n.appName || ""),
@@ -176,8 +199,9 @@ function readSaved(values) {
                 read: n.read === true,
                 snoozedUntil: typeof n.snoozedUntil === "number" ? n.snoozedUntil : 0,
                 actions: []   // the sender is gone after a restart, so actions cannot work
-            });
+            }));
         });
     }
+    out.items = cap(out.items, limits.history);
     return out;
 }

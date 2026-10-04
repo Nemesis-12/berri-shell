@@ -38,7 +38,8 @@ import qs.common
 Singleton {
     id: root
 
-    readonly property int maxItems: 200
+    readonly property int maxItems: Logic.limits.history
+    readonly property int maxLive: Logic.limits.live
     readonly property real defaultSnoozeMinutes: 60
 
     property bool serverEnabled: false
@@ -62,6 +63,7 @@ Singleton {
     property var liveIdByServerId: Object.create(null)
     property var expiresAtById: Object.create(null)
     property int counter: 0
+    property bool pendingCommit: false
 
     function setDnd(on: bool): void {
         if (root.dnd === on) return;
@@ -129,13 +131,23 @@ Singleton {
         if (n) n.dismiss();
     }
 
-    // Recomputes every derived list from "all", saves, and sets the wake timer.
+    // Changes history now. Derived lists and serialization run once after a burst.
     function commit(next): void {
         var before = root.all;
         root.all = Logic.cap(next, root.maxItems);
-        var kept = Object.create(null);
-        root.all.forEach(function (n) { kept[n.id] = true; });
-        before.forEach(function (n) { if (!kept[n.id]) root.removed(n.id); });
+        if (next.length > root.maxItems || next.length < before.length) {
+            var kept = Object.create(null);
+            root.all.forEach(function (n) { kept[n.id] = true; });
+            before.forEach(function (n) { if (!kept[n.id]) root.removed(n.id); });
+        }
+        root.pendingCommit = true;
+        Qt.callLater(root.flush);
+    }
+
+    // Flushes one pending batch through the UI and saved-state boundary.
+    function flush(): void {
+        if (!root.pendingCommit) return;
+        root.pendingCommit = false;
         root.refresh();
         root.save();
     }
@@ -165,13 +177,16 @@ Singleton {
         var urgency = n.urgency === NotificationUrgency.Critical ? "critical"
             : n.urgency === NotificationUrgency.Low ? "low" : "normal";
         var actions = [];
-        for (var i = 0; i < n.actions.length; i++)
-            actions.push({ id: n.actions[i].identifier, label: n.actions[i].text });
-        return {
+        for (var i = 0; i < Math.min(n.actions.length, Logic.limits.actions); i++) {
+            // Never truncate an action id: it must still identify the sender's action.
+            if (n.actions[i].identifier.length <= Logic.limits.actionId)
+                actions.push({ id: n.actions[i].identifier, label: n.actions[i].text });
+        }
+        return Logic.boundedItem({
             id: id, serverId: n.id, appName: n.appName !== "" ? n.appName : "Unknown", appIcon: icon,
             summary: n.summary, body: n.body, time: Date.now(), urgency: urgency,
             read: false, snoozedUntil: 0, actions: actions, transient: n.transient
-        };
+        });
     }
 
     // Called for each notification the server receives.
@@ -187,6 +202,10 @@ Singleton {
         var old = root.all.filter(function (x) { return x.id === id; })[0];
         if (old) item = Logic.keepState(old, item);
         var firstSeen = root.live[id] !== n;
+        if (firstSeen) {
+            var liveIds = Object.keys(root.live);
+            if (liveIds.length >= root.maxLive) root.closeLive(liveIds[0]);
+        }
         root.live[id] = n;
         if (firstSeen) {
             root.liveIdByServerId[n.id] = id;
@@ -200,7 +219,7 @@ Singleton {
                 if (reason === NotificationCloseReason.CloseRequested)
                     root.commit(Logic.remove(root.all, id));
             });
-            var refreshItem = function () { root.receive(n); };
+            var refreshItem = function () { if (root.live[id] === n) root.receive(n); };
             n.summaryChanged.connect(refreshItem);
             n.bodyChanged.connect(refreshItem);
             n.appIconChanged.connect(refreshItem);
@@ -248,7 +267,8 @@ Singleton {
     }
 
     function save(): void {
-        saved.save({ serverEnabled: root.serverEnabled, dnd: root.dnd, items: root.all });
+        saved.save({ serverEnabled: root.serverEnabled, dnd: root.dnd,
+            items: root.all.map(function (n) { return Object.assign({}, n, { actions: [] }); }) });
     }
 
     // Saved history. The wait of 300 ms groups the many refresh() saves.
