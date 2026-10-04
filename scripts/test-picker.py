@@ -196,3 +196,41 @@ Scope {
         }
     }
 ''')
+
+    def test_failed_sticker_choices_keep_old_file_and_png_replaces_it(self):
+        old = self.config / "sticker.jpg"
+        write_png(old)
+        old_bytes = old.read_bytes()
+        dotted_folder = self.folder / "folder.png"
+        dotted_folder.mkdir()
+        invalid_in_folder = dotted_folder / "choice"
+        invalid_plain = self.folder / "choice"
+        invalid_in_folder.write_text("invalid")
+        invalid_plain.write_text("invalid")
+        valid = self.folder / "replacement.PNG"
+        write_png(valid, (190, 80, 30))
+        for choice in (invalid_in_folder, invalid_plain, self.folder / "missing.png", valid):
+            with self.subTest(choice=choice.name):
+                self.env["PICKER_CHOICE"] = str(choice)
+                self.run_qml('''
+    Sticker { id: sticker; visible: false }
+    Timer {
+        interval: 100; running: true
+        onTriggered: {
+            find(sticker, "ImagePicker").chosen(Quickshell.env("PICKER_CHOICE"));
+            verify.restart();
+        }
+    }
+    Timer {
+        id: verify; interval: 200
+        onTriggered: { console.log("TEST PASS"); Qt.quit(); }
+    }
+''')
+                if choice == valid:
+                    self.assertEqual((self.config / "sticker.png").read_bytes(), valid.read_bytes())
+                    self.assertEqual(sorted(p.name for p in self.config.glob("sticker.*")), ["sticker.png"])
+                else:
+                    self.assertTrue(old.exists(), "failed choice deleted the old sticker")
+                    self.assertEqual(old.read_bytes(), old_bytes)
+                    self.assertEqual(sorted(p.name for p in self.config.glob("sticker.*")), ["sticker.jpg"])
+                self.assertEqual(list(self.config.glob(".sticker-copy.*")), [])
