@@ -46,6 +46,7 @@ PillTrayPopover {
             height: 25
 
             Text {
+                textFormat: Text.PlainText
                 x: 8
                 y: 6
                 width: parent.width - 16
@@ -92,6 +93,7 @@ PillTrayPopover {
                     ColorFade on color {}
 
                     Text {
+                        textFormat: Text.PlainText
                         anchors.verticalCenter: parent.verticalCenter
                         x: 10
                         width: parent.width - 34
@@ -106,6 +108,7 @@ PillTrayPopover {
 
                     // Submenu arrow, or a check mark for a ticked entry.
                     Text {
+                        textFormat: Text.PlainText
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.right: parent.right
                         anchors.rightMargin: 10

@@ -59,6 +59,7 @@ Item {
             height: 29
 
             Text {
+                textFormat: Text.PlainText
                 id: levelNumber
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter

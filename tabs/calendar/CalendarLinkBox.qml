@@ -89,6 +89,7 @@ Item {
         }
 
         Text {
+            textFormat: Text.PlainText
             id: prompt
             x: 10
             anchors.verticalCenter: parent.verticalCenter
@@ -100,6 +101,7 @@ Item {
         }
 
         Text {
+            textFormat: Text.PlainText
             anchors.left: prompt.right
             anchors.leftMargin: 10
             anchors.verticalCenter: parent.verticalCenter
@@ -171,6 +173,7 @@ Item {
         Fade on opacity { duration: Theme.stateMs }
 
         Text {
+            textFormat: Text.PlainText
             id: subscribeText
             anchors.centerIn: parent
             text: "SUBSCRIBE"

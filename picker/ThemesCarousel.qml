@@ -160,6 +160,7 @@ Item {
                         height: root.titleHeight
 
                         Text {
+                            textFormat: Text.PlainText
                             id: nameLabel
                             anchors.left: parent.left
                             anchors.verticalCenter: parent.verticalCenter
@@ -180,6 +181,7 @@ Item {
                             color: card.c.accent
 
                             Text {
+                                textFormat: Text.PlainText
                                 id: appliedLabel
                                 anchors.centerIn: parent
                                 text: "APPLIED"

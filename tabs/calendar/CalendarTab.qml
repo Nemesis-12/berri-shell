@@ -280,6 +280,7 @@ Item {
                     height: 34
 
                     Text {
+                        textFormat: Text.PlainText
                         id: monthText
                         anchors.verticalCenter: parent.verticalCenter
                         text: Times.monthsLong[root.viewMonth].toUpperCase()
@@ -543,6 +544,7 @@ Item {
         }
 
         Text {
+            textFormat: Text.PlainText
             x: ghost.isRow ? 14 : 6
             y: ghost.isRow ? 8 : Math.round((ghost.height - height) / 2)
             width: ghost.width - x - 6

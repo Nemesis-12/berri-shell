@@ -287,6 +287,7 @@ Item {
                         spacing: 8
 
                         Text {
+                            textFormat: Text.PlainText
                             visible: card.onLabel.length > 0
                             text: card.onLabel
                             font.family: Theme.mono
@@ -365,6 +366,7 @@ Item {
                         }
 
                         Text {
+                            textFormat: Text.PlainText
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: "PNG or JPG · stays with " + (Theme.current ? Theme.current.name : "this theme")
                             font.family: Theme.mono
@@ -376,6 +378,7 @@ Item {
                 }
 
                 Text {
+                    textFormat: Text.PlainText
                     anchors.top: addFrame.bottom
                     anchors.topMargin: root.imageLabelGap
                     anchors.left: parent.left

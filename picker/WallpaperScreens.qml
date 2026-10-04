@@ -49,6 +49,7 @@ Item {
         ColorFade on border.color { duration: Theme.stateMs }
 
         Text {
+            textFormat: Text.PlainText
             id: label
             anchors.centerIn: parent
             font.family: Theme.mono
@@ -131,6 +132,7 @@ Item {
             }
 
             Text {
+                textFormat: Text.PlainText
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Identify"
                 font.family: Theme.mono

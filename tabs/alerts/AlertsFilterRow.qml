@@ -70,6 +70,7 @@ Item {
     }
 
     Text {
+        textFormat: Text.PlainText
         x: 14 + 14 + 10
         anchors.verticalCenter: parent.verticalCenter
         text: root.label

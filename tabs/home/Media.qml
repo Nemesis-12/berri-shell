@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import Quickshell.Services.Mpris
+import "../../logic/ArtUrl.js" as ArtUrl
 import "../../logic/Times.js" as Times
 import "../../logic/PixelGrid.js" as PixelGrid
 import qs.common
@@ -27,7 +28,7 @@ Item {
     readonly property bool isPlaying: activePlayer !== null && activePlayer.playbackState === MprisPlaybackState.Playing
     readonly property string titleText: activePlayer ? (activePlayer.trackTitle || "Unknown title") : "Nothing playing"
     readonly property string artistText: activePlayer ? activePlayer.trackArtist.toUpperCase() : ""
-    readonly property string artUrl: activePlayer ? activePlayer.trackArtUrl : ""
+    readonly property string artUrl: ArtUrl.safeArtUrl(activePlayer ? activePlayer.trackArtUrl : "")
     readonly property real length: activePlayer ? activePlayer.length : 0
 
     // --- Album art, flush and square at the top. ---
@@ -84,6 +85,7 @@ Item {
             // size), matching Profile's title/uptime rows so the visible
             // glyph top lands 12px below the art, not a few px lower.
             Text {
+                textFormat: Text.PlainText
                 width: parent.width
                 text: root.titleText
                 font.family: Theme.condensed

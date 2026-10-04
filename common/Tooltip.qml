@@ -90,6 +90,7 @@ Item {
         }
 
         Text {
+            textFormat: Text.PlainText
             id: label
             anchors.centerIn: parent
             text: root.text

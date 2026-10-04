@@ -135,6 +135,7 @@ Item {
             height: parent.height - header.height - 2
 
             Text {
+                textFormat: Text.PlainText
                 visible: !root.adapter || !root.adapter.enabled
                 anchors.left: parent.left
                 anchors.top: parent.top
@@ -179,6 +180,7 @@ Item {
                     }
 
                     Text {
+                        textFormat: Text.PlainText
                         anchors.verticalCenter: parent.verticalCenter
                         width: Math.max(0, parent.width - 25)
                         text: row.modelData.name || row.modelData.deviceName

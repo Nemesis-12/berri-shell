@@ -1,4 +1,5 @@
 import QtQuick
+import "../logic/ArtUrl.js" as ArtUrl
 import qs.services
 
 /** Shows album art and releases decoded images when hidden. */
@@ -6,19 +7,20 @@ Item {
     id: root
 
     property string artUrl: ""
+    readonly property string safeUrl: ArtUrl.safeArtUrl(artUrl)
     property real dpr: 1
 
     function loadArt() {
-        if (!root.visible || !root.artUrl) {
+        if (!root.visible || !root.safeUrl) {
             back.source = "";
             front.source = "";
             front.opacity = 0;
             return;
         }
-        if (front.source === root.artUrl) return;
+        if (front.source === root.safeUrl) return;
         back.source = front.status === Image.Ready ? front.source : "";
         front.opacity = 0;
-        front.source = root.artUrl;
+        front.source = root.safeUrl;
         if (front.status === Image.Ready) front.opacity = 1;
     }
 

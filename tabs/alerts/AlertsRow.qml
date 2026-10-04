@@ -68,6 +68,7 @@ Item {
             height: titleText.lineCount * 17.25
 
             Text {
+                textFormat: Text.PlainText
                 id: titleText
                 y: -1.5
                 width: parent.width - stamp.implicitWidth - 10
@@ -83,6 +84,7 @@ Item {
             }
 
             Text {
+                textFormat: Text.PlainText
                 id: stamp
                 anchors.right: parent.right
                 y: 6
@@ -100,6 +102,7 @@ Item {
             visible: root.body !== ""
 
         Text {
+            textFormat: Text.PlainText
             id: bodyText
             y: 0.5
             width: parent.width

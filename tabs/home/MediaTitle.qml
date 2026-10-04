@@ -56,6 +56,7 @@ Item {
     clip: true
 
     Text {
+        textFormat: Text.PlainText
         id: measure
         visible: false
         text: root.text
@@ -67,6 +68,7 @@ Item {
 
     // Still title.
     Text {
+        textFormat: Text.PlainText
         visible: !scroll.running && !settle.running
         x: root.bleed
         width: root.textWidth
@@ -92,6 +94,7 @@ Item {
             model: 2
 
             Text {
+                textFormat: Text.PlainText
                 height: 60
                 text: root.text
                 color: Theme.fg
