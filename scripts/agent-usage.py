@@ -152,22 +152,27 @@ def claude_bucket(bucket) -> dict | None:
 
 
 def rpc_request(proc, request_id, method, params=None, timeout=8):
+    """Read one response without letting a partial line extend the deadline."""
+    deadline = time.monotonic() + timeout
     proc.stdin.write(json.dumps({"id": request_id, "method": method, "params": params or {}}) + "\n")
     proc.stdin.flush()
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        ready, _, _ = select.select([proc.stdout], [], [], 0.25)
+    pending = b""
+    while (remaining := deadline - time.monotonic()) > 0:
+        ready, _, _ = select.select([proc.stdout], [], [], remaining)
         if not ready:
             continue
-        line = proc.stdout.readline()
-        if not line:
+        chunk = os.read(proc.stdout.fileno(), 65536)
+        if not chunk:
             break
-        try:
-            message = json.loads(line)
-        except Exception:
-            continue
-        if message.get("id") == request_id:
-            return message
+        pending += chunk
+        while b"\n" in pending:
+            line, pending = pending.split(b"\n", 1)
+            try:
+                message = json.loads(line)
+            except (ValueError, UnicodeDecodeError):
+                continue
+            if isinstance(message, dict) and message.get("id") == request_id:
+                return message
     raise TimeoutError(method)
 
 
@@ -225,12 +230,13 @@ def codex_usage(cache: dict) -> dict:
         if proc is not None:
             try:
                 proc.terminate()
-                proc.wait(timeout=2)
-            except Exception:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
+                proc.wait(timeout=0.2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+            finally:
+                proc.stdin.close()
+                proc.stdout.close()
 
     new_session = codex_window(limits.get("primary"))
     new_weekly = codex_window(limits.get("secondary"))

@@ -28,6 +28,30 @@ class PercentageTests(unittest.TestCase):
 
 
 class CodexRequestTests(unittest.TestCase):
+    def test_complete_responses_accept_notifications_and_split_bytes(self):
+        child = textwrap.dedent('''\
+            import json
+            import sys
+            import time
+            for line in sys.stdin:
+                request = json.loads(line)
+                response = json.dumps({"id": request["id"], "result": "café"}, ensure_ascii=False).encode()
+                sys.stdout.buffer.write(b'not json\\n[]\\n{"method":"notice"}\\n' + response[:-3])
+                sys.stdout.buffer.flush()
+                time.sleep(0.01)
+                sys.stdout.buffer.write(response[-3:] + b'\\n')
+                sys.stdout.buffer.flush()
+        ''')
+        with subprocess.Popen([sys.executable, "-c", child], stdin=subprocess.PIPE,
+                              stdout=subprocess.PIPE, text=True) as proc:
+            try:
+                for request_id in (1, 2):
+                    self.assertEqual(usage.rpc_request(proc, request_id, "read", timeout=0.1),
+                                     {"id": request_id, "result": "café"})
+            finally:
+                proc.terminate()
+                proc.wait(timeout=1)
+
     def test_partial_line_stops_request_and_child_before_deadline(self):
         scratch = Path(__file__).resolve().parent.parent / "scratchpad"
         scratch.mkdir(exist_ok=True)
