@@ -40,6 +40,8 @@ export function calendarOffscreen(change = () => {}, input = "qml") {
     const result = spawnSync(process.env.QMLTESTRUNNER || "/usr/lib/qt6/bin/qmltestrunner",
       ["-import", copy, "-input", path.join(copy, input)], { cwd: copy, env, encoding: "utf8", timeout: 30000 });
     const output = `${result.stdout || ""}${result.stderr || ""}`;
+    if (result.error)
+      throw new Error(`qmltestrunner failed: ${result.error.message}\n${output}`);
     // Connections can emit a warning while the component still loads.
     const ok = result.status === 0 && !/\b(?:QWARN|QCRITICAL|FAIL!)\s*:/.test(output);
     return { ok, output, error: result.error };
