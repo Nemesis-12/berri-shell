@@ -516,6 +516,7 @@ Item {
 
                     WallpapersCarousel {
                         id: wallpapersCarousel
+                        visible: root.pickerOpen && root.pickerTab === "walls"
                         screenName: root.screenName
                         anchors.top: parent.top
                         anchors.left: parent.left
