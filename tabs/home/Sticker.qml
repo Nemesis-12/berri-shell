@@ -164,7 +164,7 @@ Item {
     FileView {
         path: root.stickerPath
         watchChanges: true
-        blockLoading: true
+        preload: false
         printErrors: false
         onFileChanged: {
             if (root.useAnimatedImage) root.stickerSource = root.fileUrl(root.stickerPath);
