@@ -61,6 +61,8 @@ TestCase {
 
     function init() {
         popup.hideNow();
+        alerts.visible = false;
+        alerts.filter = "all";
         Notifications.all = [];
         Notifications.live = Object.create(null);
         Notifications.liveIdByServerId = Object.create(null);
@@ -128,5 +130,55 @@ TestCase {
         popup.close();
         popup.showNext();
         compare(popup.current.summary, "Queued update");
+    }
+
+    // Reads the models used by the real Alerts ListViews.
+    function viewModels(item) {
+        var found = [];
+        if (item.model && item.model.get) found.push(item.model);
+        for (var i = 0; i < item.children.length; i++) found = found.concat(viewModels(item.children[i]));
+        return found;
+    }
+
+    function test_senderNames() {
+        var names = ["constructor", "toString", "__proto__"];
+        for (var i = 0; i < names.length; i++) Notifications.receive(notification({ id: i, appName: names[i] }));
+        wait(0);
+        alerts.visible = true;
+        alerts.rebuild();
+        var models = viewModels(alerts);
+        var rows = models.filter(function (m) { return m.count > 0 && m.get(0).kind === "header"; })[0];
+        verify(rows !== undefined, "Alerts list has no headers");
+        compare(rows.count, 6);
+        names.forEach(function (name) {
+            var headers = 0, notes = 0;
+            for (var j = 0; j < rows.count; j++) {
+                if (rows.get(j).appName !== name) continue;
+                if (rows.get(j).kind === "header") headers++;
+                if (rows.get(j).kind === "row") notes++;
+            }
+            compare(headers, 1);
+            compare(notes, 1);
+        });
+        verify(alerts.visible);
+    }
+
+    function test_readAndClearBatch() {
+        for (var i = 0; i < 200; i++) Notifications.receive(notification({ id: i }));
+        wait(0);
+        alerts.rebuild();
+        savedState().saveCount = 0;
+        alerts.readShown();
+        compare(Notifications.all.filter(function (n) { return !n.read; }).length, 0);
+        wait(0);
+        compare(savedState().saveCount, 1);
+        compare(JSON.parse(savedState().text).items.filter(function (n) { return !n.read; }).length, 0);
+        savedState().saveCount = 0;
+        alerts.clearShown();
+        compare(Notifications.all.length, 0);
+        compare(Object.keys(Notifications.live).length, 0);
+        wait(0);
+        compare(savedState().saveCount, 1);
+        compare(JSON.parse(savedState().text).items.length, 0);
     }
 }

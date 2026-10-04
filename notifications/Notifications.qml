@@ -24,6 +24,7 @@ import qs.common
  *   still stored and count as unread, silently. A transient notification
  *   arrives too but is never stored in history (its id only works for
  *   invokeAction and dismiss while the sender keeps it open).
+ *   updated(item): replaces an open or waiting pop-up without adding a copy.
  *
  * The D-Bus server (org.freedesktop.Notifications) exists only when
  * serverEnabled is true. It is read from the state file key "serverEnabled"
@@ -55,6 +56,7 @@ Singleton {
     property int snoozedCount: 0
 
     signal arrived(var item)
+    signal updated(var item)
     /** An item left the store or its sender closed it; pop-ups drop it. */
     signal removed(string id)
 
@@ -194,7 +196,9 @@ Singleton {
         n.tracked = true;
         var known = root.liveIdByServerId[n.id];
         var reloaded = known === undefined && n.lastGeneration
-            ? Logic.findReloaded(root.all, n.id, n.appName !== "" ? n.appName : "Unknown", n.summary) : null;
+            ? Logic.findReloaded(root.all, n.id,
+                Logic.boundedText(n.appName !== "" ? n.appName : "Unknown", Logic.limits.appName),
+                Logic.boundedText(n.summary, Logic.limits.summary)) : null;
         var isNew = known === undefined && reloaded === null;
         var id = known !== undefined ? known : reloaded !== null ? reloaded.id
             : "n" + Date.now().toString(36) + "-" + (root.counter++);
@@ -202,7 +206,7 @@ Singleton {
         var old = root.all.filter(function (x) { return x.id === id; })[0];
         if (old) item = Logic.keepState(old, item);
         var firstSeen = root.live[id] !== n;
-        if (firstSeen) {
+        if (firstSeen && root.live[id] === undefined) {
             var liveIds = Object.keys(root.live);
             if (liveIds.length >= root.maxLive) root.closeLive(liveIds[0]);
         }
@@ -225,9 +229,15 @@ Singleton {
             n.appIconChanged.connect(refreshItem);
             n.urgencyChanged.connect(refreshItem);
             n.actionsChanged.connect(refreshItem);
+            n.appNameChanged.connect(refreshItem);
+            n.desktopEntryChanged.connect(refreshItem);
+            n.imageChanged.connect(refreshItem);
+            n.transientChanged.connect(refreshItem);
+            n.expireTimeoutChanged.connect(refreshItem);
         }
         root.setExpiry(id, n, item.urgency);
         if (!n.transient) root.commit(Logic.upsert(root.all, item));
+        if (!isNew) root.updated(item);
         if (isNew && Logic.shouldAlert(item.urgency, root.dnd)) root.arrived(item);
     }
 
