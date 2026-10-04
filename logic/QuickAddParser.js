@@ -24,7 +24,8 @@
  * referenceDate is "today" (words like "tomorrow" and weekday names count from
  * it). color is "#rrggbb" (lowercase) when the text has a #rgb or #rrggbb
  * word, else null (the caller keeps its current color). The hex word is cut
- * from the title. Preset names are not read from the text. selectedDate is the day used when the text names none. weekStart is
+ * from the title. A word of three digits with no leading zero, like #123, is an
+ * issue number: it stays in the title and gives no color. Preset names are not read from the text. selectedDate is the day used when the text names none. weekStart is
  * accepted for the caller's symmetry; the mock's rules do not use it.
  */
 
@@ -66,6 +67,131 @@ function formatDay(key) {
     return Times.weekdaysShort[d.getDay()] + " " + Times.monthsShort[d.getMonth()] + " " + d.getDate();
 }
 
+// Next date with that weekday, today included.
+function nextWeekday(name, today) {
+    var target = WEEKDAY_NUMBER[name.slice(0, 3).toLowerCase()];
+    return addDays(today, (target - keyToDate(today).getDay() + 7) % 7);
+}
+
+// "HH:MM" from a clock reading, or null when the hour or minute is out of range.
+function toTime(h, mi, ap) {
+    h = +h;
+    mi = +(mi || 0);
+    if (ap) {
+        ap = ap.toLowerCase();
+        if (ap === "pm" && h < 12) h += 12;
+        if (ap === "am" && h === 12) h = 0;
+    }
+    if (h > 23 || mi > 59) return null;
+    return Times.pad(h) + ":" + Times.pad(mi);
+}
+
+var hasNoTime = function (o) { return !o.time; };
+var hasNoDate = function (o) { return !o.date; };
+
+// A "#123" word names an issue, not a color: three digits, none leading zero.
+function isIssueNumber(hex) {
+    return /^[1-9][0-9]{2}$/.test(hex);
+}
+
+/**
+ * The rules, in the order they run. Each step cuts its words from the line and
+ * sets fields on o. A later step sees the line without the words of the earlier ones.
+ *   name    what the step reads
+ *   fields  match fields the step reports
+ *   when    optional: the step runs only if this returns true for o
+ *   pattern what the step looks for
+ *   accept  (m, o, today) sets o. Return false to leave the words in the line,
+ *           or an array of field names to report instead of fields.
+ */
+var STEPS = [
+    { name: "task", fields: ["kind"], pattern: /^\s*(?:task|todo)\b:?/i,
+      accept: function (m, o) { o.type = "task"; } },
+    { name: "reminder", fields: ["kind"], pattern: /^\s*remind(?:\s+me)?(?:\s+to)?\b:?/i,
+      accept: function (m, o) { o.type = "reminder"; } },
+    { name: "color", fields: ["color"], pattern: /\s#([0-9a-f]{6}|[0-9a-f]{3})(?=\s)/i,
+      accept: function (m, o) {
+        var h = m[1].toLowerCase();
+        if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
+        o.color = "#" + h;
+    } },
+    { name: "all-day", fields: ["kind"], pattern: /\sall[\s-]?day\b/i,
+      accept: function (m, o) { o.type = "allday"; } },
+    { name: "every weekday", fields: ["repeat", "date"], pattern: new RegExp("\\severy\\s+" + WEEKDAY_PATTERN + "\\b", "i"),
+      accept: function (m, o, today) {
+        o.repeat = "weekly";
+        o.date = nextWeekday(m[1], today);
+        o.byDay = [WEEKDAY_NUMBER[m[1].slice(0, 3).toLowerCase()]];
+    } },
+    { name: "daily", fields: ["repeat"], pattern: /\s(?:every\s+day|daily)\b/i,
+      accept: function (m, o) { o.repeat = "daily"; } },
+    { name: "weekly", fields: ["repeat"], pattern: /\s(?:every\s+week|weekly)\b/i,
+      accept: function (m, o) { o.repeat = "weekly"; } },
+    { name: "monthly", fields: ["repeat"], pattern: /\s(?:every\s+month|monthly)\b/i,
+      accept: function (m, o) { o.repeat = "monthly"; } },
+    { name: "yearly", fields: ["repeat"], pattern: /\s(?:every\s+year|yearly|annually)\b/i,
+      accept: function (m, o) { o.repeat = "yearly"; } },
+
+    { name: "time range", fields: ["time", "end"],
+      pattern: new RegExp("\\s(?:at\\s+|from\\s+)?" + TIME_PATTERN + "\\s*(?:-|\u2013|to)\\s*" + TIME_PATTERN + "(?=\\s)", "i"),
+      accept: function (m, o) {
+        var ap1 = m[3] || m[6];
+        if (!(ap1 || m[2] || m[5])) return false;
+        o.time = toTime(m[1], m[2], ap1);
+        o.end = toTime(m[4], m[5], m[6]);
+        if (!o.time) return false;
+    } },
+    { name: "am/pm time", fields: ["time"], when: hasNoTime, pattern: /\s(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?=\s)/i,
+      accept: function (m, o) {
+        o.time = toTime(m[1], m[2], m[3]);
+        if (!o.time) return false;
+    } },
+    { name: "24-hour time", fields: ["time"], when: hasNoTime, pattern: /\s(?:at\s+)?(\d{1,2}):(\d{2})(?=\s)/,
+      accept: function (m, o) {
+        o.time = toTime(m[1], m[2]);
+        if (!o.time) return false;
+    } },
+    { name: "noon", fields: ["time"], when: hasNoTime, pattern: /\s(?:at\s+)?noon\b/i,
+      accept: function (m, o) { o.time = "12:00"; } },
+
+    { name: "today or tonight", fields: ["date"], when: hasNoDate, pattern: /\s(?:on\s+)?(today|tonight)\b/i,
+      accept: function (m, o, today) {
+        o.date = today;
+        if (/tonight/i.test(m[1]) && !o.time) {
+            o.time = "20:00";
+            return ["date", "time"];
+        }
+    } },
+    { name: "tomorrow", fields: ["date"], when: hasNoDate, pattern: /\s(?:on\s+)?(tomorrow|tmrw|tmr)\b/i,
+      accept: function (m, o, today) { o.date = addDays(today, 1); } },
+    { name: "in N days", fields: ["date"], when: hasNoDate, pattern: /\sin\s+(\d{1,2})\s+days?\b/i,
+      accept: function (m, o, today) { o.date = addDays(today, +m[1]); } },
+    { name: "in N weeks", fields: ["date"], when: hasNoDate, pattern: /\sin\s+(\d{1,2})\s+weeks?\b/i,
+      accept: function (m, o, today) { o.date = addDays(today, 7 * m[1]); } },
+    { name: "next week", fields: ["date"], when: hasNoDate, pattern: /\snext\s+week\b/i,
+      accept: function (m, o, today) { o.date = addDays(today, 7); } },
+    { name: "month then day", fields: ["date"], when: hasNoDate,
+      pattern: new RegExp("\\s(?:on\\s+)?" + MONTH_PATTERN + "\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b", "i"),
+      accept: function (m, o, today) {
+        o.date = monthDay(MONTH_NUMBER[m[1].slice(0, 3).toLowerCase()], +m[2], today);
+        if (!o.date) return false;
+    } },
+    { name: "day then month", fields: ["date"], when: hasNoDate,
+      pattern: new RegExp("\\s(?:on\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+" + MONTH_PATTERN + "\\b", "i"),
+      accept: function (m, o, today) {
+        o.date = monthDay(MONTH_NUMBER[m[2].slice(0, 3).toLowerCase()], +m[1], today);
+        if (!o.date) return false;
+    } },
+    { name: "month/day", fields: ["date"], when: hasNoDate, pattern: /\s(?:on\s+)?(\d{1,2})\/(\d{1,2})\b/,
+      accept: function (m, o, today) {
+        o.date = monthDay(+m[1] - 1, +m[2], today);
+        if (!o.date) return false;
+    } },
+    { name: "weekday", fields: ["date"], when: hasNoDate,
+      pattern: new RegExp("\\s(?:on\\s+|next\\s+|this\\s+)?" + WEEKDAY_PATTERN + "\\b", "i"),
+      accept: function (m, o, today) { o.date = nextWeekday(m[1], today); } }
+];
+
 function parse(text, referenceDate, selectedDate, weekStart, clock24) {
     var today = Times.dayKey(referenceDate);
     var s = " " + text + " ";
@@ -93,84 +219,11 @@ function parse(text, referenceDate, selectedDate, weekStart, clock24) {
         s = s.slice(0, m.index) + " " + s.slice(m.index + m[0].length);
         positions = positions.slice(0, m.index).concat([-1], positions.slice(m.index + m[0].length));
     }
-    // Next date with that weekday, today included.
-    function nextWeekday(name) {
-        var target = WEEKDAY_NUMBER[name.slice(0, 3).toLowerCase()];
-        return addDays(today, (target - keyToDate(today).getDay() + 7) % 7);
+    for (var r = 0; r < STEPS.length; r++) {
+        var step = STEPS[r];
+        if (step.when && !step.when(o)) continue;
+        take(step.pattern, step.fields, function (m) { return step.accept(m, o, today); });
     }
-    function toTime(h, mi, ap) {
-        h = +h;
-        mi = +(mi || 0);
-        if (ap) {
-            ap = ap.toLowerCase();
-            if (ap === "pm" && h < 12) h += 12;
-            if (ap === "am" && h === 12) h = 0;
-        }
-        if (h > 23 || mi > 59) return null;
-        return Times.pad(h) + ":" + Times.pad(mi);
-    }
-
-    take(/^\s*(?:task|todo)\b:?/i, ["kind"], function () { o.type = "task"; });
-    take(/^\s*remind(?:\s+me)?(?:\s+to)?\b:?/i, ["kind"], function () { o.type = "reminder"; });
-    take(/\s#([0-9a-f]{6}|[0-9a-f]{3})(?=\s)/i, ["color"], function (m) {
-        var h = m[1].toLowerCase();
-        if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
-        o.color = "#" + h;
-    });
-    take(/\sall[\s-]?day\b/i, ["kind"], function () { o.type = "allday"; });
-    take(new RegExp("\\severy\\s+" + WEEKDAY_PATTERN + "\\b", "i"), ["repeat", "date"], function (m) {
-        o.repeat = "weekly";
-        o.date = nextWeekday(m[1]);
-        o.byDay = [WEEKDAY_NUMBER[m[1].slice(0, 3).toLowerCase()]];
-    });
-    take(/\s(?:every\s+day|daily)\b/i, ["repeat"], function () { o.repeat = "daily"; });
-    take(/\s(?:every\s+week|weekly)\b/i, ["repeat"], function () { o.repeat = "weekly"; });
-    take(/\s(?:every\s+month|monthly)\b/i, ["repeat"], function () { o.repeat = "monthly"; });
-    take(/\s(?:every\s+year|yearly|annually)\b/i, ["repeat"], function () { o.repeat = "yearly"; });
-
-    take(new RegExp("\\s(?:at\\s+|from\\s+)?" + TIME_PATTERN + "\\s*(?:-|\u2013|to)\\s*" + TIME_PATTERN + "(?=\\s)", "i"), ["time", "end"], function (m) {
-        var ap1 = m[3] || m[6];
-        if (!(ap1 || m[2] || m[5])) return false;
-        o.time = toTime(m[1], m[2], ap1);
-        o.end = toTime(m[4], m[5], m[6]);
-        if (!o.time) return false;
-    });
-    if (!o.time) take(/\s(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?=\s)/i, ["time"], function (m) {
-        o.time = toTime(m[1], m[2], m[3]);
-        if (!o.time) return false;
-    });
-    if (!o.time) take(/\s(?:at\s+)?(\d{1,2}):(\d{2})(?=\s)/, ["time"], function (m) {
-        o.time = toTime(m[1], m[2]);
-        if (!o.time) return false;
-    });
-    if (!o.time) take(/\s(?:at\s+)?noon\b/i, ["time"], function () { o.time = "12:00"; });
-
-    if (!o.date) take(/\s(?:on\s+)?(today|tonight)\b/i, ["date"], function (m) {
-        o.date = today;
-        if (/tonight/i.test(m[1]) && !o.time) {
-            o.time = "20:00";
-            return ["date", "time"];
-        }
-    });
-    if (!o.date) take(/\s(?:on\s+)?(tomorrow|tmrw|tmr)\b/i, ["date"], function () { o.date = addDays(today, 1); });
-    if (!o.date) take(/\sin\s+(\d{1,2})\s+days?\b/i, ["date"], function (m) { o.date = addDays(today, +m[1]); });
-    if (!o.date) take(/\sin\s+(\d{1,2})\s+weeks?\b/i, ["date"], function (m) { o.date = addDays(today, 7 * m[1]); });
-    if (!o.date) take(/\snext\s+week\b/i, ["date"], function () { o.date = addDays(today, 7); });
-    if (!o.date) take(new RegExp("\\s(?:on\\s+)?" + MONTH_PATTERN + "\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b", "i"), ["date"], function (m) {
-        o.date = monthDay(MONTH_NUMBER[m[1].slice(0, 3).toLowerCase()], +m[2], today);
-        if (!o.date) return false;
-    });
-    if (!o.date) take(new RegExp("\\s(?:on\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+" + MONTH_PATTERN + "\\b", "i"), ["date"], function (m) {
-        o.date = monthDay(MONTH_NUMBER[m[2].slice(0, 3).toLowerCase()], +m[1], today);
-        if (!o.date) return false;
-    });
-    if (!o.date) take(/\s(?:on\s+)?(\d{1,2})\/(\d{1,2})\b/, ["date"], function (m) {
-        o.date = monthDay(+m[1] - 1, +m[2], today);
-        if (!o.date) return false;
-    });
-    if (!o.date) take(new RegExp("\\s(?:on\\s+|next\\s+|this\\s+)?" + WEEKDAY_PATTERN + "\\b", "i"), ["date"], function (m) {
-        o.date = nextWeekday(m[1]);
-    });
 
     var title = s.replace(/\s+/g, " ").trim().replace(/\s+(on|at|from|by)$/i, "").replace(/^(on|at)\s+/i, "");
     if (!o.type) o.type = o.time ? "event" : "allday";

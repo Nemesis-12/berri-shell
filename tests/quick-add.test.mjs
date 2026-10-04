@@ -249,3 +249,13 @@ test("deleting text clears matches and restores defaults on each parse", () => {
   assert.deepEqual(empty.matches, p.matches);
   assert.equal(empty.title, "");
 });
+
+// Pins the parse of about 90 phrases. The file was recorded from the parser before it was split into
+// named steps. Only the numeric issue reference cases differ (see the next test).
+test("recorded phrases parse to the same fields", () => {
+  const recorded = JSON.parse(fs.readFileSync(new URL("./fixtures/quick-add-phrases.json", import.meta.url), "utf8"));
+  assert.ok(recorded.length >= 50);
+  for (const { text, result } of recorded) {
+    assert.deepEqual(plain(lib.parse(text, today, selected, 1, false)), result, JSON.stringify(text));
+  }
+});
