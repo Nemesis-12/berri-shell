@@ -119,13 +119,12 @@ test("one thousand critical pop-ups keep only the newest twenty", () => {
 });
 
 test("readSaved: defaults on bad input (null, text), drops bad items, clears actions", () => {
-  assert.deepEqual(plain(lib.readSaved(null)), { serverEnabled: false, dnd: false, items: [] });
-  assert.deepEqual(plain(lib.readSaved("not an object")), { serverEnabled: false, dnd: false, items: [] });
+  assert.deepEqual(plain(lib.readSaved(null)), { dnd: false, items: [] });
+  assert.deepEqual(plain(lib.readSaved("not an object")), { dnd: false, items: [] });
   const saved = plain(lib.readSaved({
-    serverEnabled: true, dnd: true,
+    dnd: true,
     items: [{ id: "a", time: 5, appName: "X", urgency: "weird", actions: [{ id: "1", label: "L" }] }, { id: 7 }, null],
   }));
-  assert.equal(saved.serverEnabled, true);
   assert.equal(saved.dnd, true);
   assert.equal(saved.items.length, 1);
   assert.equal(saved.items[0].urgency, "normal");
@@ -152,6 +151,6 @@ test("saving bounded history excludes sender actions and stays below eight MiB",
   assert.equal("actions" in saved[0], false);
   assert.equal("transient" in saved[0], false);
   const history = Array.from({ length: 200 }, (_, i) => ({ ...snapshot, id: `n${i}` }));
-  const bytes = Buffer.byteLength(JSON.stringify({ serverEnabled: true, dnd: false, items: lib.savedItems(history) }, null, 2));
+  const bytes = Buffer.byteLength(JSON.stringify({ dnd: false, items: lib.savedItems(history) }, null, 2));
   assert.ok(bytes < 8 * 1024 * 1024, `Saved history is ${bytes} bytes`);
 });

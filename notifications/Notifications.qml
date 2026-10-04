@@ -27,15 +27,16 @@ import qs.common
  *   invokeAction and dismiss while the sender keeps it open).
  *   updated(item): replaces an open or waiting pop-up without adding a copy.
  *
- * The D-Bus server (org.freedesktop.Notifications) exists only when
- * serverEnabled is true. It is read from the state file key "serverEnabled"
- * and is false by default, because Omarchy's own plugin still owns the name.
- * Ticket 53 turns it on. Like every singleton, this one loads on first use, so
+ * berri starts the server after saved state loads. It must be the sole owner
+ * of org.freedesktop.Notifications. Other notification daemons must not run.
+ * Quickshell keeps an existing owner on a name conflict,
+ * logs a warning and retries when that owner releases the name.
+ * Like every singleton, this one loads on first use, so
  * something in the shell must reference Notifications for the server to start.
  *
  * State file: ~/.local/state/berri-shell/notifications.json
- *   { serverEnabled, dnd, items } with at most maxItems items. Actions are not
- *   saved (the sender is gone after a restart).
+ *   { dnd, items } with at most maxItems items. The old serverEnabled key is
+ *   ignored. Actions are not saved (the sender is gone after a restart).
  */
 Singleton {
     id: root
@@ -44,7 +45,7 @@ Singleton {
     readonly property int maxLive: Logic.limits.live
     readonly property real defaultSnoozeMinutes: 60
 
-    property bool serverEnabled: false
+    property bool historyLoaded: false
     property bool dnd: false
 
     // Everything stored, snoozed items included.
@@ -308,8 +309,7 @@ Singleton {
         if (!root.pendingSave) return;
         root.pendingSave = false;
         saveTimer.stop();
-        saved.save({ serverEnabled: root.serverEnabled, dnd: root.dnd,
-            items: Logic.savedItems(root.all) });
+        saved.save({ dnd: root.dnd, items: Logic.savedItems(root.all) });
     }
 
     Timer {
@@ -325,10 +325,10 @@ Singleton {
         waitMs: 0
         onLoaded: values => {
             var restored = Logic.readSaved(values);
-            root.serverEnabled = restored.serverEnabled;
             root.dnd = restored.dnd;
             root.all = Logic.cap(restored.items, root.maxItems);
             root.refresh();
+            root.historyLoaded = true;
         }
     }
 
@@ -346,9 +346,9 @@ Singleton {
         onTriggered: root.expireDue()
     }
 
-    // The D-Bus name is taken only while this exists.
+    // Restore history and do not disturb before accepting new notifications.
     LazyLoader {
-        active: root.serverEnabled
+        active: root.historyLoaded
 
         NotificationServer {
             actionsSupported: true
