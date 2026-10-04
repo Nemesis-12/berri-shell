@@ -2,48 +2,41 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { systemLogic, systemService } from "./fixtures/system-service.mjs";
 
-// Run service functions and completion handlers with synthetic file/process I/O.
-function frequencyService() {
+// Count real aggregations while synthetic process I/O delivers each completed sample.
+test("16 threads produce one aggregate for each completed frequency sample", () => {
   const source = fs.readFileSync(new URL("../services/SystemStats.qml", import.meta.url), "utf8");
-  const logic = fs.readFileSync(new URL("../logic/SystemReadings.js", import.meta.url), "utf8")
-    .replace(/^\.pragma library.*$/m, "");
-  const readings = vm.createContext({});
-  vm.runInContext(logic, readings);
+  const finished = /id: frequencyReader[\s\S]*?waitForEnd: true\s+onStreamFinished: ([^\n]+)/.exec(source);
+  assert.ok(finished, "Frequency output must be collected until the process ends");
+  const readings = systemLogic("SystemReadings");
   const aggregates = [];
-  const values = Array(16).fill("");
-  const service = vm.createContext({
-    active: true, cpuGhz: null,
-    Readings: { readFrequency(samples) {
-      const value = readings.readFrequency(samples);
+  const process = { running: false };
+  const stats = systemService("SystemStats", { active: true, cpuGhz: null,
+    frequencyReader: process, routeFile: { reload() {} }, networkFile: { reload() {} },
+    cpuTempPath: "", igpuTempPath: "", fanPath: "",
+    Readings: { readFrequency(values) {
+      const value = readings.readFrequency(values);
       aggregates.push(value);
       return value;
-    } },
-    frequencyFiles: { count: 16, objectAt(index) { return { text: () => values[index] }; } },
-  });
-  service.root = service;
-  for (const [, name, args, body] of source.matchAll(/^    function (\w+)\((.*?)\) \{([\s\S]*?)^    \}/gm))
-    vm.runInContext(`function ${name}(${args}) {${body}\n}`, service);
-  const perFile = /id: frequencyFiles[\s\S]*?onLoaded: ([^\n]+)/.exec(source);
-  const complete = /id: frequencyReader[\s\S]*?waitForEnd: true\s+onStreamFinished: ([^\n]+)/.exec(source);
-  assert.ok(perFile || complete, "A frequency completion handler must exist");
-  return { service, aggregates, tick() {
+    } } });
+  for (let sample = 0; sample < 3; sample++) {
+    stats.reloadFast();
+    assert.equal(process.running, true);
+    const values = [];
     for (let thread = 0; thread < 16; thread++) {
-      values[thread] = thread < 8 ? "2000000" : "4000000";
-      if (perFile) vm.runInContext(perFile[1], service);
-      else assert.equal(aggregates.length, this.completedTicks);
+      values.push(thread < 8 ? "2000000" : "4000000");
+      assert.equal(aggregates.length, sample);
     }
-    if (complete) {
-      service.text = values.join("\n");
-      vm.runInContext(complete[1], service);
-    }
-    this.completedTicks++;
-  }, completedTicks: 0 };
-}
-
-test("16 threads produce one frequency aggregate per completed one-second sample", () => {
-  const reader = frequencyService();
-  for (let second = 0; second < 3; second++) reader.tick();
-  assert.deepEqual(reader.aggregates, [3, 3, 3]);
-  assert.equal(reader.service.cpuGhz, 3);
+    stats.text = values.join("\n");
+    process.running = false;
+    vm.runInContext(finished[1], stats);
+  }
+  assert.deepEqual(aggregates, [3, 3, 3]);
+  assert.equal(stats.cpuGhz, 3);
+  stats.active = false;
+  stats.text = "9000000\n";
+  vm.runInContext(finished[1], stats);
+  assert.deepEqual(aggregates, [3, 3, 3]);
+  assert.equal(stats.cpuGhz, 3);
 });

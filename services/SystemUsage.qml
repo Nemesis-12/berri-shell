@@ -3,30 +3,28 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "../logic/MemoryUse.js" as MemoryUse
-import qs.common
+import "../logic/SystemReadings.js" as Readings
 import qs.services
 
-/**
- * Numbers for the Home usage rings. CPU percent comes from CpuLoad. RAM
- * used percent comes from /proc/meminfo (parsed by MemoryUse.js) and disk used
- * percent of / from `df`. Memory is read without a process while visible.
- * Disk usage refreshes when the view opens and every 30 seconds.
- */
+/** Shared disk, memory and uptime snapshots for Home and System, sampled while visible. */
 Singleton {
     id: root
 
     readonly property int sampleIntervalMs: 2500
-
-    /** How many views are visible now (see WhileVisible.qml). */
     property int viewers: 0
-
     readonly property real cpuPercent: CpuLoad.percent
-    property real ramPercent: 0
-    property real diskPercent: 0
 
-    // Used, in GB, for the ring captions (1 decimal for RAM, whole GB for disk).
-    property real ramUsedGb: 0
-    property real diskUsedGb: 0
+    property var memory: null
+    property var disks: []
+    property real uptimeSeconds: 0
+    readonly property var rootDisk: disks.filter(function (disk) { return disk.mount === "/"; })[0] || null
+    readonly property real ramPercent: memory ? memory.percent : 0
+    readonly property real ramUsedGb: memory ? memory.usedGb : 0
+    readonly property real ramTotalGb: memory ? memory.totalGb : 0
+    readonly property real swapUsedGb: memory ? memory.swapUsedGb : 0
+    readonly property real swapTotalGb: memory ? memory.swapTotalGb : 0
+    readonly property real diskPercent: rootDisk ? rootDisk.percent : 0
+    readonly property real diskUsedGb: rootDisk ? rootDisk.usedGb : 0
 
     FileView {
         id: memoryFile
@@ -35,40 +33,47 @@ Singleton {
         onLoaded: if (root.viewers > 0) root.readMemory(text())
     }
 
+    FileView {
+        id: uptimeFile
+        path: "/proc/uptime"
+        printErrors: false
+        onLoaded: if (root.viewers > 0) root.readUptime(text())
+    }
+
     Process {
         id: diskReader
-        command: ["df", "-P", "/"]
+        command: ["df", "-P", "-x", "tmpfs", "-x", "devtmpfs", "-x", "efivarfs", "-x", "squashfs"]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: root.readDisk(text)
+            onStreamFinished: if (root.viewers > 0) root.readDisk(text)
         }
     }
 
-    /** Updates ramPercent and ramUsedGb from a "/proc/meminfo" dump. */
-    function readMemory(block) {
-        var memoryUse = MemoryUse.readMemoryUse(block);
-        if (!memoryUse) return;
-        root.ramPercent = memoryUse.percent;
-        root.ramUsedGb = Math.round(memoryUse.usedGb * 10) / 10;
+    // Publishes one memory snapshot so percent and sizes change together.
+    function readMemory(text) {
+        var next = MemoryUse.readMemoryUse(text);
+        if (next) memory = next;
     }
 
-    /** Updates diskPercent and diskUsedGb from `df -P /`'s data line (1K blocks). */
-    function readDisk(block) {
-        var lines = block.trim().split("\n");
-        if (lines.length < 2) return;
-        var fields = lines[1].trim().split(/\s+/);
-        if (fields.length < 4) return;
-        root.diskUsedGb = Math.round(Number(fields[2]) / 1024 / 1024);
-        var match = lines[1].match(/(\d+)%/);
-        if (match) root.diskPercent = Number(match[1]);
+    // Both views use the same parsed disk sizes and percentage.
+    function readDisk(text) {
+        disks = Readings.readDisks(text);
     }
+
+    // Both uptime captions use one completed /proc/uptime sample.
+    function readUptime(text) {
+        var seconds = Readings.readUptime(text);
+        if (seconds !== null) uptimeSeconds = seconds;
+    }
+
+    onViewersChanged: if (viewers === 0) diskReader.running = false
 
     Timer {
         interval: root.sampleIntervalMs
         running: root.viewers > 0
         repeat: true
         triggeredOnStart: true
-        onTriggered: memoryFile.reload()
+        onTriggered: { memoryFile.reload(); uptimeFile.reload(); }
     }
 
     Timer {
