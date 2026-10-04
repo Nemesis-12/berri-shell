@@ -273,4 +273,10 @@ test("a number after # stays in the title; hex words with letters stay colors", 
   // Digits with a leading zero and six digits are still colors.
   assert.equal(parse("x #000").color, "#000000");
   assert.equal(parse("x #123456").color, "#123456");
+  // Issue number followed by hex color: issue stays in title, color is read.
+  const issueAndColor = parse("Fix bug #123 #f00 tomorrow");
+  assert.equal(issueAndColor.title, "Fix bug #123");
+  assert.equal(issueAndColor.color, "#ff0000");
+  assert.equal(issueAndColor.named.color, true);
+  assert.equal(issueAndColor.date, "2026-09-30");
 });

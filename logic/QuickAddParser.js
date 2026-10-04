@@ -90,8 +90,9 @@ var hasNoTime = function (o) { return !o.time; };
 var hasNoDate = function (o) { return !o.date; };
 
 // A "#123" word names an issue, not a color: three digits, none leading zero.
+var ISSUE_NUMBER_PATTERN = "[1-9][0-9]{2}";
 function isIssueNumber(hex) {
-    return /^[1-9][0-9]{2}$/.test(hex);
+    return new RegExp("^" + ISSUE_NUMBER_PATTERN + "$").test(hex);
 }
 
 /**
@@ -109,10 +110,9 @@ var STEPS = [
       accept: function (m, o) { o.type = "task"; } },
     { name: "reminder", fields: ["kind"], pattern: /^\s*remind(?:\s+me)?(?:\s+to)?\b:?/i,
       accept: function (m, o) { o.type = "reminder"; } },
-    { name: "color", fields: ["color"], pattern: /\s#([0-9a-f]{6}|[0-9a-f]{3})(?=\s)/i,
+    { name: "color", fields: ["color"], pattern: new RegExp("\\s#(?!" + ISSUE_NUMBER_PATTERN + "(?=\\s))([0-9a-f]{6}|[0-9a-f]{3})(?=\\s)", "i"),
       accept: function (m, o) {
         var h = m[1].toLowerCase();
-        if (isIssueNumber(h)) return false;
         if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
         o.color = "#" + h;
     } },
