@@ -29,7 +29,7 @@ Install the following commands on `PATH`. Some commands apply only to the named 
 
 For the related controls, provide NetworkManager, BlueZ, PipeWire, UPower and power-profiles-daemon. Quickshell accesses these services directly. Media controls need an MPRIS player. Sensor readings use Linux `/proc` and `/sys`; some readings depend on the hardware.
 
-Development also needs `node` for the JavaScript tests. Python tests use the standard library. The pre-push hook needs `node`, `python3` and `cargo`.
+Development also needs `node` for the JavaScript tests and `qml6` for isolated weather service tests. The weather tests use Qt's offscreen platform and synthetic data. They do not start the desktop shell or make network requests. Python tests use the standard library. The pre-push hook needs `node`, `qml6`, `python3` and `cargo`.
 
 ## Install and run
 
@@ -100,6 +100,18 @@ Back up these folders before changing or removing saved data.
 
 The QML state, share and config paths use `HOME` directly. They do not use the corresponding XDG overrides. The Home profile image uses `~/.face`. Weather can read Omarchy's location setting at `~/.local/state/omarchy/settings/weather.json`. Built-in theme data is in the repository's `data/` folder.
 
+### Weather location sharing
+
+Weather lookup is automatic. There is no lookup-off setting. Weather reads Omarchy's location setting first. If that file is missing or invalid, it uses an IP-based location lookup. It checks the location again each hour, updates forecasts every 15 minutes, and retries failed calls after 45 seconds. The last good weather data stays visible after a failed call.
+
+| Service | Data it receives |
+| --- | --- |
+| `api.open-meteo.com` | Latitude and longitude in the forecast request. |
+| `wttr.in` | The connection's public IP address for fallback location lookup. For place-name lookup, it also receives latitude and longitude in the request path. |
+| `geocoding-api.open-meteo.com` | The city name returned by `wttr.in`. Coordinates stay in the shell when it selects the nearest geocoding result. |
+
+Each service can also see the connection's public IP address. Weather sends coordinates to `api.open-meteo.com` and `wttr.in` to get weather data and a place name.
+
 ## Development
 
 From the repository root, enable the hook once per clone:
@@ -138,6 +150,12 @@ cargo test --manifest-path tools/feed-to-records/Cargo.toml --offline
 ```
 
 You can also test the parser with `cargo test --manifest-path tools/feed-to-records/Cargo.toml`. The pre-push hook runs all three groups and stops a push if any group fails.
+
+Weather tests run the service QML with synthetic file and request inputs. They use a clock that runs 100 times faster by default. To check the recovery limit with real timers:
+
+```sh
+WEATHER_TEST_TIME_SCALE=1 node --test --test-name-pattern='first (location|forecast) call' tests/weather-recovery.test.mjs
+```
 
 Existing QML files reload when their content changes. After adding or moving QML files, run `tools/restart-berri.sh` from the daily clone. Do not start a second instance. Keep temporary files in `scratchpad/`.
 
