@@ -17,6 +17,7 @@ Output shape:
                 "weekly": {...} | null},
      "codex":  {"session": {...} | null, "weekly": {...} | null}}
 """
+import contextlib
 import datetime as dt
 import json
 import os
@@ -79,6 +80,13 @@ def cached_buckets(entry: dict) -> dict:
     }
 
 
+class UsageRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Keep the bearer on the configured usage endpoint by refusing redirects."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def claude_usage(cache: dict) -> dict:
     """Session (5-hour) and weekly (7-day) usage, falling back to cache on any failure."""
     entry = cache.get("claude") or {}
@@ -112,7 +120,8 @@ def claude_usage(cache: dict) -> dict:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_S) as resp:
+        opener = urllib.request.build_opener(UsageRedirectHandler())
+        with opener.open(request, timeout=REQUEST_TIMEOUT_S) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as err:
         if err.code == 429:
@@ -124,6 +133,7 @@ def claude_usage(cache: dict) -> dict:
             backoff = retry_seconds if retry_seconds and retry_seconds > 0 else RATE_LIMIT_BACKOFF_S
             entry["retryAfter"] = (now + dt.timedelta(seconds=backoff)).isoformat()
             cache["claude"] = entry
+        err.close()
         return cached_buckets(entry)
     except Exception:
         return cached_buckets(entry)
@@ -147,29 +157,32 @@ def claude_bucket(bucket) -> dict | None:
         percent = float(utilization)
     except Exception:
         return None
-    # The endpoint reports a 0-100 percentage; guard against a stray 0-1 fraction.
-    if percent <= 1:
-        percent *= 100
+    # OAuth usage reports percentages, including values below 1 percent.
     return {"percent": max(0.0, min(100.0, percent)), "resetsAt": str(resets_at)}
 
 
 def rpc_request(proc, request_id, method, params=None, timeout=8):
+    """Read one response without letting a partial line extend the deadline."""
+    deadline = time.monotonic() + timeout
     proc.stdin.write(json.dumps({"id": request_id, "method": method, "params": params or {}}) + "\n")
     proc.stdin.flush()
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        ready, _, _ = select.select([proc.stdout], [], [], 0.25)
+    pending = b""
+    while (remaining := deadline - time.monotonic()) > 0:
+        ready, _, _ = select.select([proc.stdout], [], [], remaining)
         if not ready:
             continue
-        line = proc.stdout.readline()
-        if not line:
+        chunk = os.read(proc.stdout.fileno(), 65536)
+        if not chunk:
             break
-        try:
-            message = json.loads(line)
-        except Exception:
-            continue
-        if message.get("id") == request_id:
-            return message
+        pending += chunk
+        while b"\n" in pending:
+            line, pending = pending.split(b"\n", 1)
+            try:
+                message = json.loads(line)
+            except (ValueError, UnicodeDecodeError):
+                continue
+            if isinstance(message, dict) and message.get("id") == request_id:
+                return message
     raise TimeoutError(method)
 
 
@@ -227,12 +240,14 @@ def codex_usage(cache: dict) -> dict:
         if proc is not None:
             try:
                 proc.terminate()
-                proc.wait(timeout=2)
-            except Exception:
-                try:
-                    proc.kill()
-                except Exception:
-                    pass
+                proc.wait(timeout=0.2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+            finally:
+                with contextlib.suppress(BrokenPipeError):
+                    proc.stdin.close()
+                proc.stdout.close()
 
     new_session = codex_window(limits.get("primary"))
     new_weekly = codex_window(limits.get("secondary"))

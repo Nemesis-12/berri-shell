@@ -24,6 +24,7 @@ import json
 import re
 import sys
 import time
+from collections.abc import Iterable
 from pathlib import Path
 
 from recent_answers import answer_path, read_recent_answer, save_answer
@@ -79,39 +80,47 @@ def cost_of(k: dict, price: dict) -> float:
     return sum(k[n] * price[n] for n in KINDS) / 1e6
 
 
-def claude_events(path: Path, first_day: dt.date):
-    """Yields (day, model, kinds) once per assistant message (streamed lines repeat one message id)."""
+def claude_events(paths: Iterable[Path], first_day: dt.date):
+    """Count each response once across streamed lines and copied session logs."""
     latest = {}
-    with path.open(encoding="utf-8", errors="replace") as f:
-        for line in f:
-            if '"usage"' not in line:
-                continue
-            try:
-                o = json.loads(line)
-                m = o["message"]
-                u = m["usage"]
-                day = local_day(o["timestamp"])
-                model = m.get("model") or ""
-                if o.get("type") != "assistant" or day is None or day < first_day or model.startswith("<"):
-                    continue
-                write = int(u.get("cache_creation_input_tokens") or 0)
-                split = u.get("cache_creation") or {}
-                w1 = int(split.get("ephemeral_1h_input_tokens") or 0)
-                w5 = int(split.get("ephemeral_5m_input_tokens") or 0) if split else write
-                kinds = {
-                    "input": int(u.get("input_tokens") or 0),
-                    "output": int(u.get("output_tokens") or 0),
-                    "cache_write_5m": w5,
-                    "cache_write_1h": w1,
-                    "cache_read": int(u.get("cache_read_input_tokens") or 0),
-                }
-                latest[m.get("id") or o.get("uuid") or line] = (day, model, kinds)
-            except Exception:
-                continue
+    for path in paths:
+        try:
+            with path.open(encoding="utf-8", errors="replace") as f:
+                for line_number, line in enumerate(f):
+                    if '"usage"' not in line:
+                        continue
+                    try:
+                        o = json.loads(line)
+                        m = o["message"]
+                        u = m["usage"]
+                        day = local_day(o["timestamp"])
+                        model = m.get("model") or ""
+                        if o.get("type") != "assistant" or day is None or day < first_day or model.startswith("<"):
+                            continue
+                        write = int(u.get("cache_creation_input_tokens") or 0)
+                        split = u.get("cache_creation") or {}
+                        w1 = int(split.get("ephemeral_1h_input_tokens") or 0)
+                        w5 = int(split.get("ephemeral_5m_input_tokens") or 0) if split else write
+                        kinds = {
+                            "input": int(u.get("input_tokens") or 0),
+                            "output": int(u.get("output_tokens") or 0),
+                            "cache_write_5m": w5,
+                            "cache_write_1h": w1,
+                            "cache_read": int(u.get("cache_read_input_tokens") or 0),
+                        }
+                        message_id = m.get("id") or o.get("uuid") or (path, line_number)
+                        previous = latest.get(message_id)
+                        # A copied partial response must not replace its final usage.
+                        if previous is None or kinds["output"] >= previous[2]["output"]:
+                            latest[message_id] = (day, model, kinds)
+                    except Exception:
+                        continue
+        except OSError:
+            continue
     yield from latest.values()
 
 
-def codex_events(path: Path, first_day: dt.date):
+def codex_session_events(path: Path, first_day: dt.date):
     """Yields (day, model, kinds) per growth of the running session totals."""
     model = ""
     prev = {"input": 0, "output": 0, "cache_read": 0}
@@ -144,6 +153,25 @@ def codex_events(path: Path, first_day: dt.date):
                 continue
 
 
+def codex_events(paths: Iterable[Path], first_day: dt.date):
+    """Read each session independently and skip logs that cannot be opened."""
+    for path in paths:
+        try:
+            yield from codex_session_events(path, first_day)
+        except OSError:
+            continue
+
+
+def recent_logs(root: Path, cutoff: float):
+    """Find logs changed since the earliest day included in the totals."""
+    for path in root.rglob("*.jsonl"):
+        try:
+            if path.stat().st_mtime >= cutoff:
+                yield path
+        except OSError:
+            continue
+
+
 def empty_kinds() -> dict:
     return {n: 0 for n in KINDS}
 
@@ -168,24 +196,18 @@ def collect() -> dict:
     for agent, (root, events) in sources.items():
         if not root.is_dir():
             continue
-        for path in root.rglob("*.jsonl"):
-            try:
-                if path.stat().st_mtime < cutoff:
-                    continue
-                for day, model, kinds in events(path, oldest):
-                    tokens = counted(kinds)
-                    if day >= first_day:
-                        per_day[day.isoformat()][agent] += tokens
-                    if day >= week_start and model:
-                        name = pretty_model(model)
-                        per_model[agent][name] = per_model[agent].get(name, 0) + tokens
-                    for bucket, start in (("today", today), ("week", week_start), ("month", month_start)):
-                        if day >= start:
-                            acc = buckets[agent][bucket].setdefault(model or "unknown", empty_kinds())
-                            for n in KINDS:
-                                acc[n] += kinds[n]
-            except OSError:
-                continue
+        for day, model, kinds in events(recent_logs(root, cutoff), oldest):
+            tokens = counted(kinds)
+            if day >= first_day:
+                per_day[day.isoformat()][agent] += tokens
+            if day >= week_start and model:
+                name = pretty_model(model)
+                per_model[agent][name] = per_model[agent].get(name, 0) + tokens
+            for bucket, start in (("today", today), ("week", week_start), ("month", month_start)):
+                if day >= start:
+                    acc = buckets[agent][bucket].setdefault(model or "unknown", empty_kinds())
+                    for n in KINDS:
+                        acc[n] += kinds[n]
     usage = {a: {} for a in sources}
     unknown = {a: set() for a in sources}
     for agent, by_bucket in buckets.items():
