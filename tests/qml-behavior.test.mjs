@@ -12,7 +12,7 @@ test("volume, playback, and brightness follow their shared owners in QML", () =>
   mkdirSync(path.join(root, "scratchpad"), { recursive: true });
   const run = mkdtempSync(path.join(root, "scratchpad/qml-test-"));
   const imports = path.join(run, "imports");
-  cpSync(path.join(root, "tests/qml/imports"), imports, { recursive: true });
+  cpSync(path.join(root, "tests/qml-playback/imports"), imports, { recursive: true });
 
   for (const folder of ["common", "tabs/home", "tabs/media", "logic"]) {
     const target = path.join(imports, "qs", folder);
@@ -28,7 +28,7 @@ test("volume, playback, and brightness follow their shared owners in QML", () =>
   }
 
   const runner = process.env.QMLTESTRUNNER || "/usr/lib/qt6/bin/qmltestrunner";
-  const result = spawnSync(runner, ["-input", path.join(root, "tests/qml"), "-import", imports], {
+  const result = spawnSync(runner, ["-input", path.join(root, "tests/qml-playback"), "-import", imports], {
     encoding: "utf8",
     timeout: 30000,
     env: {
