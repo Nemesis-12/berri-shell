@@ -102,3 +102,13 @@ test("disk rows keep two large unique devices", () => {
   assert.deepEqual(Array.from(readings.readDisks(data), row => [row.mount, row.device, row.usedGb, row.totalGb]),
     [["/", "nvme0n1p2", 50, 100], ["/data", "sda1", 10, 40]]);
 });
+
+test("the first process sample shows memory rows before CPU deltas exist", () => {
+  const sample = "cpu 100 0 0 900\n"
+    + `101\t1.0\tfirefox\t${procLine(101, "firefox", 100, 0, 1000)}\n`
+    + `102\t2.0\tfirefox\t${procLine(102, "firefox", 50, 0, 1000)}\n`
+    + `201\t0.5\tcode\t${procLine(201, "code", 20, 0, 1000)}\n`;
+  const result = readings.readProcesses(sample, null);
+  assert.deepEqual(Array.from(result.rows, row => [row.name, row.cpu, row.mem]),
+    [["firefox", 0, 3], ["code", 0, 0.5]]);
+});
