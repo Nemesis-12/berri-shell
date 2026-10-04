@@ -92,9 +92,13 @@ Singleton {
      * every monitor.
      */
     function add(path) {
-        var ext = String(path).split(".").pop().toLowerCase();
+        var name = String(path).split("/").pop();
+        var dot = name.lastIndexOf(".");
+        var ext = dot === -1 ? "" : name.substring(dot + 1).toLowerCase();
         if (root.imageExtensions.indexOf(ext) === -1) {
             console.warn("Wallpapers.add: unsupported file type: " + path);
+            // Finish after ImagePicker.finished(), as a copy process would.
+            Qt.callLater(function() { root.addFinished(""); });
             return;
         }
         addProc.wasEmpty = root.library.length === 0;

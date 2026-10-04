@@ -188,7 +188,7 @@ Item {
             spacing: root.cardGap
 
             Repeater {
-                model: root.library
+                model: root.visible ? root.library : []
 
                 delegate: Item {
                     id: card

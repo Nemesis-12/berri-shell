@@ -111,15 +111,10 @@ Item {
     Process {
         id: setSticker
 
-        // sh -c: $1 is the config directory, $2 is the chosen file, $3 is its extension.
+        // Copy a supported choice before removing older sticker files.
         function copyFrom(path) {
-            var ext = path.substring(path.lastIndexOf(".") + 1).toLowerCase();
-            setSticker.command = ["sh", "-c",
-                "mkdir -p -- \"$1\" && temp=$(mktemp \"$1/.sticker-copy.XXXXXX\") "
-                    + "&& trap 'rm -f -- \"$temp\"' EXIT && cp -f -- \"$2\" \"$temp\" "
-                    + "&& find \"$1\" -maxdepth 1 -name \"sticker.*\" ! -type d -delete "
-                    + "&& mv -f -- \"$temp\" \"$1/sticker.$3\"",
-                "sh", root.configDirPath, path, ext];
+            setSticker.command = ["sh", Quickshell.shellPath("scripts/set-sticker.sh"),
+                root.configDirPath, path];
             setSticker.running = true;
         }
 
@@ -164,7 +159,7 @@ Item {
     FileView {
         path: root.stickerPath
         watchChanges: true
-        blockLoading: true
+        preload: false
         printErrors: false
         onFileChanged: {
             if (root.useAnimatedImage) root.stickerSource = root.fileUrl(root.stickerPath);
