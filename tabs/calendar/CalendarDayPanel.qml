@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Shapes
 import "../../logic/Times.js" as Times
 import "../../logic/ShownRows.js" as ShownRows
 import qs.common
@@ -344,29 +343,12 @@ Item {
                     anchors.centerIn: parent
                     spacing: 6
 
-                    // Stacked layers (Lucide "layers-2" strokes as in the mock).
-                    Item {
+                    Icon {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        width: 16
-                        height: 16
-
-                        Shape {
-                            width: 24
-                            height: 24
-                            scale: 16 / 24
-                            transformOrigin: Item.TopLeft
-                            antialiasing: true
-                            preferredRendererType: Shape.CurveRenderer
-
-                            ShapePath {
-                                strokeColor: calsLabel.color
-                                strokeWidth: 2
-                                fillColor: "transparent"
-                                capStyle: ShapePath.RoundCap
-                                joinStyle: ShapePath.RoundJoin
-                                PathSvg { path: "M12 3 21 8 12 13 3 8Z M3 13 12 18 21 13" }
-                            }
-                        }
+                        name: "layers-2"
+                        size: 16
+                        strokeWidth: 2
+                        color: calsLabel.color
                     }
 
                     MonoText {

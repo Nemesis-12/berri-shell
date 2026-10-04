@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import "Icons.js" as Icons
+import "../logic/IconLookup.js" as IconLookup
 
 /**
  * Draws one Lucide icon (see assets/icons/lucide/, generated into Icons.js
@@ -31,7 +32,7 @@ Item {
             fillColor: "transparent"
             capStyle: ShapePath.RoundCap
             joinStyle: ShapePath.RoundJoin
-            PathSvg { path: Icons.paths[root.name] || "" }
+            PathSvg { path: IconLookup.pathFor(Icons.paths, root.name) }
         }
     }
 }
