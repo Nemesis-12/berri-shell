@@ -17,6 +17,7 @@ Output shape:
                 "weekly": {...} | null},
      "codex":  {"session": {...} | null, "weekly": {...} | null}}
 """
+import contextlib
 import datetime as dt
 import json
 import os
@@ -132,6 +133,7 @@ def claude_usage(cache: dict) -> dict:
             backoff = retry_seconds if retry_seconds and retry_seconds > 0 else RATE_LIMIT_BACKOFF_S
             entry["retryAfter"] = (now + dt.timedelta(seconds=backoff)).isoformat()
             cache["claude"] = entry
+        err.close()
         return cached_buckets(entry)
     except Exception:
         return cached_buckets(entry)
@@ -243,7 +245,8 @@ def codex_usage(cache: dict) -> dict:
                 proc.kill()
                 proc.wait()
             finally:
-                proc.stdin.close()
+                with contextlib.suppress(BrokenPipeError):
+                    proc.stdin.close()
                 proc.stdout.close()
 
     new_session = codex_window(limits.get("primary"))

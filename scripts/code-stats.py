@@ -24,6 +24,7 @@ import json
 import re
 import sys
 import time
+from collections.abc import Iterable
 from pathlib import Path
 
 from recent_answers import answer_path, read_recent_answer, save_answer
@@ -79,7 +80,7 @@ def cost_of(k: dict, price: dict) -> float:
     return sum(k[n] * price[n] for n in KINDS) / 1e6
 
 
-def claude_events(paths, first_day: dt.date):
+def claude_events(paths: Iterable[Path], first_day: dt.date):
     """Count each response once across streamed lines and copied session logs."""
     latest = {}
     for path in paths:
@@ -152,7 +153,7 @@ def codex_session_events(path: Path, first_day: dt.date):
                 continue
 
 
-def codex_events(paths, first_day: dt.date):
+def codex_events(paths: Iterable[Path], first_day: dt.date):
     """Read each session independently and skip logs that cannot be opened."""
     for path in paths:
         try:
