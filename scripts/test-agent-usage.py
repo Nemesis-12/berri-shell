@@ -1,12 +1,15 @@
 """Usage readings keep percentages and recover from failed requests."""
 import importlib.util
 import json
+import contextlib
 import subprocess
 import sys
 import tempfile
 import textwrap
 import time
+import threading
 import unittest
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
@@ -14,6 +17,36 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location("agent_usage", Path(__file__).with_name("agent-usage.py"))
 usage = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(usage)
+
+
+# Serve synthetic usage and record only the test authorization header.
+@contextlib.contextmanager
+def usage_server(status=200, location=None):
+    authorization = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            authorization.append(self.headers.get("Authorization"))
+            self.send_response(status)
+            if location:
+                self.send_header("Location", location)
+            self.end_headers()
+            if status == 200:
+                self.wfile.write(json.dumps({"five_hour": {
+                    "utilization": 0.5, "resets_at": "2030-01-01T00:00:00Z",
+                }}).encode())
+
+        def log_message(self, *args):
+            pass
+
+    with HTTPServer(("127.0.0.1", 0), Handler) as server:
+        thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01})
+        thread.start()
+        try:
+            yield f"http://127.0.0.1:{server.server_port}/usage", authorization
+        finally:
+            server.shutdown()
+            thread.join(timeout=1)
 
 
 class PercentageTests(unittest.TestCase):
@@ -25,6 +58,26 @@ class PercentageTests(unittest.TestCase):
                                  {"percent": percent, "resetsAt": reset})
                 self.assertEqual(usage.codex_window({"usedPercent": percent, "resetsAt": 1893456000}),
                                  {"percent": percent, "resetsAt": "2030-01-01T00:00:00+00:00"})
+
+
+class ClaudeRequestTests(unittest.TestCase):
+    def test_redirect_keeps_authorization_at_original_server(self):
+        login = json.dumps({"claudeAiOauth": {"accessToken": "synthetic-test-authorization"}})
+        bucket = {"percent": 12.5, "resetsAt": "2030-01-01T00:00:00Z"}
+        cache = {"claude": {"session": bucket, "weekly": None}}
+        with usage_server() as (target, target_authorization), \
+             usage_server(302, target.replace("127.0.0.1", "localhost")) as (source, source_authorization), \
+             patch.object(Path, "read_text", return_value=login), \
+             patch.object(usage, "USAGE_ENDPOINT", source):
+            result = usage.claude_usage(cache)
+            self.assertEqual(source_authorization, ["Bearer synthetic-test-authorization"])
+            self.assertEqual(target_authorization, [])
+            self.assertEqual(result, {"session": bucket, "weekly": None})
+            with patch.object(usage, "USAGE_ENDPOINT", target):
+                self.assertEqual(usage.claude_usage({}), {"session": {
+                    "percent": 0.5, "resetsAt": "2030-01-01T00:00:00Z",
+                }, "weekly": None})
+            self.assertEqual(target_authorization, ["Bearer synthetic-test-authorization"])
 
 
 class CodexRequestTests(unittest.TestCase):
