@@ -60,10 +60,10 @@ Scope {
         onTriggered: root.writeWaiting()
     }
 
-    // Makes the folder once; a save that comes first waits for it.
+    // Makes the folder owner-only (mode 700, files 600) once; a save that comes first waits for it.
     Process {
         running: true
-        command: ["mkdir", "-p", root.folder]
+        command: ["sh", Quickshell.shellPath("scripts/private-folder.sh"), root.folder]
         onExited: {
             root.folderExists = true;
             root.writeWaiting();

@@ -7,6 +7,9 @@
 url=$1 parser=$2 dest=$3 parent=$4 missing=$5 notcalendar=$6 savefailed=$7
 
 [ -x "$parser" ] || exit "$missing"
+# Feeds are private: new files get mode 600 and the folder mode 700.
+umask 077
+sh "$(dirname "$0")/private-folder.sh" "$parent" || exit "$savefailed"
 d=$(mktemp -d "$parent/.feed.XXXXXX") || exit 1
 cleanup() { rm -f "$d/feed.ics" "$d/feed.json"; rmdir "$d" 2>/dev/null; }
 
