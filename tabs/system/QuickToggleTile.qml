@@ -59,6 +59,7 @@ Rectangle {
             spacing: 4
 
             Text {
+                textFormat: Text.PlainText
                 text: root.label
                 font.family: Theme.mono
                 font.weight: Font.Medium
@@ -70,6 +71,7 @@ Rectangle {
             }
 
             Text {
+                textFormat: Text.PlainText
                 width: Math.min(implicitWidth, root.width - 18)
                 text: root.sub
                 font.family: Theme.condensed

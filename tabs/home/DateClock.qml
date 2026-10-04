@@ -41,6 +41,7 @@ Item {
             height: 10
 
             Text {
+                textFormat: Text.PlainText
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.dateText
@@ -62,6 +63,7 @@ Item {
             height: 54
 
             Text {
+                textFormat: Text.PlainText
                 id: timeText
                 anchors.left: parent.left
                 anchors.bottom: parent.bottom
@@ -75,6 +77,7 @@ Item {
             }
 
             Text {
+                textFormat: Text.PlainText
                 anchors.left: timeText.right
                 anchors.leftMargin: 6
                 anchors.baseline: timeText.baseline

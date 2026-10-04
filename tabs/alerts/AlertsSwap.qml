@@ -43,6 +43,7 @@ Item {
     }
 
     Text {
+        textFormat: Text.PlainText
         id: outgoing
         text: root.previous
         font: root.font
@@ -55,6 +56,7 @@ Item {
     }
 
     Text {
+        textFormat: Text.PlainText
         id: current
         text: root.shown
         font: root.font

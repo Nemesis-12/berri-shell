@@ -6,6 +6,7 @@ import qs.services
  * back in when `value` changes. The first value shows at once.
  */
 Text {
+    textFormat: Text.PlainText
     id: root
 
     property string value: ""

@@ -278,6 +278,7 @@ Item {
                 }
 
                 Text {
+                    textFormat: Text.PlainText
                     id: appName
                     x: tile.width + 8
                     anchors.verticalCenter: parent.verticalCenter
@@ -289,6 +290,7 @@ Item {
                 }
 
                 Text {
+                    textFormat: Text.PlainText
                     id: timeText
                     anchors.left: appName.right
                     anchors.leftMargin: 8
@@ -301,6 +303,7 @@ Item {
                 }
 
                 Text {
+                    textFormat: Text.PlainText
                     anchors.left: timeText.right
                     anchors.leftMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
@@ -348,6 +351,7 @@ Item {
             }
 
             Text {
+                textFormat: Text.PlainText
                 id: titleText
                 y: 32
                 width: parent.width
@@ -396,6 +400,7 @@ Item {
                         ColorFade on color {}
 
                         Text {
+                            textFormat: Text.PlainText
                             id: label
                             anchors.centerIn: parent
                             text: button.modelData.label

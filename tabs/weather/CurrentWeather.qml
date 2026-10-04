@@ -27,6 +27,7 @@ Item {
         }
 
         Text {
+            textFormat: Text.PlainText
             anchors.verticalCenter: parent.verticalCenter
             text: Weather.ready ? Weather.temperatureC + "°" : "--°"
             font.family: Theme.condensed

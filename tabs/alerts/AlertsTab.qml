@@ -153,6 +153,7 @@ Item {
             clip: true
 
             Text {
+                textFormat: Text.PlainText
                 x: 10
                 y: 84
                 rotation: -90
@@ -181,6 +182,7 @@ Item {
             }
 
             Text {
+                textFormat: Text.PlainText
                 x: bigCount.x + bigCount.width + 8
                 y: 84 - 2 - 9 - 2
                 text: "UNREAD"
@@ -239,6 +241,7 @@ Item {
             }
 
             Text {
+                textFormat: Text.PlainText
                 x: 14 + 17 + 10
                 anchors.verticalCenter: parent.verticalCenter
                 text: "DO NOT DISTURB"
@@ -437,6 +440,7 @@ Item {
                 }
 
                 Text {
+                    textFormat: Text.PlainText
                     x: 14
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - 14 - 6 - turnOff.width - 10
@@ -550,6 +554,7 @@ Item {
                 Fade on opacity  { duration: Theme.stateMs }
 
                 Text {
+                    textFormat: Text.PlainText
                     text: "ALL CAUGHT UP"
                     font.family: Theme.condensed
                     font.pixelSize: 18
@@ -558,6 +563,7 @@ Item {
                 }
 
                 Text {
+                    textFormat: Text.PlainText
                     text: root.filter === "all" ? "NOTHING NEW. NOTIFICATIONS WILL COLLECT HERE." : "NOTHING IN THIS FILTER."
                     font.family: Theme.mono
                     font.pixelSize: 9

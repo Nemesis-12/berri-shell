@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Window
 import Quickshell.Services.Mpris
 import Quickshell.Services.Pipewire
+import "../../logic/ArtUrl.js" as ArtUrl
 import "../../logic/Times.js" as Times
 import qs.common
 import qs.services
@@ -44,7 +45,7 @@ Item {
         if (activePlayer.trackAlbum) parts.push(activePlayer.trackAlbum);
         return parts.join(" · ").toUpperCase();
     }
-    readonly property string artUrl: hasPlayer ? activePlayer.trackArtUrl : ""
+    readonly property string artUrl: ArtUrl.safeArtUrl(hasPlayer ? activePlayer.trackArtUrl : "")
     readonly property real length: hasPlayer ? activePlayer.length : 0
     readonly property bool canSeek: hasPlayer && activePlayer.canSeek && activePlayer.positionSupported
 
@@ -164,6 +165,7 @@ Item {
                         }
 
                         Text {
+                            textFormat: Text.PlainText
                             width: parent.width
                             text: slot.node ? (slot.node.nickname || slot.node.description) : ""
                             color: deviceTile.subColor
@@ -245,6 +247,7 @@ Item {
             anchors.bottomMargin: 14 + 14 + 14
 
             Text {
+                textFormat: Text.PlainText
                 id: elapsed
                 width: implicitWidth
                 height: 61
@@ -544,6 +547,7 @@ Item {
             height: meter.height
 
             Text {
+                textFormat: Text.PlainText
                 x: 12
                 y: 4
                 height: 34

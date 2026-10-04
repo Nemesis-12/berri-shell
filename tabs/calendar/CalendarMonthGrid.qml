@@ -148,6 +148,7 @@ Item {
                     ColorFade on color { duration: Theme.stateMs }
 
                     Text {
+                        textFormat: Text.PlainText
                         id: numberText
                         anchors.centerIn: parent
                         text: cell.day.getDate()
@@ -246,6 +247,7 @@ Item {
                             }
 
                             Text {
+                                textFormat: Text.PlainText
                                 anchors.left: parent.left
                                 anchors.leftMargin: 6
                                 anchors.right: parent.right

@@ -99,6 +99,7 @@ Item {
 
     // Hidden copy of the title used only to measure how many lines a size needs.
     Text {
+        textFormat: Text.PlainText
         id: probe
         width: titleFlick.width
         visible: false
@@ -197,6 +198,7 @@ Item {
             Keys.onEscapePressed: root.escaped()
 
             Text {
+                textFormat: Text.PlainText
                 visible: titleInput.text === ""
                 y: titleInput.topPadding
                 text: "Title"

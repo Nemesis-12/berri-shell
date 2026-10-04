@@ -313,6 +313,7 @@ Item {
 
             // Clock: auto width, fixed at the pill's rounded center.
             Text {
+                textFormat: Text.PlainText
                 id: clockText
                 x: PixelGrid.snap((parent.width - width) / 2, root.dpr)
                 anchors.verticalCenter: parent.verticalCenter
@@ -326,6 +327,7 @@ Item {
 
             // Date: right-aligned against the clock's left edge.
             Text {
+                textFormat: Text.PlainText
                 id: dateText
                 anchors.right: clockText.left
                 anchors.rightMargin: 10
@@ -380,6 +382,7 @@ Item {
                 }
 
                 Text {
+                    textFormat: Text.PlainText
                     anchors.verticalCenter: parent.verticalCenter
                     text: Weather.ready ? Weather.temperatureC + "°" : "--°"
                     font.family: Theme.mono

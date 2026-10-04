@@ -192,6 +192,7 @@ Item {
                 height: 15.4
 
                 Text {
+                    textFormat: Text.PlainText
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width
                     text: row.title

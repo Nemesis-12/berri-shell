@@ -35,6 +35,7 @@ Item {
     }
 
     Text {
+        textFormat: Text.PlainText
         id: name
         x: 14 + 13 + 8
         anchors.verticalCenter: parent.verticalCenter

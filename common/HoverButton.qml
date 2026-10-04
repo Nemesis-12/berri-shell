@@ -56,6 +56,7 @@ Rectangle {
     }
 
     Text {
+        textFormat: Text.PlainText
         id: labelText
         anchors.centerIn: parent
         visible: root.label !== ""

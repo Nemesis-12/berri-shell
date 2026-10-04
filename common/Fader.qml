@@ -56,6 +56,7 @@ Item {
 
         // Normal-color number (top-left) and icon+label (bottom-left).
         Text {
+            textFormat: Text.PlainText
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.topMargin: 10
@@ -82,6 +83,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
             }
             Text {
+                textFormat: Text.PlainText
                 text: root.label
                 font.family: Theme.mono
                 font.weight: Font.DemiBold
@@ -109,6 +111,7 @@ Item {
                 height: track.height
 
                 Text {
+                    textFormat: Text.PlainText
                     anchors.top: parent.top
                     anchors.left: parent.left
                     anchors.topMargin: 10
@@ -135,6 +138,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                     }
                     Text {
+                        textFormat: Text.PlainText
                         text: root.label
                         font.family: Theme.mono
                         font.weight: Font.DemiBold

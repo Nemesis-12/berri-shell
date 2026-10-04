@@ -404,6 +404,7 @@ Item {
                                 ColorFade on color { duration: Theme.stateMs }
 
                                 Text {
+                                    textFormat: Text.PlainText
                                     id: tabLabel
                                     anchors.centerIn: parent
                                     text: tabBtn.modelData.label
@@ -426,6 +427,7 @@ Item {
 
                 // Sub line: e.g. "Wine Lilac applied · 9 themes".
                 Text {
+                    textFormat: Text.PlainText
                     id: subLabel
                     anchors.left: tabsBg.right
                     anchors.leftMargin: 12
@@ -474,6 +476,7 @@ Item {
 
                 // Hint text, right of the sub line, left of the close button.
                 Text {
+                    textFormat: Text.PlainText
                     anchors.right: closeBtn.left
                     anchors.rightMargin: 12
                     anchors.verticalCenter: parent.verticalCenter

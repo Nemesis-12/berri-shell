@@ -48,6 +48,7 @@ Rectangle {
     }
 
     Text {
+        textFormat: Text.PlainText
         id: hash
         anchors.left: dot.right
         anchors.leftMargin: 6
@@ -79,6 +80,7 @@ Rectangle {
         cursorDelegate: Rectangle { width: 1; color: Theme.accentLight }
 
         Text {
+            textFormat: Text.PlainText
             visible: hexInput.text === ""
             anchors.verticalCenter: parent.verticalCenter
             text: "hex"

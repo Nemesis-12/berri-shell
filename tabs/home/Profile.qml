@@ -170,6 +170,7 @@ Item {
             // its font size (Qt's default line box is taller than the pixel
             // size), so the 7px spacing above is the only gap between lines.
             Text {
+                textFormat: Text.PlainText
                 text: root.userName
                 font.family: Theme.condensed
                 font.weight: Font.DemiBold
@@ -182,6 +183,7 @@ Item {
             }
 
             Text {
+                textFormat: Text.PlainText
                 text: root.uptimeText
                 font.family: Theme.mono
                 font.weight: Font.Medium

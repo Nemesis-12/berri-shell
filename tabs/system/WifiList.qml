@@ -116,6 +116,7 @@ Item {
             height: parent.height - header.height - 2
 
             Text {
+                textFormat: Text.PlainText
                 visible: !Networking.wifiEnabled
                 anchors.left: parent.left
                 anchors.top: parent.top
@@ -167,6 +168,7 @@ Item {
                     }
 
                     Text {
+                        textFormat: Text.PlainText
                         visible: !row.editing
                         anchors.verticalCenter: parent.verticalCenter
                         width: Math.max(0, parent.width - 25)
@@ -189,6 +191,7 @@ Item {
                         border.color: Theme.accentLine
 
                         Text {
+                            textFormat: Text.PlainText
                             anchors.left: parent.left
                             anchors.leftMargin: 6
                             anchors.verticalCenter: parent.verticalCenter

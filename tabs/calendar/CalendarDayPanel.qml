@@ -211,6 +211,7 @@ Item {
                     height: 53
 
                     Text {
+                        textFormat: Text.PlainText
                         id: numberText
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.shownDate.getDate()

@@ -64,6 +64,7 @@ Item {
             }
 
             Text {
+                textFormat: Text.PlainText
                 id: number
                 anchors.centerIn: parent
                 text: overlay.mon ? String(overlay.mon.number) : ""
