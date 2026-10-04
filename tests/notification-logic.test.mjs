@@ -102,13 +102,20 @@ test("pop-up queue keeps the newest waiting items", () => {
   assert.deepEqual(ids(old), ["a", "b"]);
 });
 
-test("waiting critical pop-ups survive the limit on other items", () => {
+test("waiting critical pop-ups share a hard limit and take priority over normal items", () => {
   let queue = [item("critical", "X", 0, { urgency: "critical" })];
   for (let i = 1; i <= 21; i++)
     queue = plain(lib.queuePopup(queue, item(`normal-${i}`, "X", i), 20));
-  assert.deepEqual(ids(queue), ["critical", ...Array.from({ length: 20 }, (_, i) => `normal-${i + 2}`)]);
+  assert.deepEqual(ids(queue), ["critical", ...Array.from({ length: 19 }, (_, i) => `normal-${i + 3}`)]);
   assert.deepEqual(ids(plain(lib.queuePopup(queue, item("critical-2", "X", 22, { urgency: "critical" }), 20))),
-    ["critical", ...Array.from({ length: 20 }, (_, i) => `normal-${i + 2}`), "critical-2"]);
+    ["critical", ...Array.from({ length: 18 }, (_, i) => `normal-${i + 4}`), "critical-2"]);
+});
+
+test("one thousand critical pop-ups keep only the newest twenty", () => {
+  let queue = [];
+  for (let i = 0; i < 1000; i++)
+    queue = lib.queuePopup(queue, item(`critical-${i}`, "X", i, { urgency: "critical" }), 20);
+  assert.deepEqual(ids(plain(queue)), Array.from({ length: 20 }, (_, i) => `critical-${980 + i}`));
 });
 
 test("readSaved: defaults on bad input (null, text), drops bad items, clears actions", () => {
@@ -124,4 +131,27 @@ test("readSaved: defaults on bad input (null, text), drops bad items, clears act
   assert.equal(saved.items[0].urgency, "normal");
   assert.deepEqual(saved.items[0].actions, []);
   assert.equal(plain(lib.readSaved({ items: [item("a", "X", 1, { serverId: 7 })] }).items)[0].serverId, 7);
+});
+
+test("restored history cannot retain oversized sender text", () => {
+  const text = "x".repeat(100 * 1024);
+  const restored = plain(lib.readSaved({ items: [item("a", text, 1, { summary: text, body: text, appIcon: text })] })).items[0];
+  assert.equal(restored.appName.length, 256);
+  assert.equal(restored.appIcon.length, 1024);
+  assert.equal(restored.summary.length, 512);
+  assert.equal(restored.body.length, 4096);
+  assert.equal(restored.body.slice(-3), "xxx");
+});
+
+test("saving bounded history excludes sender actions and stays below eight MiB", () => {
+  const text = "\0".repeat(100 * 1024);
+  const snapshot = lib.boundedItem(item("a", text, 1, { summary: text, body: text, appIcon: text,
+    actions: [{ id: "open", label: "Open" }], transient: false }));
+  const saved = plain(lib.savedItems([snapshot]));
+  assert.equal(saved[0].summary.length, 512);
+  assert.equal("actions" in saved[0], false);
+  assert.equal("transient" in saved[0], false);
+  const history = Array.from({ length: 200 }, (_, i) => ({ ...snapshot, id: `n${i}` }));
+  const bytes = Buffer.byteLength(JSON.stringify({ serverEnabled: true, dnd: false, items: lib.savedItems(history) }, null, 2));
+  assert.ok(bytes < 8 * 1024 * 1024, `Saved history is ${bytes} bytes`);
 });

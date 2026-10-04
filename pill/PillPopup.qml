@@ -50,7 +50,7 @@ Item {
     property bool hovered: false
     /** Items that wait, newest last. */
     property var queue: []
-    readonly property int maxQueued: 20
+    readonly property int maxQueued: NotificationLogic.limits.queued
     /** Width of the pill when the card started to grow; the card shrinks back to it. */
     property real startWidth: 124
     property real progress: 0
@@ -88,6 +88,15 @@ Item {
         } else {
             root.queue = NotificationLogic.queuePopup(root.queue, item, root.maxQueued);
         }
+    }
+
+    /** Replaces the same pop-up in place, including its actions. Never adds a queued copy. */
+    function update(item) {
+        if (root.current !== null && root.current.id === item.id) {
+            root.current = item;
+            root.armTimer();
+        }
+        root.queue = root.queue.map(function (n) { return n.id === item.id ? item : n; });
     }
 
     function showNow(item) {
@@ -154,6 +163,7 @@ Item {
     Connections {
         target: Notifications
         function onArrived(item) { root.receive(item); }
+        function onUpdated(item) { root.update(item); }
         function onRemoved(id) { root.drop(id); }
     }
 

@@ -8,6 +8,41 @@
  * The caller passes "now" so nothing here reads the clock.
  */
 
+// One policy for live senders, history, pop-ups and sender-controlled text.
+var limits = { history: 200, live: 200, queued: 20, id: 128, appName: 256,
+    appIcon: 1024, summary: 512, body: 4096, actions: 16, actionId: 128, actionLabel: 256 };
+
+/** Limits text at the sender and saved-state boundaries, in UTF-16 code units. */
+function boundedText(value, max) {
+    return String(value || "").slice(0, max);
+}
+
+/** Builds a bounded snapshot without retaining the sender's action objects. */
+function boundedItem(item) {
+    return {
+        id: boundedText(item.id, limits.id),
+        serverId: item.serverId,
+        appName: boundedText(item.appName, limits.appName),
+        appIcon: boundedText(item.appIcon, limits.appIcon),
+        summary: boundedText(item.summary, limits.summary),
+        body: boundedText(item.body, limits.body),
+        time: item.time, urgency: item.urgency, read: item.read,
+        snoozedUntil: item.snoozedUntil, transient: item.transient,
+        actions: (item.actions || []).slice(0, limits.actions).map(function (action) {
+            return { id: boundedText(action.id, limits.actionId), label: boundedText(action.label, limits.actionLabel) };
+        })
+    };
+}
+
+/** Copies only persistent fields. Sender actions and transient state are never saved. */
+function savedItems(all) {
+    return all.map(function (n) {
+        return { id: n.id, serverId: n.serverId, appName: n.appName, appIcon: n.appIcon,
+            summary: n.summary, body: n.body, time: n.time, urgency: n.urgency,
+            read: n.read, snoozedUntil: n.snoozedUntil };
+    });
+}
+
 /** Newest first. Equal times keep the later-listed item first. */
 function byNewest(a, b) {
     return b.time - a.time;
@@ -145,18 +180,14 @@ function shouldAlert(urgency, dnd) {
     return !dnd || urgency === "critical";
 }
 
-/** Keep all waiting critical pop-ups and the newest other ones. Transient items are not in history. */
+/** Bounds every waiting pop-up, dropping oldest non-critical items first. Updates keep their place. */
 function queuePopup(queue, item, max) {
-    var next = queue.concat([item]);
-    var excess = next.filter(function (n) { return n.urgency !== "critical"; }).length - max;
-    return next.filter(function (n) {
-        if (n.urgency === "critical") return true;
-        if (excess > 0) {
-            excess--;
-            return false;
-        }
-        return true;
-    });
+    var next = upsert(queue, item);
+    while (next.length > max) {
+        var drop = next.findIndex(function (n) { return n.urgency !== "critical"; });
+        next.splice(drop < 0 ? 0 : drop, 1);
+    }
+    return next;
 }
 
 /** Reads the saved object. Bad or partial data gives safe defaults. */
@@ -167,8 +198,8 @@ function readSaved(values) {
     out.dnd = values.dnd === true;
     if (Array.isArray(values.items)) {
         values.items.forEach(function (n) {
-            if (!n || typeof n.id !== "string" || typeof n.time !== "number") return;
-            out.items.push({
+            if (!n || typeof n.id !== "string" || typeof n.time !== "number" || !isFinite(n.time)) return;
+            out.items.push(boundedItem({
                 id: n.id,
                 serverId: typeof n.serverId === "number" ? n.serverId : undefined,
                 appName: String(n.appName || ""),
@@ -180,8 +211,9 @@ function readSaved(values) {
                 read: n.read === true,
                 snoozedUntil: typeof n.snoozedUntil === "number" ? n.snoozedUntil : 0,
                 actions: []   // the sender is gone after a restart, so actions cannot work
-            });
+            }));
         });
     }
+    out.items = cap(out.items, limits.history);
     return out;
 }

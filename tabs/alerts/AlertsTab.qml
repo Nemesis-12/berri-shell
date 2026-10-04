@@ -16,7 +16,7 @@ import qs.services
 Item {
     id: root
 
-    /** Filter in use: "all", "unread" or an app name. */
+    /** Filter key: "all", "unread" or "app:" followed by the sender name. */
     property string filter: "all"
 
     /** Clock for the relative times; set when the tab is shown, then every 30 s while it stays shown. */
@@ -36,13 +36,13 @@ Item {
         return n;
     }
 
-    readonly property string viewName: filter === "all" ? "All notifications" : filter === "unread" ? "Unread" : filter
+    readonly property string viewName: filter === "all" ? "All notifications" : filter === "unread" ? "Unread" : filter.slice(4)
     readonly property string countText: shown.length + (shown.length === 1 ? " ITEM" : " ITEMS")
 
     function matches(item): bool {
         if (root.filter === "all") return true;
         if (root.filter === "unread") return !item.read;
-        return item.appName === root.filter;
+        return "app:" + item.appName === root.filter;
     }
 
     // Rebuilds both models from the store. Called through callLater so a burst of changes runs once.
@@ -52,7 +52,6 @@ Item {
         root.shown = visible;
 
         // Filter rows: All, Unread, then every app of the store.
-        var appCounts = {};
         var apps = Notifications.apps;
         var rows = [
             { key: "all", label: "All", icon: "inbox", appName: "", appIcon: "", count: String(Notifications.totalCount) },
@@ -67,13 +66,13 @@ Item {
         // A filtered app that has no alerts left goes back to All.
         if (root.anyFilterApp) {
             var found = false;
-            for (var f = 0; f < apps.length; f++) if (apps[f].appName === root.filter) found = true;
+            for (var f = 0; f < apps.length; f++) if ("app:" + apps[f].appName === root.filter) found = true;
             if (!found) { root.filter = "all"; return; }
         }
 
         // List: one header per app (newest app first), then its alerts.
         var order = [];
-        var byApp = {};
+        var byApp = Object.create(null);
         for (var i = 0; i < visible.length; i++) {
             var n = visible[i];
             if (!byApp[n.appName]) { byApp[n.appName] = []; order.push(n.appName); }
@@ -95,21 +94,19 @@ Item {
 
     // Marks every alert the filter shows as read.
     function readShown(): void {
-        for (var i = 0; i < root.shown.length; i++) {
-            if (!root.shown[i].read) Notifications.markRead(root.shown[i].id);
-        }
+        Notifications.markReadMany(root.shown.filter(function (n) { return !n.read; })
+            .map(function (n) { return n.id; }));
     }
 
     // Dismisses every alert the filter shows.
     function clearShown(): void {
-        for (var i = 0; i < root.shown.length; i++) Notifications.dismiss(root.shown[i].id);
+        Notifications.dismissMany(root.shown.map(function (n) { return n.id; }));
     }
 
     // Dismisses the alerts of one app that the filter shows.
     function clearApp(appName: string): void {
-        for (var i = 0; i < root.shown.length; i++) {
-            if (root.shown[i].appName === appName) Notifications.dismiss(root.shown[i].id);
-        }
+        Notifications.dismissMany(root.shown.filter(function (n) { return n.appName === appName; })
+            .map(function (n) { return n.id; }));
     }
 
     onFilterChanged: Qt.callLater(root.rebuild)
@@ -322,8 +319,8 @@ Item {
                 iconColor: model.key === "all" ? Theme.fg : model.key === "unread" ? Theme.accentLight : Theme.fg2
                 selected: model.key === "all" ? root.filter === "all"
                     : model.key === "unread" ? root.filter === "unread"
-                    : root.filter === model.appName
-                onClicked: root.filter = model.key.indexOf("app:") === 0 ? model.appName : model.key
+                    : root.filter === model.key
+                onClicked: root.filter = model.key
             }
         }
 
@@ -537,7 +534,7 @@ Item {
                         timeText: Times.ageText(cell.stamp, root.now, "shortCaps")
                         onOpened: if (!cell.read) Notifications.markRead(cell.noteId)
                         onMarkRead: Notifications.markRead(cell.noteId)
-                        onSnooze: Notifications.snooze(cell.noteId, 60)
+                        onSnooze: Notifications.snooze(cell.noteId, Notifications.defaultSnoozeMinutes)
                         onDismiss: Notifications.dismiss(cell.noteId)
                     }
                 }

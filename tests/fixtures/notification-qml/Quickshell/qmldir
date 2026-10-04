@@ -1,0 +1,3 @@
+module Quickshell
+Singleton 1.0 Singleton.qml
+LazyLoader 1.0 LazyLoader.qml
