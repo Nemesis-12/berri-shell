@@ -1,12 +1,9 @@
 // Run: node --test tests/
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import vm from "node:vm";
+import { calendarModule } from "./fixtures/calendar-code.mjs";
 
-const source = fs.readFileSync(new URL("../logic/CalendarSave.js", import.meta.url), "utf8").replace(/^\.pragma library.*$/m, "");
-const lib = vm.createContext({});
-vm.runInContext(source, lib);
+const lib = calendarModule("CalendarSave.js");
 
 test("a saved write keeps the new text and has no error", () => {
   assert.deepEqual({ ...lib.writeOutcome(true, "", "Could not save berri", "old", "new") },
