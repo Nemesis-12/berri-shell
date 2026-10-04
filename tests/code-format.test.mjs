@@ -23,3 +23,18 @@ test("commit age keeps its wording at each time boundary", () => {
     }
     assert.equal(format.ago(new Date(2026, 7, 14, 12), now), "Aug 14");
 });
+
+test("rounded token and cost text picks the unit of the rounded value", () => {
+    for (const [n, expected] of [
+        [42, "42"], [7300, "7.3K"], [99949, "99.9K"], [99950, "100K"], [999499, "999K"],
+        [999500, "1.00M"], [999999, "1.00M"], [1210000, "1.21M"], [99994999, "99.99M"],
+        [99995000, "100M"], [250e6, "250M"]
+    ]) {
+        assert.equal(format.tokens(n), expected, String(n));
+    }
+    for (const [usd, expected] of [
+        [12.4, "$12.40"], [999.99, "$999.99"], [999.996, "$1.0K"], [1234, "$1.2K"]
+    ]) {
+        assert.equal(format.cost(usd), expected, String(usd));
+    }
+});

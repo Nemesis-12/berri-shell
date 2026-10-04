@@ -7,7 +7,7 @@ the global git email or name, or the logged-in GitHub account). Only hash, subje
 folder name and time are kept. GitHub commits come from the cache of
 github-stats.py. The two lists merge by hash, newest first.
 
-The result is cached in $XDG_CACHE_HOME/berri-shell/commits.json for 10 minutes.
+The result is cached in $XDG_CACHE_HOME/berri-shell/commits.json for 10 minutes, or until github.json is newer.
 Output: [{"sha": 7 chars, "message": str, "repo": str, "date": iso8601}, ...]
 With --with-version: {"version": cache file time in milliseconds, "commits": output array}
 """
@@ -102,8 +102,17 @@ def merged() -> list[dict]:
     return sorted(by_hash.values(), key=when, reverse=True)[:5]
 
 
+def github_is_newer() -> bool:
+    """True when the GitHub cache changed after the commits cache was written."""
+    try:
+        return GITHUB_PATH.stat().st_mtime > CACHE_PATH.stat().st_mtime
+    except OSError:
+        return False
+
+
 def main() -> None:
-    cached = read_recent_answer(CACHE_PATH, CACHE_FRESH_S) if "--force" not in sys.argv else None
+    use_cache = "--force" not in sys.argv and not github_is_newer()
+    cached = read_recent_answer(CACHE_PATH, CACHE_FRESH_S) if use_cache else None
     text = cached
     if text is None:
         text = json.dumps(merged())
