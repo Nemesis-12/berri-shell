@@ -64,6 +64,7 @@ class PickerTests(unittest.TestCase):
         qml = self.root / "shell.qml"
         qml.write_text('''import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs.picker
 import qs.tabs.home
 import qs.services
@@ -78,6 +79,11 @@ Scope {
         for (var i = 0; i < children.length; i++) {
             var found = find(children[i], type);
             if (found) return found;
+        }
+        var resources = item.resources || [];
+        for (var j = 0; j < resources.length; j++) {
+            var resource = find(resources[j], type);
+            if (resource) return resource;
         }
         return null;
     }
@@ -155,6 +161,37 @@ Scope {
         onTriggered: {
             if (!check(completions === 1 && addedPath === "", "failed add did not finish exactly once")) return;
             if (!check(Wallpapers.library.length === 0 && notch.pickerOpen, "failed add did not reopen an empty picker")) return;
+            console.log("TEST PASS"); Qt.quit();
+        }
+    }
+''')
+
+    def test_sticker_watcher_detects_changes_without_loading_bytes(self):
+        write_png(self.config / "sticker.png")
+        replacement = self.folder / "replacement.png"
+        write_png(replacement, (190, 80, 30))
+        self.env["PICKER_CHOICE"] = str(replacement)
+        self.run_qml('''
+    Sticker { id: sticker; visible: false }
+    property int changes: 0
+    Process {
+        id: replace
+        command: ["cp", Quickshell.env("PICKER_CHOICE"), sticker.configDirPath + "/sticker.png"]
+    }
+    Timer {
+        interval: 100; running: true
+        onTriggered: {
+            var watcher = find(sticker, "FileView");
+            if (!check(watcher && !watcher.loaded, "watcher loaded image bytes")) return;
+            watcher.fileChanged.connect(function() { changes++; });
+            replace.running = true; verify.restart();
+        }
+    }
+    Timer {
+        id: verify; interval: 200
+        onTriggered: {
+            var watcher = find(sticker, "FileView");
+            if (!check(!watcher.loaded && changes > 0, "watcher did not detect the replacement without reading bytes")) return;
             console.log("TEST PASS"); Qt.quit();
         }
     }
