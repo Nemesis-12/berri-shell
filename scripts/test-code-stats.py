@@ -50,6 +50,49 @@ class CollectedUsageTests(unittest.TestCase):
             self.assertEqual(resumed["models"]["claude"], [{"name": "Sonnet Test", "tokens": 34}])
             self.assertEqual(resumed["days"][-1]["claude"], 34)
 
+    def test_partial_copies_do_not_replace_final_usage_or_merge_distinct_responses(self):
+        scratch = Path(__file__).resolve().parent.parent / "scratchpad"
+        scratch.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as folder:
+            final = Path(folder) / "final.jsonl"
+            copied = Path(folder) / "copied.jsonl"
+            final.write_text(json.dumps(response()) + "\n", encoding="utf-8")
+            copied.write_text("\n".join(json.dumps(message) for message in (
+                response(output=2), response("new-response", output=5),
+            )) + "\n", encoding="utf-8")
+            expected = [34, 19]
+            for paths in ([final, copied], [copied, final]):
+                readings = list(stats.claude_events(paths, dt.date.today()))
+                self.assertEqual(sorted(stats.counted(kinds) for _, _, kinds in readings), sorted(expected))
+                self.assertEqual(sum(stats.counted(kinds) for _, _, kinds in readings), 53)
+
+    def test_codex_running_totals_are_independent_for_each_session(self):
+        scratch = Path(__file__).resolve().parent.parent / "scratchpad"
+        scratch.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as folder:
+            root = Path(folder) / ".codex" / "sessions"
+            root.mkdir(parents=True)
+            timestamp = dt.datetime.now().astimezone().isoformat()
+            turn = {"type": "turn_context", "payload": {"model": "gpt-test"}}
+            total = {"timestamp": timestamp, "payload": {"type": "token_count", "info": {
+                "total_token_usage": {"input_tokens": 100, "cached_input_tokens": 80, "output_tokens": 5},
+            }}}
+            increased = {"timestamp": timestamp, "payload": {"type": "token_count", "info": {
+                "total_token_usage": {"input_tokens": 110, "cached_input_tokens": 80, "output_tokens": 7},
+            }}}
+            for name in ("first", "second"):
+                (root / f"{name}.jsonl").write_text("\n".join(json.dumps(event) for event in (
+                    turn, total, total, increased,
+                )) + "\n", encoding="utf-8")
+            with patch.object(Path, "home", return_value=Path(folder)), \
+                 patch.object(stats, "load_prices", return_value=({}, {})):
+                result = stats.collect()
+            self.assertEqual(result["usage"]["codex"], {
+                period: {"tokens": 74, "cost": 0.0} for period in ("today", "week", "month")
+            })
+            self.assertEqual(result["models"]["codex"], [{"name": "GPT-Test", "tokens": 74}])
+            self.assertEqual(result["unpricedModels"]["codex"], ["gpt-test"])
+
 
 if __name__ == "__main__":
     unittest.main()
