@@ -17,6 +17,7 @@ import qs.common
  *   unreadCount, totalCount, snoozedCount
  *   markRead(id), markAllRead(), snooze(id, minutes = 60), unsnoozeAll(),
  *   dismiss(id), clearGroup(appName), clearAll(), invokeAction(id, actionId)
+ *   markReadMany(ids), dismissMany(ids): one history change per bulk action
  *   dnd, setDnd(on)
  *   removed(id): the item left the store or the sender closed it
  *   arrived(item): a new notification that should pop up. With do not disturb
@@ -66,6 +67,7 @@ Singleton {
     property var expiresAtById: Object.create(null)
     property int counter: 0
     property bool pendingCommit: false
+    property bool pendingSave: false
 
     function setDnd(on: bool): void {
         if (root.dnd === on) return;
@@ -75,6 +77,14 @@ Singleton {
 
     function markRead(id: string): void {
         root.commit(Logic.patch(root.all, id, { read: true }));
+    }
+
+    /** Marks the Alerts filter's items read in one history change. */
+    function markReadMany(ids): void {
+        var selected = new Set(ids);
+        root.commit(root.all.map(function (n) {
+            return selected.has(n.id) && !n.read ? Object.assign({}, n, { read: true }) : n;
+        }));
     }
 
     function markAllRead(): void {
@@ -94,6 +104,13 @@ Singleton {
     function dismiss(id: string): void {
         root.closeLive(id);
         root.commit(Logic.remove(root.all, id));
+    }
+
+    /** Closes the Alerts filter's senders and removes its items in one change. */
+    function dismissMany(ids): void {
+        var selected = new Set(ids);
+        ids.forEach(function (id) { root.closeLive(id); });
+        root.commit(root.all.filter(function (n) { return !selected.has(n.id); }));
     }
 
     function clearGroup(appName: string): void {
@@ -140,7 +157,10 @@ Singleton {
         if (next.length > root.maxItems || next.length < before.length) {
             var kept = Object.create(null);
             root.all.forEach(function (n) { kept[n.id] = true; });
-            before.forEach(function (n) { if (!kept[n.id]) root.removed(n.id); });
+            before.forEach(function (n) {
+                // A sender that becomes transient keeps its pop-up, but loses history.
+                if (!kept[n.id] && !(root.live[n.id] && root.live[n.id].transient)) root.removed(n.id);
+            });
         }
         root.pendingCommit = true;
         Qt.callLater(root.flush);
@@ -237,6 +257,7 @@ Singleton {
         }
         root.setExpiry(id, n, item.urgency);
         if (!n.transient) root.commit(Logic.upsert(root.all, item));
+        else if (old) root.commit(Logic.remove(root.all, id));
         if (!isNew) root.updated(item);
         if (isNew && Logic.shouldAlert(item.urgency, root.dnd)) root.arrived(item);
     }
@@ -276,16 +297,32 @@ Singleton {
         root.armExpireTimer();
     }
 
+    // Defers serialization as well as the file write until the burst ends.
     function save(): void {
-        saved.save({ serverEnabled: root.serverEnabled, dnd: root.dnd,
-            items: root.all.map(function (n) { return Object.assign({}, n, { actions: [] }); }) });
+        root.pendingSave = true;
+        saveTimer.restart();
     }
 
-    // Saved history. The wait of 300 ms groups the many refresh() saves.
+    // Serializes the latest history once after 300 ms without a save request.
+    function writeSaved(): void {
+        if (!root.pendingSave) return;
+        root.pendingSave = false;
+        saveTimer.stop();
+        saved.save({ serverEnabled: root.serverEnabled, dnd: root.dnd,
+            items: Logic.savedItems(root.all) });
+    }
+
+    Timer {
+        id: saveTimer
+        interval: 300
+        onTriggered: root.writeSaved()
+    }
+
+    // The store groups serialization; SavedState still makes the write atomic.
     SavedState {
         id: saved
         name: "notifications"
-        waitMs: 300
+        waitMs: 0
         onLoaded: values => {
             var restored = Logic.readSaved(values);
             root.serverEnabled = restored.serverEnabled;

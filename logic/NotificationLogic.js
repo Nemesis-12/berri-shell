@@ -19,15 +19,27 @@ function boundedText(value, max) {
 
 /** Builds a bounded snapshot without retaining the sender's action objects. */
 function boundedItem(item) {
-    return Object.assign({}, item, {
+    return {
         id: boundedText(item.id, limits.id),
+        serverId: item.serverId,
         appName: boundedText(item.appName, limits.appName),
         appIcon: boundedText(item.appIcon, limits.appIcon),
         summary: boundedText(item.summary, limits.summary),
         body: boundedText(item.body, limits.body),
+        time: item.time, urgency: item.urgency, read: item.read,
+        snoozedUntil: item.snoozedUntil, transient: item.transient,
         actions: (item.actions || []).slice(0, limits.actions).map(function (action) {
             return { id: boundedText(action.id, limits.actionId), label: boundedText(action.label, limits.actionLabel) };
         })
+    };
+}
+
+/** Copies only persistent fields. Sender actions and transient state are never saved. */
+function savedItems(all) {
+    return all.map(function (n) {
+        return { id: n.id, serverId: n.serverId, appName: n.appName, appIcon: n.appIcon,
+            summary: n.summary, body: n.body, time: n.time, urgency: n.urgency,
+            read: n.read, snoozedUntil: n.snoozedUntil };
     });
 }
 
