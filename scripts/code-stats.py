@@ -197,6 +197,8 @@ def collect() -> dict:
         if not root.is_dir():
             continue
         for day, model, kinds in events(recent_logs(root, cutoff), oldest):
+            if day > today:  # A wrong clock or copied log can hold a future date.
+                continue
             tokens = counted(kinds)
             if day >= first_day:
                 per_day[day.isoformat()][agent] += tokens

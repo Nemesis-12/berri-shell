@@ -4,17 +4,18 @@
 var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-/** 1210000 -> "1.21M", 7300 -> "7.3K", 42 -> "42". */
+/** 1210000 -> "1.21M", 7300 -> "7.3K", 42 -> "42". The unit follows the rounded value: 999999 -> "1.00M". */
 function tokens(n) {
-    if (n >= 100e6) return Math.round(n / 1e6) + "M";
-    if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
-    if (n >= 1e3) return (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + "K";
+    if (n >= 99.995e6) return Math.round(n / 1e6) + "M";
+    if (n >= 999500) return (n / 1e6).toFixed(2) + "M";
+    if (n >= 99950) return Math.round(n / 1e3) + "K";
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
     return String(Math.round(n));
 }
 
-/** Estimated cost: 12.4 -> "$12.40", 1234 -> "$1.2K". */
+/** Estimated cost: 12.4 -> "$12.40", 1234 -> "$1.2K", 999.996 -> "$1.0K". */
 function cost(usd) {
-    if (usd >= 1000) return "$" + (usd / 1000).toFixed(1) + "K";
+    if (Math.round(usd * 100) >= 100000) return "$" + (usd / 1000).toFixed(1) + "K";
     return "$" + usd.toFixed(2);
 }
 
