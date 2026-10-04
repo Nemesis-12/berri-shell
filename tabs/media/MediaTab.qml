@@ -36,8 +36,8 @@ Item {
     Binding { target: MediaPlayer; property: "seeking"; value: scrub.pressed }
 
     readonly property bool hasPlayer: activePlayer !== null
-    readonly property bool isPlaying: hasPlayer && activePlayer.playbackState === MprisPlaybackState.Playing
-    readonly property string titleText: hasPlayer ? (activePlayer.trackTitle || "Unknown title") : "Nothing playing"
+    readonly property bool isPlaying: MediaPlayer.isPlaying
+    readonly property string titleText: MediaPlayer.titleText
     readonly property string subtitleText: {
         if (!hasPlayer) return "";
         const parts = [];
@@ -58,8 +58,6 @@ Item {
     PwObjectTracker {
         objects: root.outputs.concat(root.defaultSink ? [root.defaultSink] : [])
     }
-
-    readonly property real volume: (defaultSink && defaultSink.audio) ? Math.max(0, Math.min(1, defaultSink.audio.volume)) : 0
 
     function outputKind(node) {
         const text = (node.name + " " + node.description + " " + node.nickname).toLowerCase();
@@ -509,103 +507,11 @@ Item {
     }
 
     // ---------- Volume meter ----------
-    Rectangle {
-        id: meter
+    VolumeFader {
         x: root.middleX + root.middleWidth + root.gap
         y: 0
         width: root.volumeWidth
         height: root.height
-        color: Theme.card
-        clip: true
-
-        // Level being shown: follows Pipewire, except while dragging.
-        property real level: root.volume
-        property bool dragging: meterArea.pressed
-
-        Behavior on level {
-            enabled: !meter.dragging
-            NumberAnimation { duration: Theme.stateMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
-        }
-
-        Rectangle {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: parent.height * meter.level
-            color: Theme.accentLight
-        }
-
-        // The number and the icon/label are drawn twice: normal colors, and
-        // Theme.onAccent clipped to the fill so the covered part stays readable.
-        component MeterText: Item {
-            id: layer
-            property color textColor: Theme.fg
-
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: meter.height
-
-            Text {
-                textFormat: Text.PlainText
-                x: 12
-                y: 4
-                height: 34
-                text: Math.round(meter.level * 100)
-                color: layer.textColor
-                font.family: Theme.condensed
-                font.weight: Font.Medium
-                font.pixelSize: 40
-                lineHeightMode: Text.FixedHeight
-                lineHeight: 34
-            }
-
-            Column {
-                x: 12
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 14
-                spacing: 10
-
-                SideLabel {
-                    text: "VOLUME"
-                    tone: layer.textColor
-                    weight: Font.DemiBold
-                }
-
-                Icon {
-                    name: "volume-2"
-                    size: 17
-                    strokeWidth: 1.8
-                    color: layer.textColor
-                }
-            }
-        }
-
-        MeterText { textColor: Theme.fg }
-
-        Item {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: parent.height * meter.level
-            clip: true
-
-            MeterText { textColor: Theme.onAccent }
-        }
-
-        MouseArea {
-            id: meterArea
-            anchors.fill: parent
-            cursorShape: Qt.SizeVerCursor
-
-            function setLevel(mouseY) {
-                const value = Math.max(0, Math.min(1, 1 - mouseY / height));
-                meter.level = value;
-                if (root.defaultSink && root.defaultSink.audio)
-                    root.defaultSink.audio.volume = value;
-            }
-            onPressed: mouse => setLevel(mouse.y)
-            onPositionChanged: mouse => { if (pressed) setLevel(mouse.y); }
-        }
+        expanded: true
     }
 }
