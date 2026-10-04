@@ -16,7 +16,7 @@
  * { text, start, end }, with original input offsets and an exclusive end.
  * It reports the last accepted rule for each field, before all-day/task rules
  * clear times or ends. A time range supplies the same match for time and end.
- * Defaults have no match. "tonight" supplies both date and time unless a time
+ * Defaults have no match. An end clock before the start clock means the next day (the saved fields add that day). "tonight" supplies both date and time unless a time
  * was already read. named has kind, date, time, color and repeat booleans for
  * form updates. named.time is false when all-day rules clear the time.
  * Callers can use matches.color.text.toLowerCase() for the entered color tag.
@@ -138,6 +138,8 @@ var STEPS = [
         o.time = toTime(m[1], m[2], ap1);
         o.end = toTime(m[4], m[5], m[6]);
         if (!o.time) return false;
+        // "9-5pm": a start that gets its am/pm from the end must not fall after the end.
+        if (!m[3] && m[6] && o.end && o.time > o.end) o.time = toTime(m[1], m[2], "am") || o.time;
     } },
     { name: "am/pm time", fields: ["time"], when: hasNoTime, pattern: /\s(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?=\s)/i,
       accept: function (m, o) {
@@ -228,7 +230,7 @@ function parse(text, referenceDate, selectedDate, weekStart, clock24) {
     if (o.type === "allday") { o.time = null; o.end = null; }
     if (o.type === "reminder" && !o.time) o.time = "09:00";
     if (o.type === "event" && o.time && !o.end) {
-        o.end = Times.pad(Math.min(23, +o.time.slice(0, 2) + 1)) + ":" + o.time.slice(3);
+        o.end = Times.pad((+o.time.slice(0, 2) + 1) % 24) + ":" + o.time.slice(3);
     }
     if (o.type !== "event") o.end = null;
 

@@ -18,7 +18,7 @@ function fromText(text, { base = opening, touched = {}, current = base, clock24 
   return {
     fields: plain(draft.fields),
     hint: plain(calendar.buildHint(draft.line, touched, draft.fields, clock24, false)),
-    stored: plain(calendar.toStoredFields(draft.fields, original)),
+    stored: plain(calendar.toStoredFields(draft.fields, original, base)),
   };
 }
 
@@ -168,4 +168,68 @@ test("time fields keep five-minute steps and wrap at midnight", () => {
   assert.equal(calendar.stepTime("00:00", -1), "23:55");
   assert.equal(calendar.stepTime("", 1), "09:00");
   assert.equal(calendar.stepTime("", -1), "09:00");
+});
+
+test("a title edit keeps the due day and due time of a task", () => {
+  const task = { type: "task", date: "2026-10-01", time: "09:00", end: "17:00", color: "accent", repeat: "none", byDay: [] };
+  const original = { kind: "task", date: "2026-10-01", time: "09:00", end: "17:00", endDate: "2026-10-02", color: "accent" };
+  const draft = fromText("Renamed", { base: task, current: task, original });
+  assert.deepEqual(
+    { time: draft.stored.time, end: draft.stored.end, endDate: draft.stored.endDate },
+    { time: "09:00", end: "17:00", endDate: "2026-10-02" },
+  );
+});
+
+test("an unchanged color keeps the stored color, a changed color is saved", () => {
+  const inherited = { ...opening, color: "green" };
+  const original = { kind: "event", date: "2026-09-30", endDate: null, color: "accent" };
+  const kept = calendar.toStoredFields({ ...inherited, raw: "A", title: "A" }, original, inherited);
+  assert.equal(kept.color, "accent");
+  const changed = calendar.toStoredFields({ ...inherited, color: "red", raw: "A", title: "A" }, original, inherited);
+  assert.equal(changed.color, "red");
+  assert.equal(calendar.toStoredFields({ ...inherited, raw: "A", title: "A" }, null, null).color, "green");
+});
+
+test("a stored end is never before the start", () => {
+  const stored = (extra, original = null, base = null) => plain(calendar.toStoredFields(
+    { ...opening, title: "A", raw: "A", ...extra }, original, base));
+  const early = stored({ time: "23:00", end: "01:00", date: "2026-10-02" });
+  assert.deepEqual({ end: early.end, endDate: early.endDate }, { end: "01:00", endDate: "2026-10-03" });
+  const same = stored({ time: "09:00", end: "09:00" });
+  assert.deepEqual({ end: same.end, endDate: same.endDate }, { end: null, endDate: null });
+  const normal = stored({ time: "09:00", end: "17:00" });
+  assert.deepEqual({ end: normal.end, endDate: normal.endDate }, { end: "17:00", endDate: null });
+});
+
+test("a title edit keeps an event that crosses midnight, a new end resets its span", () => {
+  const night = { ...opening, date: "2026-10-02", time: "23:00", end: "01:00" };
+  const original = { kind: "event", date: "2026-10-02", time: "23:00", end: "01:00", endDate: "2026-10-03", color: "accent" };
+  const kept = plain(calendar.toStoredFields({ ...night, title: "A", raw: "A" }, original, night));
+  assert.deepEqual({ end: kept.end, endDate: kept.endDate }, { end: "01:00", endDate: "2026-10-03" });
+  const edited = plain(calendar.toStoredFields({ ...night, end: "23:30", title: "A", raw: "A" }, original, night));
+  assert.deepEqual({ end: edited.end, endDate: edited.endDate }, { end: "23:30", endDate: null });
+});
+
+test("typing a time into a task title drops the old due time", () => {
+  const task = { type: "task", date: "2026-10-01", time: "09:00", end: "17:00", color: "accent", repeat: "none", byDay: [] };
+  assert.equal(fromText("task Pay rent 2pm", { base: task, current: task }).fields.end, "");
+});
+
+test("saving a title edit writes the same DUE and DTSTART lines", () => {
+  const format = calendarModule("CalendarFormat.js");
+  const text = format.writeCalendar({ ...format.emptyCalendar(), items: [] });
+  const ics = text.replace("END:VCALENDAR", [
+    "BEGIN:VTODO", "UID:t1", "DTSTAMP:20260901T000000Z", "SUMMARY:Report",
+    "DTSTART;TZID=Europe/Berlin:20261001T090000", "DUE;TZID=Europe/Berlin:20261002T170000", "END:VTODO", "END:VCALENDAR"].join("\r\n"));
+  const doc = format.readCalendar(ics, "Europe/Berlin");
+  const item = doc.items[0];
+  const base = { type: "task", date: item.date, time: item.time, end: item.end || "", color: "accent", repeat: "none", byDay: [] };
+  const draft = calendar.fromText(base, {}, base, "Report v2", today, false);
+  const changes = calendar.toStoredFields(draft.fields, item, base);
+  doc.items[0] = format.Items.applyChanges(item, plain(changes));
+  const lines = format.writeCalendar(doc).split(/\r?\n/);
+  assert.ok(lines.includes("DTSTART;TZID=Europe/Berlin:20261001T090000"));
+  assert.ok(lines.includes("DUE;TZID=Europe/Berlin:20261002T170000"));
+  assert.ok(lines.includes("SUMMARY:Report v2"));
+  assert.ok(!lines.some((l) => l.startsWith("X-BERRI-COLOR")));
 });

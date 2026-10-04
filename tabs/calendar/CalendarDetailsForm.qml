@@ -237,7 +237,7 @@ Item {
             return;
         }
         if (!root.canSave) return;
-        var fields = CalendarDraft.toStoredFields(root.draft, root.original);
+        var fields = CalendarDraft.toStoredFields(root.draft, root.original, root.base);
         var ok = root.isEdit ? Calendar.update(root.uid, fields) : Calendar.add(fields);
         if (ok) {
             CalendarColors.lastColor = root.color;
