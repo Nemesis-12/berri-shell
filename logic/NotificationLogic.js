@@ -145,18 +145,14 @@ function shouldAlert(urgency, dnd) {
     return !dnd || urgency === "critical";
 }
 
-/** Keep all waiting critical pop-ups and the newest other ones. Transient items are not in history. */
+/** Bounds every waiting pop-up, dropping oldest non-critical items first. Updates keep their place. */
 function queuePopup(queue, item, max) {
-    var next = queue.concat([item]);
-    var excess = next.filter(function (n) { return n.urgency !== "critical"; }).length - max;
-    return next.filter(function (n) {
-        if (n.urgency === "critical") return true;
-        if (excess > 0) {
-            excess--;
-            return false;
-        }
-        return true;
-    });
+    var next = upsert(queue, item);
+    while (next.length > max) {
+        var drop = next.findIndex(function (n) { return n.urgency !== "critical"; });
+        next.splice(drop < 0 ? 0 : drop, 1);
+    }
+    return next;
 }
 
 /** Reads the saved object. Bad or partial data gives safe defaults. */
