@@ -1,7 +1,8 @@
 """Usage readings keep percentages and recover from failed requests."""
+import contextlib
+import datetime as dt
 import importlib.util
 import json
-import contextlib
 import subprocess
 import sys
 import tempfile
@@ -61,6 +62,22 @@ class PercentageTests(unittest.TestCase):
 
 
 class ClaudeRequestTests(unittest.TestCase):
+    def test_rate_limit_keeps_cached_usage_and_delays_next_request(self):
+        login = json.dumps({"claudeAiOauth": {"accessToken": "synthetic-test-authorization"}})
+        bucket = {"percent": 12.5, "resetsAt": "2030-01-01T00:00:00Z"}
+        cache = {"claude": {"session": bucket, "weekly": None}}
+        with usage_server(429) as (endpoint, authorization), \
+             patch.object(Path, "read_text", return_value=login), \
+             patch.object(usage, "USAGE_ENDPOINT", endpoint):
+            before = usage.now_utc()
+            result = usage.claude_usage(cache)
+            self.assertEqual(result, {"session": bucket, "weekly": None})
+            retry = dt.datetime.fromisoformat(cache["claude"]["retryAfter"])
+            self.assertGreaterEqual(retry - before, dt.timedelta(minutes=10))
+            self.assertLess(retry - before, dt.timedelta(minutes=10, seconds=1))
+            self.assertEqual(usage.claude_usage(cache), result)
+            self.assertEqual(authorization, ["Bearer synthetic-test-authorization"])
+
     def test_redirect_keeps_authorization_at_original_server(self):
         login = json.dumps({"claudeAiOauth": {"accessToken": "synthetic-test-authorization"}})
         bucket = {"percent": 12.5, "resetsAt": "2030-01-01T00:00:00Z"}
@@ -81,6 +98,27 @@ class ClaudeRequestTests(unittest.TestCase):
 
 
 class CodexRequestTests(unittest.TestCase):
+    def test_child_exit_during_startup_keeps_cached_usage(self):
+        scratch = Path(__file__).resolve().parent.parent / "scratchpad"
+        scratch.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as folder:
+            child = Path(folder) / "codex"
+            child.write_text(f"#!{sys.executable}\n", encoding="utf-8")
+            child.chmod(0o755)
+            start_child = subprocess.Popen
+
+            # The real child exits before the parent can write initialization.
+            def launch(*args, **kwargs):
+                proc = start_child(*args, **kwargs)
+                proc.wait(timeout=1)
+                return proc
+
+            bucket = {"percent": 12.5, "resetsAt": "2030-01-01T00:00:00Z"}
+            with patch.object(usage.shutil, "which", return_value=str(child)), \
+                 patch.object(usage.subprocess, "Popen", side_effect=launch):
+                self.assertEqual(usage.codex_usage({"codex": {"session": bucket, "weekly": None}}),
+                                 {"session": bucket, "weekly": None})
+
     def test_complete_responses_accept_notifications_and_split_bytes(self):
         child = textwrap.dedent('''\
             import json
