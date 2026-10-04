@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell.Networking
 import qs.common
 import qs.services
+import "../../logic/ListSync.js" as ListSync
 
 /**
  * Wi-Fi network list (ticket 16): swaps into the toggle grid's cell when the
@@ -18,8 +19,11 @@ Item {
     /** The Quickshell.Networking WifiDevice this list reads and drives, or null. */
     property var wifiDevice: null
 
-    /** True while this list is the active panel (drives scanning and focus). */
+    /** True while this list is the active panel. */
     property bool open: false
+
+    /** True while the list is open and on screen. Hidden lists do no work. */
+    readonly property bool active: open && visible
 
     /** True while a network's password row is being typed into, so the panel
      *  window can grab real keyboard focus only for that moment. */
@@ -38,15 +42,19 @@ Item {
 
     function refreshNetworks() {
         if (!root.wifiDevice) {
-            root.networks = [];
+            if (root.networks.length > 0) root.networks = [];
             return;
         }
+        // While a password row is open, a new model would destroy the row
+        // and lose what the user typed.
+        if (root.editingNetwork !== "") return;
         var list = root.wifiDevice.networks.values.slice();
         list.sort(function (a, b) {
             if (a.connected !== b.connected) return a.connected ? -1 : 1;
             return b.signalStrength - a.signalStrength;
         });
-        root.networks = list;
+        // The same list again must not rebuild the rows.
+        if (!ListSync.sameItems(root.networks, list)) root.networks = list;
     }
 
     function cancelEditing() {
@@ -78,22 +86,29 @@ Item {
         return "wifi-zero";
     }
 
-    onWifiDeviceChanged: if (open) refreshNetworks()
+    onWifiDeviceChanged: if (active) refreshNetworks()
 
-    onOpenChanged: {
-        if (open) {
+    onActiveChanged: {
+        if (active) {
             refreshNetworks();
         } else {
             cancelEditing();
         }
-        if (wifiDevice) wifiDevice.scannerEnabled = open;
+    }
+
+    // Scanning runs while the list is on screen. It stays on while another
+    // monitor still shows a list.
+    RadioRequest {
+        kind: "scan"
+        device: root.wifiDevice
+        wanted: root.active && root.wifiDevice !== null
     }
 
     Timer {
         id: scanPoll
         interval: 2000
         repeat: true
-        running: root.open && root.wifiDevice !== null
+        running: root.active && root.wifiDevice !== null
         onTriggered: root.refreshNetworks()
     }
 

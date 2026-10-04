@@ -6,6 +6,7 @@ Item {
     property var command: []
     property bool running: false
     property var stdout: null
+    signal exited(int exitCode, int exitStatus)
     onRunningChanged: {
         if (running) {
             ProcessLog.commands = ProcessLog.commands.concat([command.slice()]);

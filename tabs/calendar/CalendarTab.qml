@@ -39,7 +39,7 @@ Item {
     property bool showCalendars: false
     property string saveError: ""
 
-    Binding { target: Calendar; property: "saveErrorShown"; value: root.visible && root.panelOpen }
+    WhileVisible { service: Calendar; counter: "saveErrorViewers"; when: root.panelOpen }
 
     Connections {
         target: Calendar
