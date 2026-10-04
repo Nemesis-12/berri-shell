@@ -106,6 +106,17 @@ Scope {
         self.assertEqual(errors, [], output)
         return output
 
+    # Replace only the Wayland window boundary for the offscreen transition check.
+    def use_offscreen_wallpaper_window(self):
+        path = self.root / "picker/WallpaperLayer.qml"
+        source = path.read_text().replace("import Quickshell.Wayland", "import QtQuick.Window as QtWindow")
+        source = source.replace("PanelWindow {", "QtWindow.Window {")
+        source = source.replace("screen: modelData", "width: 320; height: 180; visible: true")
+        source = "\n".join(line for line in source.splitlines() if not any(
+            setting in line for setting in ("exclusionMode:", "WlrLayershell.",
+                                           "anchors { top: true", "mask: Region")))
+        path.write_text(source)
+
     def test_closed_picker_creates_no_images_and_open_picker_loads_cards(self):
         image = self.folder / "wallpaper.png"
         write_png(image)
@@ -212,6 +223,7 @@ Scope {
         for choice in (invalid_in_folder, invalid_plain, self.folder / "missing.png", valid):
             with self.subTest(choice=choice.name):
                 self.env["PICKER_CHOICE"] = str(choice)
+                self.env["PICKER_EXPECTED"] = str(self.config / "sticker.png" if choice == valid else old)
                 self.run_qml('''
     Sticker { id: sticker; visible: false }
     Timer {
@@ -223,7 +235,11 @@ Scope {
     }
     Timer {
         id: verify; interval: 200
-        onTriggered: { console.log("TEST PASS"); Qt.quit(); }
+        onTriggered: {
+            if (!check(sticker.stickerPath === Quickshell.env("PICKER_EXPECTED"),
+                       "sticker view does not show the saved choice")) return;
+            console.log("TEST PASS"); Qt.quit();
+        }
     }
 ''')
                 if choice == valid:
@@ -234,3 +250,43 @@ Scope {
                     self.assertEqual(old.read_bytes(), old_bytes)
                     self.assertEqual(sorted(p.name for p in self.config.glob("sticker.*")), ["sticker.jpg"])
                 self.assertEqual(list(self.config.glob(".sticker-copy.*")), [])
+
+    def test_second_wallpaper_choice_ends_idle_with_the_second_image(self):
+        self.use_offscreen_wallpaper_window()
+        for name, color in (("first.png", (190, 80, 30)), ("second.png", (10, 20, 30))):
+            write_png(self.folder / name, color)
+        self.env["PICKER_FIRST"] = str(self.folder / "first.png")
+        self.env["PICKER_SECOND"] = str(self.folder / "second.png")
+        self.run_qml('''
+    WallpaperLayer { id: wallpapers }
+    property int stage: 0
+    Timer {
+        interval: 20; running: true; repeat: true
+        onTriggered: {
+            if (!Wallpapers.loaded || wallpapers.instances.length === 0) return;
+            var layer = wallpapers.instances[0];
+            var items = layer.contentItem.children;
+            var effect = null;
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].modeIndex !== undefined) effect = items[i];
+            }
+            if (stage === 0) {
+                Theme.transitioning = true;
+                Wallpapers.assign(Quickshell.env("PICKER_FIRST"), [layer.modelData.name]);
+                Theme.transitioning = false;
+                Theme.wallpaperTransition("A", 1000); stage = 1;
+            } else if (stage === 1 && effect.visible && effect.progress > 0) {
+                Wallpapers.assign(Quickshell.env("PICKER_SECOND"), [layer.modelData.name]);
+                stage = 2;
+            } else if (stage === 2 && layer.currentPath === Quickshell.env("PICKER_SECOND")
+                       && layer.screenImage.opacity === 1 && layer.hiddenImage.opacity === 0) {
+                if (!check(!effect.visible && layer.pendingWallpaperChoice === null,
+                           "transition did not end idle")) return;
+                if (!check(layer.screenImage.source.toString().endsWith("/second.png")
+                           && layer.hiddenImage.source.toString() === "",
+                           "second image did not replace the first")) return;
+                console.log("TEST PASS"); Qt.quit();
+            }
+        }
+    }
+''')
