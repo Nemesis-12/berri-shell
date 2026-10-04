@@ -132,3 +132,13 @@ test("readSaved: defaults on bad input (null, text), drops bad items, clears act
   assert.deepEqual(saved.items[0].actions, []);
   assert.equal(plain(lib.readSaved({ items: [item("a", "X", 1, { serverId: 7 })] }).items)[0].serverId, 7);
 });
+
+test("restored history cannot retain oversized sender text", () => {
+  const text = "x".repeat(100 * 1024);
+  const restored = plain(lib.readSaved({ items: [item("a", text, 1, { summary: text, body: text, appIcon: text })] })).items[0];
+  assert.equal(restored.appName.length, 256);
+  assert.equal(restored.appIcon.length, 1024);
+  assert.equal(restored.summary.length, 512);
+  assert.equal(restored.body.length, 4096);
+  assert.equal(restored.body.slice(-3), "xxx");
+});
