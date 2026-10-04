@@ -192,9 +192,8 @@ function queuePopup(queue, item, max) {
 
 /** Reads the saved object. Bad or partial data gives safe defaults. */
 function readSaved(values) {
-    var out = { serverEnabled: false, dnd: false, items: [] };
+    var out = { dnd: false, items: [] };
     if (!values || typeof values !== "object") return out;
-    out.serverEnabled = values.serverEnabled === true;
     out.dnd = values.dnd === true;
     if (Array.isArray(values.items)) {
         values.items.forEach(function (n) {

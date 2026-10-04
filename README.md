@@ -56,11 +56,19 @@ For daily use, add one autostart entry to Hyprland. Replace the path with your c
 exec-once = qs -n -d -p /absolute/path/to/berri-shell
 ```
 
-Use only one autostart entry and one clone for daily use. Do not stop the Omarchy app menu. If another notification server runs, remove its notification-server launch before you use berri for notifications.
+Use only one autostart entry and one clone for daily use. Keep the Omarchy app menu running. berri is the sole notification server. See "Notification ownership".
 
 For a manual toggle, run `./toggle.sh` from this clone. It stops this configuration if it runs, or starts it again.
 
 Read logs with `qs log -i <instance-id>`. Find the ID with `qs list --all`.
+
+## Notification ownership
+
+berri starts its notification server by default. There is no setting to turn it off. berri must be the sole owner of `org.freedesktop.Notifications` on the session D-Bus. Other notification daemons must not run. This includes `mako`, which Omarchy ships. Before you start berri, remove other notification-daemon launches from your autostart configuration or user services. Keep the Omarchy app menu running.
+
+If another daemon already owns the name, berri leaves it running. Quickshell writes a warning to the berri log and retries when that daemon releases the name. Until then, the other daemon receives notifications; berri receives none. Use `qs log -i <instance-id>` to check for the warning. berri does not stop or disable other daemons.
+
+The old `serverEnabled` key in saved notification state is ignored. Saved history and do not disturb state still load. No saved-data reset is needed.
 
 ## Use
 
