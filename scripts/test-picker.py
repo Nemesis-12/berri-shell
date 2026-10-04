@@ -56,6 +56,8 @@ class PickerTests(unittest.TestCase):
             target = self.folder / name.lower()
             target.mkdir(mode=0o700)
             self.env[f"XDG_{name}_DIR" if name == "RUNTIME" else f"XDG_{name}_HOME"] = str(target)
+        # Keep Unix socket names short while all runtime files stay in this worktree.
+        self.env["XDG_RUNTIME_DIR"] = "/proc/self/cwd/runtime"
 
     # Run only the supplied QML fixture, with no desktop shell or live input.
     def run_qml(self, body):
@@ -88,15 +90,13 @@ Scope {
     Timer { interval: 5000; running: true; onTriggered: { console.error("TEST TIMEOUT"); Qt.quit(); } }
 ''' + body + "\n}")
         result = subprocess.run([QS, "--no-color", "-p", str(qml)], env=self.env,
-                                capture_output=True, text=True, timeout=10)
+                                cwd=self.folder, capture_output=True, text=True, timeout=10)
         output = result.stdout + result.stderr
         self.assertEqual(result.returncode, 0, output)
         self.assertIn("TEST PASS", output, output)
         self.assertNotIn("TEST FAIL", output, output)
         self.assertNotIn("TEST TIMEOUT", output, output)
-        # A long worktree path can exceed the Unix socket path limit. No IPC is used.
-        errors = [line for line in output.splitlines()
-                  if "ERROR" in line and "Failed to start IPC server" not in line]
+        errors = [line for line in output.splitlines() if "ERROR" in line]
         self.assertEqual(errors, [], output)
         return output
 
@@ -123,6 +123,39 @@ Scope {
                 if (!check(imageCount(notch) === 0, "closed picker kept card images")) return;
                 console.log("TEST PASS"); Qt.quit();
             }
+        }
+    }
+''')
+
+    def test_unsupported_wallpaper_finishes_once_and_reopens_picker(self):
+        invalid = self.folder / "choice.txt"
+        invalid.write_text("unsupported")
+        self.env["PICKER_CHOICE"] = str(invalid)
+        self.run_qml('''
+    FloatingWindow {
+        implicitWidth: 1000; implicitHeight: 500
+        ThemeNotch { id: notch; anchors.centerIn: parent; pickerTab: "walls" }
+    }
+    property int completions: 0
+    property string addedPath: "unset"
+    Timer {
+        interval: 100; running: true
+        onTriggered: {
+            var carousel = find(notch, "WallpapersCarousel");
+            var chooser = find(carousel, "ImagePicker");
+            carousel.addDone.connect(function(path) { completions++; addedPath = path; });
+            notch.openPicker(); notch.closeAtOnce();
+            chooser.chosen(Quickshell.env("PICKER_CHOICE"));
+            chooser.finished();
+            verify.restart();
+        }
+    }
+    Timer {
+        id: verify; interval: 200
+        onTriggered: {
+            if (!check(completions === 1 && addedPath === "", "failed add did not finish exactly once")) return;
+            if (!check(Wallpapers.library.length === 0 && notch.pickerOpen, "failed add did not reopen an empty picker")) return;
+            console.log("TEST PASS"); Qt.quit();
         }
     }
 ''')
