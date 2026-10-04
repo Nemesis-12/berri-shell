@@ -122,15 +122,15 @@ function readProcesses(text, previous) {
         if (!counters || !isFinite(mem) || mem < 0) continue;
         current.processes[pid] = { name: name, ticks: counters.ticks, started: counters.started };
         var before = previous && previous.processes[pid];
-        if (!before || before.name !== name || before.started !== counters.started
-                || elapsed <= 0 || counters.ticks < before.ticks) continue;
         var row = combined[name] || { name: name, cpu: 0, mem: 0 };
-        row.cpu += 100 * (counters.ticks - before.ticks) / elapsed;
+        if (before && before.name === name && before.started === counters.started
+                && elapsed > 0 && counters.ticks >= before.ticks)
+            row.cpu += 100 * (counters.ticks - before.ticks) / elapsed;
         row.mem += mem;
         combined[name] = row;
     }
     return { sample: current, rows: Object.keys(combined).map(function (name) { return combined[name]; })
-        .sort(function (a, b) { return b.cpu - a.cpu; }).slice(0, 8) };
+        .sort(function (a, b) { return b.cpu - a.cpu || b.mem - a.mem; }).slice(0, 8) };
 }
 
 /** Keep the first two large, distinct disks from df output. */

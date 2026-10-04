@@ -75,13 +75,14 @@ test("process rows use CPU ticks from the last sample and sort by them", () => {
     + `201\t0.5\tcode\t${procLine(201, "code", 320, 0, 1000)}\n`
     + `301\t0.2\tbackup\t${procLine(301, "backup", 5, 0, 1000)}\n`;
   const before = readings.readProcesses(first, null);
-  assert.deepEqual(Array.from(before.rows), []);
+  assert.deepEqual(Array.from(before.rows, row => [row.name, row.cpu, row.mem]),
+    [["firefox", 0, 3], ["code", 0, 0.5], ["backup", 0, 0.2]]);
   const after = readings.readProcesses(second, before.sample);
   assert.deepEqual(Array.from(after.rows, row => [row.name, row.cpu, row.mem]),
     [["code", 30, 0.5], ["firefox", 20, 3], ["backup", 0.5, 0.2]]);
 });
 
-test("process rows ignore new and restarted PIDs until the next sample", () => {
+test("new and restarted PIDs show memory without a false CPU delta", () => {
   const first = "cpu 100 0 0 900\n"
     + `101\t1.0\tfirefox\t${procLine(101, "firefox", 100, 0, 1000)}\n`;
   const second = "cpu 500 0 0 1500\n"
@@ -89,7 +90,8 @@ test("process rows ignore new and restarted PIDs until the next sample", () => {
     + `202\t2.0\tcode\t${procLine(202, "code", 300, 0, 1500)}\n`;
   const before = readings.readProcesses(first, null);
   const after = readings.readProcesses(second, before.sample);
-  assert.deepEqual(Array.from(after.rows, row => [row.name, row.cpu]), []);
+  assert.deepEqual(Array.from(after.rows, row => [row.name, row.cpu, row.mem]),
+    [["code", 0, 2], ["firefox", 0, 1]]);
 });
 
 test("disk rows keep two large unique devices", () => {
