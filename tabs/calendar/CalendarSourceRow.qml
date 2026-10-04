@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Shapes
 import "../../logic/Times.js" as Times
 import qs.common
 import qs.services
@@ -154,29 +153,13 @@ Item {
 
             ColorFade on color {}
 
-            Item {
+            Icon {
                 anchors.centerIn: parent
-                width: 13
-                height: 13
-
-                Shape {
-                    width: 24
-                    height: 24
-                    scale: 13 / 24
-                    transformOrigin: Item.TopLeft
-                    antialiasing: true
-                    preferredRendererType: Shape.CurveRenderer
-
-                    ShapePath {
-                        strokeColor: refreshMouse.containsMouse ? Theme.fg : Theme.mute
-                        ColorFade on strokeColor {}
-                        strokeWidth: 1.8
-                        fillColor: "transparent"
-                        capStyle: ShapePath.RoundCap
-                        joinStyle: ShapePath.RoundJoin
-                        PathSvg { path: "M 21 12 a 9 9 0 1 1 -3 -6.7 L 21 8 M 21 3 v 5 h -5" }
-                    }
-                }
+                name: "rotate-cw"
+                size: 13
+                strokeWidth: 1.8
+                color: refreshMouse.containsMouse ? Theme.fg : Theme.mute
+                ColorFade on color {}
             }
 
             MouseArea {
