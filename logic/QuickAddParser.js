@@ -112,6 +112,7 @@ var STEPS = [
     { name: "color", fields: ["color"], pattern: /\s#([0-9a-f]{6}|[0-9a-f]{3})(?=\s)/i,
       accept: function (m, o) {
         var h = m[1].toLowerCase();
+        if (isIssueNumber(h)) return false;
         if (h.length === 3) h = h.charAt(0) + h.charAt(0) + h.charAt(1) + h.charAt(1) + h.charAt(2) + h.charAt(2);
         o.color = "#" + h;
     } },
