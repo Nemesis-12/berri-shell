@@ -147,9 +147,7 @@ def claude_bucket(bucket) -> dict | None:
         percent = float(utilization)
     except Exception:
         return None
-    # The endpoint reports a 0-100 percentage; guard against a stray 0-1 fraction.
-    if percent <= 1:
-        percent *= 100
+    # OAuth usage reports percentages, including values below 1 percent.
     return {"percent": max(0.0, min(100.0, percent)), "resetsAt": str(resets_at)}
 
 
