@@ -224,6 +224,7 @@ test("looksLikeCalendar, unusedColor and shortHash", () => {
 test("curlError gives a short message", () => {
   assert.equal(Queries.curlError(6), "Cannot reach the host");
   assert.equal(Queries.curlError(28), "Timed out");
+  assert.equal(Queries.curlError(47), "Too many redirects");
   assert.equal(Queries.curlError(999), "Download failed");
 });
 
