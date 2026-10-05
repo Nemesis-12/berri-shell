@@ -267,10 +267,8 @@ Item {
                     color: Theme.fg
                     x: dndRow.on ? 17 : 3
                     Behavior on x {
-                        NumberAnimation {
+                        EmphasizedMotion {
                             duration: 200
-                            easing.type: Easing.BezierSpline
-                            easing.bezierCurve: Theme.emphasizedCurve
                         }
                     }
                 }
@@ -300,11 +298,9 @@ Item {
             add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.listMs } }
             remove: Transition { NumberAnimation { property: "opacity"; to: 0; duration: Theme.hoverMs } }
             displaced: Transition {
-                NumberAnimation {
+                StandardMotion {
                     property: "y"
                     duration: Theme.listMs
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: Theme.standardCurve
                 }
             }
 
@@ -419,10 +415,8 @@ Item {
 
             property real shownAmount: Notifications.dnd ? 1 : 0
             Behavior on shownAmount {
-                NumberAnimation {
+                StandardMotion {
                     duration: 260
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: Theme.standardCurve
                 }
             }
 
@@ -493,11 +487,9 @@ Item {
                     }
                 }
                 displaced: Transition {
-                    NumberAnimation {
+                    StandardMotion {
                         property: "y"
                         duration: 240
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: Theme.standardCurve
                     }
                 }
 

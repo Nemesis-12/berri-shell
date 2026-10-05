@@ -1,6 +1,7 @@
 import QtQuick
 import "../../logic/PixelGrid.js" as PixelGrid
 import "../../logic/SystemFormat.js" as Fmt
+import "../../logic/Times.js" as Times
 import qs.common
 import qs.services
 
@@ -474,7 +475,7 @@ Item {
                 font.pixelSize: 10
                 font.letterSpacing: 10 * 0.06
                 color: Theme.dim
-                text: Fmt.uptime(SystemStats.uptimeSeconds)
+                text: "UP " + Times.duration(SystemStats.uptimeSeconds)
             }
         }
 

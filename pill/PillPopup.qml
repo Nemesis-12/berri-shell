@@ -60,13 +60,11 @@ Item {
         && Hyprland.focusedMonitor.name === screenName
 
     // Moves progress to `to` from where it is now (also when it is mid-way).
-    NumberAnimation {
+    SpringMotion {
         id: slide
         target: root
         property: "progress"
         duration: 500
-        easing.type: Easing.BezierSpline
-        easing.bezierCurve: Theme.springCurve
         // The shrink has ended: the next waiting item may grow.
         onFinished: if (!root.open && root.current !== null) root.showNext()
     }

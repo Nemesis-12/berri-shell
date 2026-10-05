@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell.Services.UPower
 import qs.common
+import "../logic/Times.js" as Times
 
 /**
  * Battery cell: level, charging state and time left from UPower, a 3px
@@ -23,22 +24,18 @@ Item {
     readonly property string timeLabel: {
         if (!device) return "";
         if (state === UPowerDeviceState.Charging && device.timeToFull > 0)
-            return formatDuration(device.timeToFull) + " TO FULL";
+            return Times.duration(device.timeToFull, timeWording) + " TO FULL";
         if (state === UPowerDeviceState.FullyCharged || (!UPower.onBattery && percent >= 100))
             return "FULL";
         if (state === UPowerDeviceState.Discharging && device.timeToEmpty > 0)
-            return formatDuration(device.timeToEmpty) + " LEFT";
+            return Times.duration(device.timeToEmpty, timeWording) + " LEFT";
         return "";
     }
 
     readonly property string suffixText: timeLabel.length > 0 ? ("% · " + timeLabel) : "%"
 
-    function formatDuration(seconds) {
-        var totalMinutes = Math.round(seconds / 60);
-        var h = Math.floor(totalMinutes / 60);
-        var m = totalMinutes % 60;
-        return h + "H " + m + "M";
-    }
+    /** Wording of the time left: "10H 24M" (Times.duration). */
+    readonly property var timeWording: ({ round: true, pad: false, days: false })
 
     Item {
         id: content
@@ -97,10 +94,8 @@ Item {
                 color: Theme.accent
 
                 Behavior on width {
-                    NumberAnimation {
+                    StandardMotion {
                         duration: 400
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: Theme.standardCurve
                     }
                 }
             }

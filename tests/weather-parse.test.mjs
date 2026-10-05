@@ -19,6 +19,7 @@ vm.runInContext(timesSource, times);
 const format = vm.createContext({ Times: times });
 vm.runInContext(formatSource, format);
 lib.WeatherFormat = format;
+lib.Times = times;
 vm.runInContext(source, lib);
 
 // Two days of hourly data is enough to test the slicing.

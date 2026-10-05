@@ -77,7 +77,7 @@ Item {
             color: Theme.fg
 
             Behavior on x {
-                NumberAnimation { duration: 450; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+                StandardMotion { duration: 450 }
             }
         }
 

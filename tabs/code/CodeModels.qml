@@ -60,7 +60,7 @@ Rectangle {
                 property real lastTokens: 0
                 // Animated share (0..1) of the bar; the width follows the live layout.
                 property real share: Math.min(1, lastTokens / root.peak)
-                Behavior on share { NumberAnimation { duration: 450; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve } }
+                Behavior on share { StandardMotion { duration: 450 } }
                 onEntryChanged: if (entry) { lastName = entry.name; lastTokens = entry.tokens; }
                 Component.onCompleted: if (entry) { lastName = entry.name; lastTokens = entry.tokens; }
 

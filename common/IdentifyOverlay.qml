@@ -75,10 +75,8 @@ Item {
                 opacity: root.showing ? 1 : 0
 
                 Behavior on opacity {
-                    NumberAnimation {
+                    StandardMotion {
                         duration: Theme.stateMs
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: Theme.standardCurve
                     }
                 }
 

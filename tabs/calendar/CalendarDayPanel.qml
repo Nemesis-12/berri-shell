@@ -119,13 +119,11 @@ Item {
     SequentialAnimation {
         id: dayChange
 
-        NumberAnimation {
+        StandardMotion {
             target: root
             property: "dayFade"
             to: 0
             duration: 100
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: Theme.standardCurve
         }
         ScriptAction {
             script: {
@@ -135,13 +133,11 @@ Item {
                 root.resetting = false;
             }
         }
-        NumberAnimation {
+        StandardMotion {
             target: root
             property: "dayFade"
             to: 1
-            duration: 180
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: Theme.standardCurve
+            duration: Theme.hoverMs
         }
     }
 
@@ -423,7 +419,7 @@ Item {
             opacity: rows.count === 0 ? root.dayFade : 0
 
             Behavior on opacity {
-                NumberAnimation { duration: 180; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+                StandardMotion { duration: Theme.hoverMs }
             }
         }
     }

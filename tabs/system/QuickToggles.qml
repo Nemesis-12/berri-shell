@@ -140,7 +140,7 @@ Item {
         enabled: !root.listOpen
 
         Behavior on opacity {
-            NumberAnimation { duration: 250; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+            StandardMotion { duration: 250 }
         }
 
         QuickToggleTile {
@@ -233,7 +233,7 @@ Item {
         enabled: root.wifiListOpen
 
         Behavior on opacity {
-            NumberAnimation { duration: 250; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+            StandardMotion { duration: 250 }
         }
 
         onBackClicked: root.wifiListOpen = false
@@ -250,7 +250,7 @@ Item {
         enabled: root.btListOpen
 
         Behavior on opacity {
-            NumberAnimation { duration: 250; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+            StandardMotion { duration: 250 }
         }
 
         onBackClicked: root.btListOpen = false

@@ -16,11 +16,8 @@ QtObject {
     /** Icons shown in the pill before the "+N" chip. */
     readonly property int shownCount: 3
 
-    /** Mock --c-hover: raised mixed 8% toward the foreground. */
-    readonly property color hoverFill: Qt.rgba(
-        Theme.raised.r * 0.92 + Theme.fg.r * 0.08,
-        Theme.raised.g * 0.92 + Theme.fg.g * 0.08,
-        Theme.raised.b * 0.92 + Theme.fg.b * 0.08, 1)
+    /** Hover fill: the same theme color as every other hover (Theme.hover). */
+    readonly property color hoverFill: Theme.hover
 
     /** The hover fill at zero alpha, so a fade in or out keeps the same hue. */
     readonly property color hoverFillClear: Qt.rgba(hoverFill.r, hoverFill.g, hoverFill.b, 0)

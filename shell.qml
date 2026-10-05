@@ -185,7 +185,7 @@ ShellRoot {
         // switch, then applies the theme (28a visual check).
         function theme(key: string, mode: string): void {
             Theme.transitionMode = mode;
-            Theme.apply(key, true, true, Theme.transitionDurationMs);
+            Theme.apply(key, { wallpaper: true, durationMs: Theme.transitionDurationMs });
             Theme.transitionMode = "random";
         }
     }

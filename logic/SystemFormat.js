@@ -16,15 +16,6 @@ function usedOfTotal(usedGb, totalGb) {
     return usedText + " / " + totalText + " " + unit;
 }
 
-/** "UP 4H 12M", or "UP 2D 3H" from a day on. */
-function uptime(seconds) {
-    var minutes = Math.floor(seconds / 60);
-    var days = Math.floor(minutes / 1440);
-    var hours = Math.floor((minutes % 1440) / 60);
-    if (days > 0) return "UP " + days + "D " + hours + "H";
-    return "UP " + hours + "H " + (minutes % 60) + "M";
-}
-
 /** MB/s with one decimal, none from 100 up. */
 function rate(mbPerSecond) {
     return mbPerSecond >= 100 ? String(Math.round(mbPerSecond)) : mbPerSecond.toFixed(1);

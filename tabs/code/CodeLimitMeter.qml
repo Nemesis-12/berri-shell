@@ -25,7 +25,7 @@ Item {
     readonly property real fillHeight: Math.max(0, Math.min(root.height, fillShare * root.height))
     clip: true
     Behavior on fillShare {
-        NumberAnimation { duration: 450; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+        StandardMotion { duration: 450 }
     }
 
     Rectangle {

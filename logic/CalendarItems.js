@@ -20,9 +20,7 @@ function toKey(value) {
     return Times.dayKey(value);
 }
 
-function addDays(key, days) {
-    return Times.keyOfDayNum(Times.dayNum(key) + days);
-}
+var addDays = Times.addDays;
 
 /** A preset key or "#rrggbb" (lowercase, #rgb expanded), else null. */
 function cleanColor(value) {

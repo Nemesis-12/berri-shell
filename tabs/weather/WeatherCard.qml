@@ -90,10 +90,8 @@ Item {
 
                 ColorFade on color {}
                 Behavior on rotation {
-                    NumberAnimation {
+                    EmphasizedMotion {
                         duration: 700
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: [0.2, 0, 0, 1, 1, 1]
                     }
                 }
             }

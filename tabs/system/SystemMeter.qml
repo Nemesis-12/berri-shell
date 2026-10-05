@@ -1,4 +1,5 @@
 import QtQuick
+import qs.common
 import qs.services
 
 /**
@@ -28,10 +29,8 @@ Rectangle {
         color: root.fillColor
 
         Behavior on width {
-            NumberAnimation {
+            StandardMotion {
                 duration: Theme.stateMs
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: Theme.standardCurve
             }
         }
     }

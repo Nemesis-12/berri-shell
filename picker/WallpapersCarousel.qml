@@ -176,10 +176,8 @@ Item {
         // Centers the focused card: -(focusIndex * step - (viewport - card) / 2).
         x: PixelGrid.snap(-(root.focusIndex * root.cardStep - (root.viewportWidth - root.cardWidth) / 2), root.dpr)
         Behavior on x {
-            NumberAnimation {
+            SpringMotion {
                 duration: 500
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: Theme.springCurve
             }
         }
 
@@ -207,10 +205,8 @@ Item {
                     opacity: focused ? 1 : 0.7
 
                     Behavior on scale {
-                        NumberAnimation {
+                        SpringMotion {
                             duration: 450
-                            easing.type: Easing.BezierSpline
-                            easing.bezierCurve: Theme.springCurve
                         }
                     }
                     Fade on opacity { duration: Theme.stateMs }
@@ -317,10 +313,8 @@ Item {
                 opacity: focused ? 1 : 0.7
 
                 Behavior on scale {
-                    NumberAnimation {
+                    SpringMotion {
                         duration: 450
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: Theme.springCurve
                     }
                 }
                 Fade on opacity { duration: Theme.stateMs }

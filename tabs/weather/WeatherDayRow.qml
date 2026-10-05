@@ -22,10 +22,8 @@ Rectangle {
     property real pick: root.selected ? 1 : 0
 
     Behavior on pick {
-        NumberAnimation {
+        StandardMotion {
             duration: 200
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: Theme.standardCurve
         }
     }
 

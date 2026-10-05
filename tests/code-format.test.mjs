@@ -38,3 +38,11 @@ test("rounded token and cost text picks the unit of the rounded value", () => {
         assert.equal(format.cost(usd), expected, String(usd));
     }
 });
+
+test("time left uses the shared duration text", () => {
+    const now = new Date(2026, 8, 30, 12);
+    assert.equal(format.timeLeft(new Date(now.getTime() + 7500 * 1000), now), "2H 05M");
+    assert.equal(format.timeLeft(new Date(now.getTime() + (3 * 86400 + 4 * 3600) * 1000), now), "3D 4H");
+    assert.equal(format.timeLeft(new Date(now.getTime() - 1), now), "--");
+    assert.equal(format.timeLeft(null, now), "--");
+});

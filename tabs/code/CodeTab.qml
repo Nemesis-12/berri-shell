@@ -77,7 +77,7 @@ Item {
             height: parent.height
             name: "Session"
             percent: root.sessionPercent
-            timeLeft: Fmt.timeLeft(new Date(root.sessionResetAt), AgentUsage.now).toUpperCase()
+            timeLeft: Fmt.timeLeft(new Date(root.sessionResetAt), AgentUsage.now)
         }
 
         CodeLimitMeter {
@@ -86,7 +86,7 @@ Item {
             height: parent.height
             name: "Weekly"
             percent: root.weeklyPercent
-            timeLeft: Fmt.timeLeft(new Date(root.weeklyResetAt), AgentUsage.now).toUpperCase()
+            timeLeft: Fmt.timeLeft(new Date(root.weeklyResetAt), AgentUsage.now)
         }
 
         Column {

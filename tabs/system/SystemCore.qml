@@ -1,5 +1,6 @@
 import QtQuick
 import "../../logic/PixelGrid.js" as PixelGrid
+import qs.common
 import qs.services
 
 /**
@@ -26,10 +27,8 @@ Item {
     }
 
     Behavior on level {
-        NumberAnimation {
+        StandardMotion {
             duration: Theme.stateMs
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: Theme.standardCurve
         }
     }
 

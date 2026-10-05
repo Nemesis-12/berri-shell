@@ -5,7 +5,8 @@ import Quickshell.Io
 import qs.common
 import qs.picker
 import qs.services
-import "../../logic/SystemFormat.js" as Fmt
+import "../../logic/PixelGrid.js" as PixelGrid
+import "../../logic/Times.js" as Times
 
 /**
  * Profile cell (ticket 13): account picture on the left, username and
@@ -34,10 +35,10 @@ Item {
 
     /** "" means no picture file was found; show the solid fallback square. */
     property string pictureSource: ""
-    readonly property string uptimeText: Fmt.uptime(SystemUsage.uptimeSeconds)
+    readonly property string uptimeText: "UP " + Times.duration(SystemUsage.uptimeSeconds)
 
     /** Output scale of the screen this cell is on; used to decode images at native sharpness. */
-    readonly property real dpr: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
+    readonly property real dpr: PixelGrid.dpr(Screen.devicePixelRatio)
 
     /** Click on the picture; Pill closes the panel then calls openPictureChooser(). */
     signal pictureClicked()

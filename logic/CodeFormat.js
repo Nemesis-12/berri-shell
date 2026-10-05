@@ -25,15 +25,12 @@ function localDate(iso) {
     return new Date(+p[0], +p[1] - 1, +p[2]);
 }
 
-/** Time left until `at` (Date), like "3d 4h" or "2h 05m"; "--" when unknown or passed. */
+/** Time left until `at` (Date), like "3D 4H" or "2H 05M" (Times.duration); "--" when unknown or passed. */
 function timeLeft(at, now) {
     if (!at || isNaN(at.getTime())) return "--";
     var ms = at.getTime() - now.getTime();
     if (!(ms > 0)) return "--";
-    var m = Math.floor(ms / 60000);
-    var d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60), mi = m % 60;
-    if (d > 0) return d + "d " + h + "h";
-    return h + "h " + (mi < 10 ? "0" : "") + mi + "m";
+    return Times.duration(ms / 1000);
 }
 
 /** "12m ago", "3h ago", "yesterday", "5d ago" or "Sep 14". */

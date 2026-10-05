@@ -247,10 +247,8 @@ Item {
         // land on a whole device pixel (no jitter at scale 2).
         property real restHalfWidth: (root.pointerInside ? root.hoverWidth : root.collapsedWidth) / 2
         Behavior on restHalfWidth {
-            NumberAnimation {
+            SpringMotion {
                 duration: root.widenMs
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: Theme.springCurve
             }
         }
         readonly property real halfWidth: restHalfWidth
@@ -343,10 +341,8 @@ Item {
                 transform: Translate {
                     x: root.hovered ? 0 : 8
                     Behavior on x {
-                        NumberAnimation {
+                        SpringMotion {
                             duration: 500
-                            easing.type: Easing.BezierSpline
-                            easing.bezierCurve: Theme.springCurve
                         }
                     }
                 }
@@ -365,10 +361,8 @@ Item {
                 transform: Translate {
                     x: root.hovered ? 0 : -8
                     Behavior on x {
-                        NumberAnimation {
+                        SpringMotion {
                             duration: 500
-                            easing.type: Easing.BezierSpline
-                            easing.bezierCurve: Theme.springCurve
                         }
                     }
                 }
@@ -409,10 +403,8 @@ Item {
                 transform: Translate {
                     x: root.hovered ? 0 : -8
                     Behavior on x {
-                        NumberAnimation {
+                        SpringMotion {
                             duration: 500
-                            easing.type: Easing.BezierSpline
-                            easing.bezierCurve: Theme.springCurve
                         }
                     }
                 }

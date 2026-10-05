@@ -22,10 +22,8 @@ Item {
 
     Behavior on fillValue {
         enabled: !root.dragging
-        NumberAnimation {
+        StandardMotion {
             duration: Theme.stateMs
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: Theme.standardCurve
         }
     }
 
