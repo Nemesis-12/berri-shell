@@ -119,8 +119,10 @@ function normalize(item) {
     }
     if (item.repeat === "none") {
         item.interval = 1; item.byDay = []; item.until = null; item.count = null; item.exdates = []; item.ruleRest = null;
+        item.zoned = null; item.changedOccurrences = [];
     }
     if (item.repeat !== "weekly") item.byDay = [];
+    if (item.repeat !== "monthly") item.monthWeekday = null;
     return item;
 }
 
@@ -157,6 +159,11 @@ var fieldChecks = {
     repeat: function (v) { return REPEATS.indexOf(v) >= 0 ? v : undefined; },
     interval: function (v) { return isWhole(v, 1) ? v : undefined; },
     byDay: listOf(function (d) { return isWhole(d, 0) && d <= 6; }),
+    monthWeekday: function (v) {
+        if (v === null) return v;
+        if (!v || !isWhole(v.day, 0) || v.day > 6 || !isWhole(Math.abs(v.nth), 1) || Math.abs(v.nth) > 5) return undefined;
+        return { nth: v.nth, day: v.day };
+    },
     until: function (v) { return v === null || isDayKey(v) ? v : undefined; },
     count: function (v) { return v === null || isWhole(v, 1) ? v : undefined; },
     exdates: listOf(isDayKey),
@@ -165,6 +172,22 @@ var fieldChecks = {
     status: function (v) { return v === null || isText(v) ? v : undefined; },
     stamp: function (v) { return v === null || isText(v) ? v : undefined; },
     ruleRest: function (v) { return v === null || isText(v) ? v : undefined; },
+    zoned: function (v) {
+        if (v === null) return v;
+        if (!v || !isDayKey(v.date) || !isClock(v.time) || !(v.length === null || isWhole(v.length, 0)) ||
+            !Array.isArray(v.offsets) || v.offsets.length === 0) return undefined;
+        var offsets = [];
+        for (var i = 0; i < v.offsets.length; i++) {
+            var o = v.offsets[i];
+            if (!Array.isArray(o) || !isDayKey(o[0]) || !isWhole(Math.abs(o[1]), 0)) return undefined;
+            offsets.push([o[0], o[1]]);
+        }
+        return { date: v.date, time: v.time, length: v.length, offsets: offsets };
+    },
+    changedOccurrences: listOf(function (c) {
+        return !!c && isDayKey(c.from) && typeof c.cancelled === "boolean" && orNull(isText)(c.title) &&
+            orNull(isDayKey)(c.date) && orNull(isClock)(c.time) && orNull(isClock)(c.end) && orNull(isDayKey)(c.endDate);
+    }),
     raw: listOf(isText),
     rawChildren: listOf(function (c) { return Array.isArray(c); })
 };
@@ -189,8 +212,9 @@ function storedItem(fields) {
     var item = {
         uid: "", kind: "event", title: "",
         date: null, time: null, end: null, endDate: null,
-        color: "accent", repeat: "none", interval: 1, byDay: [], until: null, count: null,
+        color: "accent", repeat: "none", interval: 1, byDay: [], monthWeekday: null, until: null, count: null,
         exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: null, ruleRest: null,
+        zoned: null, changedOccurrences: [],
         raw: [], rawChildren: []
     };
     takeCheckedFields(item, fields);
@@ -224,6 +248,8 @@ function applyChanges(item, changes) {
         next.ruleRest = null;
         if (next.repeat === "none") next.exdates = [];
     }
+    // The zone data describes the imported start; a new start or repeat makes it wrong.
+    if (next.date !== item.date || next.time !== item.time || next.end !== item.end || next.repeat !== item.repeat) next.zoned = null;
     next.stamp = stampNow();
     return normalize(next);
 }
@@ -290,6 +316,15 @@ function snoozeTarget(time, dateKey, amount, nowKey, nowTime) {
     return { date: date, time: Times.pad(Math.floor(mins / 60)) + ":" + Times.pad(mins % 60) };
 }
 
+/** Day number of the nth weekday (day 0 = Sunday) of a month. nth is 1 to 5, or -1 for the last. Null when the month has no such day. */
+function weekdayInMonth(year, month, nth, day) {
+    var first = Math.floor(Date.UTC(year, month - 1, 1) / 86400000);
+    var last = first + daysInMonth(year, month) - 1;
+    var n = nth > 0 ? first + ((day - weekdayOf(first) + 7) % 7) + (nth - 1) * 7
+        : last - ((weekdayOf(last) - day + 7) % 7) + (nth + 1) * 7;
+    return n >= first && n <= last ? n : null;
+}
+
 /** Start days (as day numbers) of a repeating item that fall in [fromN, toN]. */
 function startDays(item, fromN, toN) {
     var out = [];
@@ -329,7 +364,10 @@ function startDays(item, fromN, toN) {
             var idx = monthIndex + k * iv;
             var y = Math.floor(idx / 12), mo = idx % 12 + 1;
             base = Math.floor(Date.UTC(y, mo - 1, 1) / 86400000);
-            list = sd <= daysInMonth(y, mo) ? [base + sd - 1] : []; // no such day this month: skipped, as RFC 5545 says
+            if (item.monthWeekday) {
+                var weekday = weekdayInMonth(y, mo, item.monthWeekday.nth, item.monthWeekday.day);
+                list = weekday === null ? [] : [weekday];
+            } else list = sd <= daysInMonth(y, mo) ? [base + sd - 1] : []; // no such day this month: skipped, as RFC 5545 says
         } else {
             var yr = sy + k * iv;
             base = Math.floor(Date.UTC(yr, 0, 1) / 86400000);
@@ -364,20 +402,115 @@ function occurrenceOf(item, startN, dayN) {
     };
 }
 
-/** Occurrences of one item on the days from..to (inclusive keys). A multi-day item shows on every day it covers. */
+/** Offset (seconds east of UTC) of a zoned series on a source-zone day: the last table entry on or before that day. */
+function zoneOffsetOn(offsets, key) {
+    var offset = offsets[0][1];
+    for (var i = 1; i < offsets.length && offsets[i][0] <= key; i++) offset = offsets[i][1];
+    return offset;
+}
+
+function clockOfDate(date) {
+    return Times.pad(date.getHours()) + ":" + Times.pad(date.getMinutes());
+}
+
+/** The repeat rule of a zoned series as it runs on source-zone days. The end bound gets one more day: a shown day can be a day earlier. */
+function zonedRule(item) {
+    return { date: item.zoned.date, repeat: item.repeat, interval: item.interval, byDay: item.byDay,
+        monthWeekday: item.monthWeekday, count: item.count, until: item.until ? addDays(item.until, 1) : null };
+}
+
+/** A copy of a zoned item whose date, time, end and endDate are the shown ones of the occurrence on source-zone day wallN. */
+function zonedVariant(item, wallN) {
+    var zoned = item.zoned;
+    var wall = Times.keyOfDayNum(wallN);
+    var startMs = Date.UTC(+wall.slice(0, 4), +wall.slice(5, 7) - 1, +wall.slice(8, 10), +zoned.time.slice(0, 2), +zoned.time.slice(3, 5)) -
+        zoneOffsetOn(zoned.offsets, wall) * 1000;
+    var start = new Date(startMs);
+    var shown = {};
+    for (var k in item) shown[k] = item[k];
+    shown.date = Times.dayKey(start);
+    shown.time = clockOfDate(start);
+    shown.end = null;
+    shown.endDate = null;
+    if (zoned.length) {
+        var end = new Date(startMs + zoned.length * 60000);
+        shown.end = clockOfDate(end);
+        if (Times.dayKey(end) !== shown.date) shown.endDate = Times.dayKey(end);
+    }
+    return shown;
+}
+
+/** The change an imported feed made to the occurrence that starts on `key`, or null. */
+function changeFor(item, key) {
+    var changes = item.changedOccurrences || [];
+    for (var i = 0; i < changes.length; i++) if (changes[i].from === key) return changes[i];
+    return null;
+}
+
+/**
+ * Occurrences of one item on the days from..to (inclusive keys). A multi-day item shows on every day it covers.
+ * A cancelled item has none. An occurrence the feed cancelled has none. An occurrence the feed moved shows at its new time.
+ */
 function expand(item, fromKey, toKey) {
+    if (item.status === "CANCELLED") return [];
     var fromN = Times.dayNum(fromKey), toN = Times.dayNum(toKey);
-    var span = item.endDate && item.time === null ? Times.dayNum(item.endDate) - Times.dayNum(item.date) : 0;
-    var starts = startDays(item, fromN - span, toN);
     var out = [];
-    for (var i = 0; i < starts.length; i++) {
-        if (item.exdates.indexOf(Times.keyOfDayNum(starts[i])) >= 0) continue;
+    function addShownDays(variant, startN) {
+        var span = variant.endDate && variant.time === null ? Times.dayNum(variant.endDate) - Times.dayNum(variant.date) : 0;
         for (var d = 0; d <= span; d++) {
-            var day = starts[i] + d;
-            if (day >= fromN && day <= toN) out.push(occurrenceOf(item, starts[i], day));
+            var day = startN + d;
+            if (day >= fromN && day <= toN) out.push(occurrenceOf(variant, startN, day));
+        }
+    }
+    function addStart(variant, startN) {
+        var key = Times.keyOfDayNum(startN);
+        if (item.exdates.indexOf(key) >= 0) return;
+        var change = changeFor(item, key);
+        if (change && (change.cancelled || change.date !== null)) return;
+        if (change && change.title !== null) {
+            variant = shallowCopy(variant);
+            variant.title = change.title;
+        }
+        addShownDays(variant, startN);
+    }
+    if (item.zoned && item.repeat !== "none") {
+        var walls = startDays(zonedRule(item), fromN - 2, toN + 2);
+        for (var w = 0; w < walls.length; w++) {
+            var shown = zonedVariant(item, walls[w]);
+            var shownN = Times.dayNum(shown.date);
+            if (shownN >= fromN && shownN <= toN && !(item.until && shown.date > item.until)) addStart(shown, shownN);
+        }
+    } else {
+        var span = item.endDate && item.time === null ? Times.dayNum(item.endDate) - Times.dayNum(item.date) : 0;
+        var starts = startDays(item, fromN - span, toN);
+        for (var i = 0; i < starts.length; i++) addStart(item, starts[i]);
+    }
+    var changes = item.changedOccurrences || [];
+    for (var c = 0; c < changes.length; c++) {
+        var change = changes[c];
+        if (change.cancelled || change.date === null || item.exdates.indexOf(change.from) >= 0) continue;
+        var moved = shallowCopy(item);
+        moved.date = change.date;
+        moved.time = change.time;
+        moved.end = change.end;
+        moved.endDate = change.endDate;
+        if (change.title !== null) moved.title = change.title;
+        var first = out.length;
+        addShownDays(moved, Times.dayNum(change.date));
+        for (var m = first; m < out.length; m++) {
+            out[m].occurrenceDate = change.from;
+            out[m].repeat = item.repeat;
+            out[m].recurring = true;
+            out[m].done = item.doneDates.indexOf(change.from) >= 0;
         }
     }
     return out;
+}
+
+function shallowCopy(object) {
+    var copy = {};
+    for (var k in object) copy[k] = object[k];
+    return copy;
 }
 
 /**

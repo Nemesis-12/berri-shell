@@ -205,3 +205,37 @@ fn unknown_zone_keeps_the_written_clock() {
     }
     assert!(json.contains("\"uid\":\"berlin\",\"kind\":\"event\",\"title\":\"berlin\",\"location\":\"\",\"date\":\"2026-10-05\",\"time\":\"03:00\""));
 }
+
+// A leading byte-order mark and one invalid text byte do not reject the feed.
+#[test]
+fn byte_order_mark_and_invalid_bytes() {
+    for (name, bytes) in [
+        ("bom", b"\xef\xbb\xbfBEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261005T090000\r\nSUMMARY:Hi\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n".as_slice()),
+        ("bad-byte", b"BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART:20261005T090000\r\nSUMMARY:Hi \xff\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n".as_slice()),
+    ] {
+        let input = std::env::temp_dir().join(format!("berri-feed-{}-{name}.ics", std::process::id()));
+        fs::write(&input, bytes).unwrap();
+        let json = convert(input.to_str().unwrap());
+        fs::remove_file(input).unwrap();
+        assert_eq!(json.matches("\"uid\":").count(), 1, "{name}");
+    }
+}
+
+// An alarm too large to count exactly gives no alarm. It must not wrap in a release build or panic in a debug build.
+#[test]
+fn too_large_alarm_gives_no_alarm() {
+    for trigger in ["-P99999999999999999W", "-P999999999999999999999999W", "-P1000000000000000W"] {
+        assert!(alarm_field(trigger, &[&format!("BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:{trigger}\r\nEND:VALARM\r\n")]).ends_with("null"), "{trigger}");
+    }
+}
+
+// A cancelled occurrence and a moved occurrence become short entries of their repeating event.
+#[test]
+fn changed_occurrences_and_zone_data() {
+    let json = convert_text(
+        "changed",
+        "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:w\r\nDTSTART;TZID=Europe/Berlin:20261005T090000\r\nDTEND;TZID=Europe/Berlin:20261005T100000\r\nRRULE:FREQ=WEEKLY\r\nSUMMARY:W\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:w\r\nRECURRENCE-ID;TZID=Europe/Berlin:20261012T090000\r\nDTSTART;TZID=Europe/Berlin:20261013T150000\r\nSUMMARY:Moved\r\nEND:VEVENT\r\nBEGIN:VEVENT\r\nUID:w\r\nRECURRENCE-ID;TZID=Europe/Berlin:20261019T090000\r\nSTATUS:CANCELLED\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n",
+    );
+    assert!(json.contains("\"changedOccurrences\":[{\"from\":\"2026-10-12\",\"cancelled\":false,\"title\":\"Moved\",\"date\":\"2026-10-13\",\"time\":\"13:00\",\"end\":null,\"endDate\":null},{\"from\":\"2026-10-19\",\"cancelled\":true,\"title\":null,\"date\":null,\"time\":null,\"end\":null,\"endDate\":null}]"), "{json}");
+    assert!(json.contains("\"zoned\":{\"date\":\"2026-10-05\",\"time\":\"09:00\",\"length\":60,\"offsets\":[[\"2026-10-05\",7200],[\"2026-10-25\",3600],"), "{json}");
+}

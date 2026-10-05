@@ -31,13 +31,44 @@ struct Record {
     repeat: String,
     interval: usize,
     by_day: Vec<usize>,
+    // Week number (1 to 5, or -1 for the last) and weekday (0 = Sunday) of a monthly rule such as BYDAY=2TU.
+    month_weekday: Option<(i32, usize)>,
     until: Option<CalendarDate>,
     count: Option<usize>,
     exdates: Vec<CalendarDate>,
     done_dates: Vec<CalendarDate>,
     alarm_minutes: Option<usize>,
     status: Option<String>,
+    // Set on a RECURRENCE-ID component: the start of the occurrence it replaces.
+    recurrence_id: Option<CalendarDate>,
     override_event: bool,
+    changed: Vec<ChangedOccurrence>,
+}
+
+/// What a feed changed in one occurrence of a repeating event. Date and clock fields are None for a cancelled occurrence.
+struct ChangedOccurrence {
+    from: String,
+    cancelled: bool,
+    title: Option<String>,
+    timing: Timing,
+}
+
+/// The shown date and clock of a record: start day and time, end time, and last day of a longer event.
+#[derive(Default)]
+struct Timing {
+    date: Option<String>,
+    time: Option<String>,
+    end: Option<String>,
+    end_date: Option<String>,
+}
+
+/// How a repeating event in a named zone moves through the daylight-saving changes of that zone.
+struct ZonedSeries {
+    date: String,
+    time: String,
+    length: Option<i64>,
+    // Offset from UTC in seconds from each source day on: (first day, offset).
+    offsets: Vec<(String, i64)>,
 }
 
 /// One VALARM block while it is read. Only the simple form berri writes is used.
@@ -70,6 +101,8 @@ impl Alarm {
 struct Feed {
     name: String,
     records: Vec<Record>,
+    // RECURRENCE-ID components, until they are attached to their repeating event.
+    overrides: Vec<Record>,
 }
 
 #[repr(C)]
@@ -196,6 +229,7 @@ fn calendar_date(value: &str, params: &[(String, String)]) -> Option<CalendarDat
 
 // Reads one repeat rule into the fields that berri uses.
 fn repeat_rule(record: &mut Record, value: &str) {
+    let mut ordinal_day = None;
     for part in value.split(';') {
         let Some((key, value)) = part.split_once('=') else {
             continue;
@@ -230,11 +264,31 @@ fn repeat_rule(record: &mut Record, value: &str) {
                     .collect();
                 if let Some(days) = days {
                     record.by_day = days;
+                } else {
+                    ordinal_day = ordinal_weekday(value);
                 }
             }
             _ => {}
         }
     }
+    // A week number counts only in a monthly rule, and FREQ can come after BYDAY.
+    if record.repeat == "monthly" {
+        record.month_weekday = ordinal_day;
+    }
+}
+
+// Reads one BYDAY value with a week number, such as 2TU or -1FR.
+fn ordinal_weekday(value: &str) -> Option<(i32, usize)> {
+    let (week, day) = value.split_at(value.len().checked_sub(2)?);
+    let nth: i32 = week.parse().ok()?;
+    let digits = week.trim_start_matches(['+', '-']);
+    if digits.len() != 1 || !(1..=5).contains(&nth.abs()) {
+        return None;
+    }
+    let day = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
+        .iter()
+        .position(|name| name.eq_ignore_ascii_case(day))?;
+    Some((nth, day))
 }
 
 // Takes "<digits><unit>" from the front of the text. Leaves the text alone when it does not fit.
@@ -247,6 +301,8 @@ fn take_amount(rest: &mut &str, unit: char) -> Option<usize> {
     *rest = &rest[digits + 1..];
     Some(amount)
 }
+
+const MAX_EXACT_MINUTES: usize = (1 << 53) - 1;
 
 // Reads a trigger duration such as -PT15M. Returns None for a trigger after the start.
 fn alarm_minutes(value: &str) -> Option<usize> {
@@ -267,8 +323,13 @@ fn alarm_minutes(value: &str) -> Option<usize> {
     if !rest.is_empty() {
         return None;
     }
-    let total = weeks * 10080 + days * 1440 + hours * 60 + minutes;
-    (before_start || total == 0).then_some(total)
+    // A total above 2^53 - 1 cannot be counted exactly by the JavaScript reader, so it is not an alarm.
+    let total = weeks
+        .checked_mul(10080)?
+        .checked_add(days.checked_mul(1440)?)?
+        .checked_add(hours.checked_mul(60)?)?
+        .checked_add(minutes)?;
+    (total <= MAX_EXACT_MINUTES && (before_start || total == 0)).then_some(total)
 }
 
 // Reads events and tasks from one calendar feed.
@@ -325,7 +386,9 @@ fn read_feed(text: &str) -> Feed {
                         record.until = None;
                         record.count = None;
                     }
-                    if !record.override_event {
+                    if record.override_event {
+                        feed.overrides.push(record);
+                    } else {
                         feed.records.push(record);
                     }
                 }
@@ -356,7 +419,10 @@ fn read_feed(text: &str) -> Feed {
         };
         match name.as_str() {
             "UID" => record.uid = value.to_owned(),
-            "RECURRENCE-ID" => record.override_event = true,
+            "RECURRENCE-ID" => {
+                record.override_event = true;
+                record.recurrence_id = calendar_date(value, &params);
+            }
             "SUMMARY" => record.title = text_value(value),
             "LOCATION" => record.location = text_value(value),
             "DTSTART" => record.start = calendar_date(value, &params),
@@ -396,8 +462,42 @@ fn read_feed(text: &str) -> Feed {
             _ => {}
         }
     }
+    attach_overrides(&mut feed);
     feed.records.sort_by_cached_key(source_sort_key);
     feed
+}
+
+// Gives each repeating event the changes that RECURRENCE-ID components make to its occurrences.
+fn attach_overrides(feed: &mut Feed) {
+    for over in std::mem::take(&mut feed.overrides) {
+        let Some(from) = over
+            .recurrence_id
+            .as_ref()
+            .and_then(local_clock)
+            .map(|(date, _)| date)
+        else {
+            continue;
+        };
+        let cancelled = over.status.as_deref() == Some("CANCELLED");
+        let timing = if cancelled {
+            Timing::default()
+        } else {
+            timing(&over)
+        };
+        let title = (!cancelled && !over.title.is_empty()).then(|| over.title.clone());
+        let series = feed
+            .records
+            .iter_mut()
+            .find(|record| record.uid == over.uid && record.repeat != "none");
+        if let Some(series) = series.filter(|_| !over.uid.is_empty()) {
+            series.changed.push(ChangedOccurrence {
+                from,
+                cancelled,
+                title,
+                timing,
+            });
+        }
+    }
 }
 
 // Orders records by the local day and clock shown by berri.
@@ -473,6 +573,25 @@ fn zone_known(name: &str) -> bool {
     Path::new(&root).join(name).is_file()
 }
 
+// The instant of a source clock "YYYYMMDDTHHMMSS" in `zone`, or in the system zone for None.
+fn instant_of(value: &str, zone: Option<&str>) -> Option<c_long> {
+    let mut clock = Clock {
+        year: value[..4].parse::<i32>().ok()? - 1900,
+        month: value[4..6].parse::<i32>().ok()? - 1,
+        day: value[6..8].parse().ok()?,
+        hour: value[9..11].parse().ok()?,
+        minute: value[11..13].parse().ok()?,
+        second: value[13..15].parse().ok()?,
+        daylight: -1,
+        ..Clock::default()
+    };
+    let instant = {
+        let _restore = zone.map(ZoneGuard::set);
+        unsafe { mktime(&mut clock) }
+    };
+    (instant != -1).then_some(instant)
+}
+
 // Converts a source clock through the Linux time-zone database to local time.
 // A clock in an unknown zone stays as written, like the old JavaScript reader.
 fn local_clock(date: &CalendarDate) -> Option<(String, Option<String>)> {
@@ -491,24 +610,10 @@ fn local_clock(date: &CalendarDate) -> Option<(String, Option<String>)> {
             Some(format!("{}:{}", &value[9..11], &value[11..13])),
         ));
     }
-    let mut clock = Clock {
-        year: value[..4].parse::<i32>().ok()? - 1900,
-        month: value[4..6].parse::<i32>().ok()? - 1,
-        day: value[6..8].parse().ok()?,
-        hour: value[9..11].parse().ok()?,
-        minute: value[11..13].parse().ok()?,
-        second: value[13..15].parse().ok()?,
-        daylight: -1,
-        ..Clock::default()
-    };
     let instant = {
         let source_zone = if *utc { Some("UTC") } else { zone.as_deref() };
-        let _restore = source_zone.map(ZoneGuard::set);
-        unsafe { mktime(&mut clock) }
+        instant_of(value, source_zone)?
     };
-    if instant == -1 {
-        return None;
-    }
     let mut local = Clock::default();
     if unsafe { localtime_r(&instant, &mut local) }.is_null() {
         return None;
@@ -623,8 +728,122 @@ fn number_list(output: &mut String, name: &str, values: &[usize]) {
     list(output, name, &numbers);
 }
 
-// Writes one record with the field names used by CalendarFormat.js.
-fn record_json(output: &mut String, record: &Record) {
+// Days since 1970-01-01 of a calendar day (Howard Hinnant's civil-days algorithm).
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = year.div_euclid(400);
+    let year_of_era = year - era * 400;
+    let day_of_year = (153 * (month + if month > 2 { -3 } else { 9 }) + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146097 + day_of_era - 719468
+}
+
+// The calendar day (year, month, day) of a day count from days_from_civil.
+fn civil_from_days(days: i64) -> (i64, i64, i64) {
+    let days = days + 719468;
+    let era = days.div_euclid(146097);
+    let day_of_era = days - era * 146097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36524 - day_of_era / 146096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_index = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
+    let month = if month_index < 10 { month_index + 3 } else { month_index - 9 };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    (year, month, day)
+}
+
+fn day_key(days: i64) -> String {
+    let (year, month, day) = civil_from_days(days);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
+// A zoned series is followed for ten years, in steps of this many days (same values as CalendarFormat.js).
+const ZONE_SCAN_DAYS: i64 = 3660;
+const ZONE_SCAN_STEP: i64 = 21;
+
+// The source-zone data of a repeating event with a named zone (see zonedSeries in CalendarFormat.js).
+// Returns None for other events and for an unknown zone.
+fn zoned_series(record: &Record) -> Option<ZonedSeries> {
+    let Some(CalendarDate::DateTime {
+        value,
+        zone: Some(zone),
+        utc: false,
+    }) = &record.start
+    else {
+        return None;
+    };
+    if record.repeat == "none" || !zone_known(zone) {
+        return None;
+    }
+    let first = days_from_civil(
+        value[..4].parse().ok()?,
+        value[4..6].parse().ok()?,
+        value[6..8].parse().ok()?,
+    );
+    let clock_seconds = value[9..11].parse::<i64>().ok()? * 3600 + value[11..13].parse::<i64>().ok()? * 60;
+    // Offset of the source zone at the event's clock on one source day.
+    let offset_on = |day: i64| -> Option<i64> {
+        let (year, month, date) = civil_from_days(day);
+        let mut clock = Clock {
+            year: i32::try_from(year - 1900).ok()?,
+            month: i32::try_from(month - 1).ok()?,
+            day: i32::try_from(date).ok()?,
+            hour: i32::try_from(clock_seconds / 3600).ok()?,
+            minute: i32::try_from(clock_seconds % 3600 / 60).ok()?,
+            daylight: -1,
+            ..Clock::default()
+        };
+        let instant = unsafe { mktime(&mut clock) };
+        (instant != -1).then(|| day * 86400 + clock_seconds - instant)
+    };
+    let mut offsets;
+    {
+        let _restore = ZoneGuard::set(zone);
+        let mut offset = offset_on(first)?;
+        offsets = vec![(day_key(first), offset)];
+        let mut before = first;
+        let mut day = first + ZONE_SCAN_STEP;
+        while day <= first + ZONE_SCAN_DAYS {
+            let now = offset_on(day)?;
+            if now != offset {
+                // The offset changes on a day after `low`, up to `high`.
+                let (mut low, mut high) = (before, day);
+                while high - low > 1 {
+                    let middle = (low + high) / 2;
+                    if offset_on(middle)? == offset {
+                        low = middle;
+                    } else {
+                        high = middle;
+                    }
+                }
+                offsets.push((day_key(high), now));
+                offset = now;
+            }
+            before = day;
+            day += ZONE_SCAN_STEP;
+        }
+    }
+    let start = instant_of(value, Some(zone))?;
+    let length = match &record.end_value {
+        Some(CalendarDate::DateTime { value, zone, utc }) if *utc || zone.as_deref().is_none_or(zone_known) => {
+            let source_zone = if *utc { Some("UTC") } else { zone.as_deref() };
+            instant_of(value, source_zone)
+                .map(|end| (end - start + 30).div_euclid(60))
+                .filter(|length| *length >= 0)
+        }
+        _ => None,
+    };
+    Some(ZonedSeries {
+        date: day_key(first),
+        time: format!("{}:{}", &value[9..11], &value[11..13]),
+        length,
+        offsets,
+    })
+}
+
+// The shown start, end and last day of a record, as the JavaScript reader gives them.
+fn timing(record: &Record) -> Timing {
     let start = record
         .start
         .as_ref()
@@ -632,10 +851,11 @@ fn record_json(output: &mut String, record: &Record) {
         .and_then(local_clock);
     let end = record.end_value.as_ref().and_then(local_clock);
     let all_day = matches!(record.start, Some(CalendarDate::Date(_)));
-    let date = start.as_ref().map(|(date, _)| date.as_str());
-    let time = start.as_ref().and_then(|(_, time)| time.as_deref());
-    let mut end_time = None;
-    let mut end_date = None;
+    let mut timing = Timing {
+        date: start.as_ref().map(|(date, _)| date.clone()),
+        time: start.as_ref().and_then(|(_, time)| time.clone()),
+        ..Timing::default()
+    };
     if let (Some((start_date, start_time)), Some((last_date, last_time))) = (&start, &end) {
         if all_day {
             let last = if record.is_todo {
@@ -644,17 +864,31 @@ fn record_json(output: &mut String, record: &Record) {
                 previous_day(last_date)
             };
             if last > *start_date {
-                end_date = Some(last);
+                timing.end_date = Some(last);
             }
         } else if last_time.is_some() {
             if last_time != start_time || last_date != start_date {
-                end_time = last_time.as_deref();
+                timing.end = last_time.clone();
             }
             if last_date != start_date {
-                end_date = Some(last_date.clone());
+                timing.end_date = Some(last_date.clone());
             }
         }
     }
+    timing
+}
+
+// Writes one record with the field names used by CalendarFormat.js.
+fn record_json(output: &mut String, record: &Record) {
+    let Timing {
+        date,
+        time,
+        end: end_time,
+        end_date,
+    } = timing(record);
+    let date = date.as_deref();
+    let time = time.as_deref();
+    let end_time = end_time.as_deref();
     let until = record
         .until
         .as_ref()
@@ -702,8 +936,60 @@ fn record_json(output: &mut String, record: &Record) {
         .as_deref()
         .filter(|value| *value != "COMPLETED" && *value != "NEEDS-ACTION");
     field(output, "status", status);
+    json_string(output, "monthWeekday");
+    match record.month_weekday {
+        Some((nth, day)) => output.push_str(&format!(":{{\"nth\":{nth},\"day\":{day}}},")),
+        None => output.push_str(":null,"),
+    }
+    zoned_json(output, zoned_series(record).as_ref());
+    changed_json(output, &record.changed);
     output.pop();
     output.push('}');
+}
+
+// Appends the zoned field: the source-zone data of a repeating event, or null.
+fn zoned_json(output: &mut String, zoned: Option<&ZonedSeries>) {
+    json_string(output, "zoned");
+    output.push(':');
+    let Some(zoned) = zoned else {
+        output.push_str("null,");
+        return;
+    };
+    output.push('{');
+    field(output, "date", Some(&zoned.date));
+    field(output, "time", Some(&zoned.time));
+    number(output, "length", zoned.length.map(|length| length as usize));
+    let offsets: Vec<String> = zoned
+        .offsets
+        .iter()
+        .map(|(day, offset)| format!("[\"{day}\",{offset}]"))
+        .collect();
+    list(output, "offsets", &offsets);
+    output.pop();
+    output.push_str("},");
+}
+
+// Appends the changedOccurrences field: the changes a feed made to single occurrences.
+fn changed_json(output: &mut String, changed: &[ChangedOccurrence]) {
+    let entries: Vec<String> = changed
+        .iter()
+        .map(|change| {
+            let mut entry = String::from("{");
+            field(&mut entry, "from", Some(&change.from));
+            entry.push_str(&format!("\"cancelled\":{},", change.cancelled));
+            field(&mut entry, "title", change.title.as_deref());
+            field(&mut entry, "date", change.timing.date.as_deref());
+            field(&mut entry, "time", change.timing.time.as_deref());
+            field(&mut entry, "end", change.timing.end.as_deref());
+            field(&mut entry, "endDate", change.timing.end_date.as_deref());
+            entry.pop();
+            entry.push('}');
+            entry
+        })
+        .collect();
+    json_string(output, "changedOccurrences");
+    output.push(':');
+    output.push_str(&format!("[{}],", entries.join(",")));
 }
 
 // Converts the complete feed into one compact JSON object.
@@ -724,7 +1010,10 @@ fn feed_json(feed: &Feed) -> String {
 
 // Reads one input file and writes one JSON file.
 fn convert(input: &Path, output: &Path) -> io::Result<()> {
-    let text = fs::read_to_string(input)?;
+    // Bad bytes become U+FFFD and a leading byte-order mark is dropped, so one bad byte does not reject the feed.
+    let bytes = fs::read(input)?;
+    let decoded = String::from_utf8_lossy(&bytes);
+    let text = decoded.strip_prefix('\u{feff}').unwrap_or(&decoded);
     if !text.lines().any(|line| {
         line.trim_end_matches('\r')
             .eq_ignore_ascii_case("BEGIN:VCALENDAR")
@@ -734,7 +1023,7 @@ fn convert(input: &Path, output: &Path) -> io::Result<()> {
             "not a calendar feed",
         ));
     }
-    let feed = read_feed(&text);
+    let feed = read_feed(text);
     let temporary = output.with_extension(format!("json.tmp.{}", std::process::id()));
     fs::write(&temporary, feed_json(&feed))?;
     fs::rename(temporary, output)

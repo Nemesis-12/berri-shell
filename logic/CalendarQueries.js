@@ -158,9 +158,9 @@ function calendarName(cal) {
     return "";
 }
 
-/** True when the text has a VCALENDAR block. */
+/** True when the text has a VCALENDAR block. A leading byte-order mark is allowed. */
 function looksLikeCalendar(text) {
-    return /^BEGIN:VCALENDAR\s*$/im.test(text || "");
+    return /^\uFEFF?BEGIN:VCALENDAR\s*$/im.test(text || "");
 }
 
 /** "https://..." for an https:// or webcal:// link, else null. */

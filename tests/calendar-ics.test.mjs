@@ -213,6 +213,7 @@ test("feedUrl accepts https and webcal only", () => {
 
 test("looksLikeCalendar, unusedColor and shortHash", () => {
   assert.equal(Queries.looksLikeCalendar("BEGIN:VCALENDAR\r\nEND:VCALENDAR"), true);
+  assert.equal(Queries.looksLikeCalendar("\uFEFFBEGIN:VCALENDAR\r\nEND:VCALENDAR"), true);
   assert.equal(Queries.looksLikeCalendar("<html>nope</html>"), false);
   assert.equal(Queries.unusedColor(["accent", "blue"]), "green");
   assert.equal(Queries.unusedColor(plain(Items.itemColors)), "accent");
@@ -544,4 +545,25 @@ test("calendar date helpers keep day keys at month and year changes", () => {
   assert.equal(Times.keyOfDayNum(Times.dayNum("2026-12-31") + 1), "2027-01-01");
   assert.equal(Items.toKey("2026-12-31T23:59:00"), "2026-12-31");
   assert.equal(Items.toKey(new Date(2026, 11, 31, 23, 59)), "2026-12-31");
+});
+
+test("a monthly weekday rule is written back with its week number", () => {
+  const text = "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:m\r\nDTSTART:20261013T100000\r\nRRULE:FREQ=MONTHLY;BYDAY=2TU;COUNT=4\r\nSUMMARY:x\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+  const cal = Format.readCalendar(text);
+  assert.deepEqual(plain(cal.items[0].monthWeekday), { nth: 2, day: 2 });
+  assert.match(Format.writeCalendar(cal), /RRULE:FREQ=MONTHLY;BYDAY=2TU;COUNT=4\r\n/);
+});
+
+test("a week number on a weekly rule stays a raw rule part and is not used", () => {
+  const cal = Format.readCalendar("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:w\r\nDTSTART:20261013T100000\r\nRRULE:FREQ=WEEKLY;BYDAY=2TU\r\nSUMMARY:x\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
+  assert.equal(cal.items[0].monthWeekday, null);
+  assert.equal(cal.items[0].ruleRest, "BYDAY=2TU");
+});
+
+test("editing the start of a zoned series drops its zone data, and editing the title keeps it", () => {
+  const cal = Format.readCalendar("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:z\r\nDTSTART;TZID=Europe/Berlin:20261005T090000\r\nRRULE:FREQ=WEEKLY\r\nSUMMARY:x\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
+  const series = cal.items[0];
+  assert.deepEqual(plain(series.zoned.offsets.slice(0, 2)), [["2026-10-05", 7200], ["2026-10-25", 3600]]);
+  assert.ok(Items.applyChanges(series, { title: "y" }).zoned);
+  assert.equal(Items.applyChanges(series, { time: "10:00" }).zoned, null);
 });
