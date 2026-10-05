@@ -54,3 +54,23 @@ test("setup.sh builds the feed reader where the shell looks for it", () => {
   assert.match(text, /tools\/feed-to-records\/feed-to-records/);
   assert.match(text, /core\.hooksPath \.githooks/);
 });
+
+test("start-berri.sh sets the allocator and runs qs for the repo with the extra flags", () => {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "berri-qs-"));
+  fs.writeFileSync(path.join(bin, "qs"), '#!/bin/sh\necho "$MALLOC_CONF|$*"\n', { mode: 0o755 });
+  const result = spawnSync(path.join(repo, "tools/start-berri.sh"), ["-n", "-d"], {
+    encoding: "utf8",
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, MALLOC_CONF: "" },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const root = path.resolve(repo);
+  assert.equal(result.stdout.trim(), `background_thread:true,dirty_decay_ms:100,muzzy_decay_ms:100|-p ${root} -n -d`);
+});
+
+test("every start method uses the launcher and only the launcher sets the allocator", () => {
+  const read = (file) => fs.readFileSync(path.join(repo, file), "utf8");
+  assert.match(read("toggle.sh"), /tools\/start-berri\.sh/);
+  assert.match(read("tools/restart-berri.sh"), /start-berri\.sh/);
+  assert.match(read("README.md"), /^exec-once = .*\/tools\/start-berri\.sh -n -d$/m);
+  for (const file of ["toggle.sh", "tools/restart-berri.sh", "README.md"]) assert.doesNotMatch(read(file), /MALLOC_CONF/, file);
+});

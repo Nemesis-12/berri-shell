@@ -12,7 +12,6 @@ if qs list --all 2>/dev/null | grep -q "Config path: ${SHELL_DIR}/shell.qml"; th
     echo "berri-shell: OFF"
 else
     # berri-shell is not running, start it
-    export MALLOC_CONF="background_thread:true,dirty_decay_ms:100,muzzy_decay_ms:100"
-    qs -p "$SHELL_DIR" -d
+    "$SHELL_DIR/tools/start-berri.sh" -d
     echo "berri-shell: ON"
 fi

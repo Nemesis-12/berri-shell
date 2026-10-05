@@ -52,7 +52,7 @@ qs -p "$PWD"
 For daily use, add one autostart entry to Hyprland. Replace the path with your clone path:
 
 ```ini
-exec-once = qs -n -d -p /absolute/path/to/berri-shell
+exec-once = /absolute/path/to/berri-shell/tools/start-berri.sh -n -d
 ```
 
 Use only one autostart entry and one clone for daily use. Keep the Omarchy app menu running. berri is the sole notification server. See "Notification ownership".
