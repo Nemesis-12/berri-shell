@@ -19,10 +19,16 @@
  *   color (preset key "accent" | "blue" | "green" | "yellow" | "red" | "cyan" | "magenta" | "orange",
  *   or a custom "#rrggbb"; stored as X-BERRI-COLOR, "accent" is not written),
  *   repeat ("none" | "daily" | "weekly" | "monthly" | "yearly"), interval,
- *   byDay (weekly only, 0 = Sunday), until, count,
+ *   byDay (weekly only, 0 = Sunday), monthWeekday (monthly only: { nth, day }, nth 1 to 5 or -1 for the last,
+ *   day 0 = Sunday; from BYDAY=2TU), until, count,
  *   exdates (skipped occurrence dates), doneDates (occurrence dates ticked off),
  *   alarmMinutes (VALARM minutes before start, null = none), status, stamp,
  *   ruleRest (RRULE parts berri ignores, written back unchanged),
+ *   zoned (repeating event with a named time zone: { date, time, length, offsets }, the first source clock,
+ *   the length in minutes and the [first day, UTC offset in seconds] changes of that zone, so each
+ *   occurrence follows the daylight-saving changes of the zone; null otherwise),
+ *   changedOccurrences (RECURRENCE-ID components of a repeating event: { from, cancelled, title, date, time, end, endDate },
+ *   from = the day the occurrence had, date null = not moved; the component also stays in rawComponents),
  *   raw (unknown property lines, kept as is), rawChildren (unknown nested components),
  *   sourceDates (imported DTSTART, DTEND/DUE, UNTIL and EXDATE source forms).
  *   This is the stored item. CalendarItems.js checks it when it is built (storedItem).
@@ -50,7 +56,11 @@
  *
  * Month numbers are 1 to 12 everywhere.
  * Known limits: unknown TZIDs keep their source clock for display until edited.
- * RECURRENCE-ID overrides, BYMONTHDAY and other rule parts stay raw but are ignored.
+ * A zoned series follows its zone for ten years from its first day.
+ * A moved occurrence without DTEND has no end time. Deleting a moved occurrence of an editable calendar
+ * leaves its RECURRENCE-ID component in the file.
+ * BYMONTHDAY, BYSETPOS, a BYDAY list with week numbers and other rule parts stay raw but are ignored.
+ * A cancelled item (STATUS:CANCELLED) has no occurrences, also in an editable calendar.
  */
 
 // Names for QML callers.

@@ -215,6 +215,7 @@ function parseRule(value, item, localZone) {
     var rest = [];
     var parts = value.split(";");
     var freq = null;
+    var ordinalDay = null; // BYDAY with a week number, for example 2TU, read only when the rule is monthly
     for (var i = 0; i < parts.length; i++) {
         var eq = parts[i].indexOf("=");
         var k = (eq > 0 ? parts[i].slice(0, eq) : parts[i]).toUpperCase();
@@ -225,7 +226,13 @@ function parseRule(value, item, localZone) {
         else if (k === "UNTIL") { var u = parseDateValue(v, null, localZone); item.until = u ? u.date : null; item.untilSource = u; }
         else if (k === "BYDAY" && /^(MO|TU|WE|TH|FR|SA|SU)(,(MO|TU|WE|TH|FR|SA|SU))*$/i.test(v)) {
             item.byDay = v.toUpperCase().split(",").map(function (d) { return weekdays.indexOf(d); });
+        } else if (k === "BYDAY" && /^[+-]?[1-5](MO|TU|WE|TH|FR|SA|SU)$/i.test(v)) {
+            ordinalDay = { part: parts[i], nth: parseInt(v, 10), day: weekdays.indexOf(v.slice(-2).toUpperCase()) };
         } else rest.push(parts[i]);
+    }
+    if (ordinalDay) {
+        if (freq === "monthly") item.monthWeekday = { nth: ordinalDay.nth, day: ordinalDay.day };
+        else rest.push(ordinalDay.part);
     }
     return { freq: freq, rest: rest };
 }
@@ -245,8 +252,47 @@ function parseAlarm(node) {
     var m = /^(-?)P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(trigger.value.trim());
     if (!m) return null;
     var minutes = (+m[2] || 0) * 10080 + (+m[3] || 0) * 1440 + (+m[4] || 0) * 60 + (+m[5] || 0);
+    if (!(minutes <= 9007199254740991)) return null; // too large to count exactly
     if (m[1] !== "-" && minutes > 0) return null; // alarm after the start
     return minutes;
+}
+
+var ZONE_SCAN_DAYS = 3660; // a zoned series is followed for ten years
+var ZONE_SCAN_STEP = 21;
+
+/**
+ * The source-zone data of a repeating event with a named zone: its first source clock, its length in
+ * minutes, and the offset from UTC (seconds) at that clock on each source day, as a list of
+ * [first day, offset] changes. A repeat takes its time from the source zone, so the shown time
+ * follows the daylight-saving changes of that zone. Null when the zone is unknown.
+ */
+function zonedSeries(start, endValue, localZone) {
+    if (start.form !== "zone" || start.instantMs === null) return null;
+    var hhmm = start.value.slice(9, 13);
+    function offsetOn(dayN) {
+        var wall = Times.keyOfDayNum(dayN).replace(/-/g, "") + "T" + hhmm + "00";
+        return Math.round((clockMs(wall) - zoneInstant(wall, start.tzid, localZone)) / 1000);
+    }
+    var first = Times.dayNum(start.value.slice(0, 4) + "-" + start.value.slice(4, 6) + "-" + start.value.slice(6, 8));
+    var offset = offsetOn(first);
+    if (!isFinite(offset)) return null;
+    var offsets = [[Times.keyOfDayNum(first), offset]];
+    var before = first;
+    for (var n = first + ZONE_SCAN_STEP; n <= first + ZONE_SCAN_DAYS; n += ZONE_SCAN_STEP) {
+        var now = offsetOn(n);
+        if (now === offset) { before = n; continue; }
+        var low = before, high = n; // the offset changes on a day after `low`, up to `high`
+        while (high - low > 1) {
+            var middle = Math.floor((low + high) / 2);
+            if (offsetOn(middle) === offset) low = middle; else high = middle;
+        }
+        offsets.push([Times.keyOfDayNum(high), now]);
+        offset = now;
+        before = n;
+    }
+    var length = endValue && endValue.instantMs !== null ? Math.round((endValue.instantMs - start.instantMs) / 60000) : null;
+    return { date: Times.keyOfDayNum(first), time: start.value.slice(9, 11) + ":" + start.value.slice(11, 13),
+        length: length !== null && length >= 0 ? length : null, offsets: offsets };
 }
 
 function parseItem(node, localZone) {
@@ -254,8 +300,9 @@ function parseItem(node, localZone) {
     var item = {
         uid: "", kind: isTodo ? "task" : "event", title: "",
         date: null, time: null, end: null, endDate: null,
-        color: "accent", repeat: "none", interval: 1, byDay: [], until: null, count: null,
+        color: "accent", repeat: "none", interval: 1, byDay: [], monthWeekday: null, until: null, count: null,
         exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: null, ruleRest: null,
+        zoned: null, changedOccurrences: [],
         raw: [], rawChildren: []
     };
     var start = null, endValue = null, sawDoneCompleted = false;
@@ -282,12 +329,13 @@ function parseItem(node, localZone) {
         }
         case "X-BERRI-COLOR": ownColor = p.value.trim(); break;
         case "RRULE": {
-            var repeatRule = { interval: 1, byDay: [], until: null, count: null };
+            var repeatRule = { interval: 1, byDay: [], monthWeekday: null, until: null, count: null };
             var rule = parseRule(p.value, repeatRule, localZone);
             if (!rule.freq || item.repeat !== "none") { item.raw.push(p.raw); break; }
             item.repeat = rule.freq;
             item.interval = repeatRule.interval;
             item.byDay = repeatRule.byDay;
+            item.monthWeekday = repeatRule.monthWeekday;
             item.until = repeatRule.until;
             sourceDates.until = repeatRule.untilSource || null;
             item.count = repeatRule.count;
@@ -337,6 +385,7 @@ function parseItem(node, localZone) {
     sourceDates.start = start;
     sourceDates.end = endValue;
     item.sourceDates = sourceDates;
+    if (item.repeat !== "none" && start) item.zoned = zonedSeries(start, endValue, localZone);
     if (item.uid === "") item.uid = Items.newUid();
 
     // Children: the one simple VALARM is taken over, the rest stays raw.
@@ -351,10 +400,26 @@ function parseItem(node, localZone) {
     return item;
 }
 
-/** Parses the text of one .ics file. Never throws; garbage gives an empty calendar. */
+/** The change one RECURRENCE-ID component makes to its series: { uid, entry }. Null for any other component. */
+function changedOccurrence(node, localZone) {
+    if (node.name !== "VEVENT" && node.name !== "VTODO") return null;
+    var id = node.props.filter(function (p) { return p.name === "RECURRENCE-ID"; })[0];
+    var uid = node.props.filter(function (p) { return p.name === "UID"; })[0];
+    var from = id && uid ? parseDateValue(id.value, id.params, localZone) : null;
+    if (!from) return null;
+    var changed = parseItem(node, localZone);
+    var cancelled = changed.status === "CANCELLED";
+    var moved = !cancelled && changed.date !== null;
+    return { uid: uid.value, entry: {
+        from: from.date, cancelled: cancelled, title: !cancelled && changed.title !== "" ? changed.title : null,
+        date: moved ? changed.date : null, time: moved ? changed.time : null,
+        end: moved ? changed.end : null, endDate: moved ? changed.endDate : null } };
+}
+
+/** Parses the text of one .ics file. Never throws; garbage gives an empty calendar. A leading byte-order mark is ignored. */
 function readCalendar(text, localZone) {
     var cal = { prodid: null, raw: [], rawComponents: [], items: [] };
-    var roots = parseComponents(unfold(text || ""));
+    var roots = parseComponents(unfold((text || "").replace(/^\uFEFF/, "")));
     for (var r = 0; r < roots.length; r++) {
         var root = roots[r];
         if (root.name !== "VCALENDAR") continue;
@@ -369,6 +434,12 @@ function readCalendar(text, localZone) {
             var hasOverride = node.props.some(function (q) { return q.name === "RECURRENCE-ID"; });
             if ((node.name === "VEVENT" || node.name === "VTODO") && !hasOverride) cal.items.push(parseItem(node, localZone));
             else cal.rawComponents.push(node.lines);
+        }
+        // The changed occurrences stay in rawComponents as they were; the series also gets a short form of each.
+        for (var o = 0; o < root.children.length; o++) {
+            var changed = changedOccurrence(root.children[o], localZone);
+            var series = changed ? cal.items.filter(function (it) { return it.uid === changed.uid && it.repeat !== "none"; })[0] : null;
+            if (series) series.changedOccurrences.push(changed.entry);
         }
     }
     return cal;
@@ -415,6 +486,7 @@ function ruleText(item, localZone) {
     var parts = ["FREQ=" + item.repeat.toUpperCase()];
     if (item.interval > 1) parts.push("INTERVAL=" + item.interval);
     if (item.repeat === "weekly" && item.byDay.length) parts.push("BYDAY=" + item.byDay.map(function (d) { return weekdays[d]; }).join(","));
+    if (item.repeat === "monthly" && item.monthWeekday) parts.push("BYDAY=" + item.monthWeekday.nth + weekdays[item.monthWeekday.day]);
     if (item.count) parts.push("COUNT=" + item.count);
     else if (item.until) {
         var source = item.sourceDates && item.sourceDates.until;

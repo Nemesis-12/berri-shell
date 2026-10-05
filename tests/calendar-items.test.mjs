@@ -37,11 +37,12 @@ test("a stored item keeps good fields exactly", () => {
 test("a stored item replaces each malformed field with its default", () => {
   const item = Items.storedItem({ uid: 5, kind: "meeting", title: null, date: "tomorrow", time: "9am", end: 900,
     endDate: "x", color: "bogus", repeat: "hourly", interval: "x", byDay: [1, "x", 9, 6], until: 3, count: -2,
-    exdates: ["2026-10-01", "nope", 4], doneDates: "2026-10-01", alarmMinutes: -5, status: 7, raw: "x" });
+    exdates: ["2026-10-01", "nope", 4], doneDates: "2026-10-01", alarmMinutes: -5, status: 7, raw: "x",
+    monthWeekday: { nth: 0, day: 2 }, zoned: { date: "x" }, changedOccurrences: [{ from: "2026-10-01" }, 5] });
   assert.deepEqual(plain({ ...item, stamp: null }), { uid: "", kind: "event", title: "",
     date: null, time: null, end: null, endDate: null, color: "accent", repeat: "none", interval: 1, byDay: [],
-    until: null, count: null, exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: null,
-    ruleRest: null, raw: [], rawChildren: [] });
+    monthWeekday: null, until: null, count: null, exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: null,
+    ruleRest: null, zoned: null, changedOccurrences: [], raw: [], rawChildren: [] });
   assert.deepEqual(plain(Items.storedItem({ repeat: "weekly", byDay: [1, "x", 9, 6] }).byDay), [1, 6]);
 });
 
