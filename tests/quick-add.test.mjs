@@ -249,3 +249,34 @@ test("deleting text clears matches and restores defaults on each parse", () => {
   assert.deepEqual(empty.matches, p.matches);
   assert.equal(empty.title, "");
 });
+
+// Pins the parse of about 90 phrases. The file was recorded from the parser before it was split into
+// named steps. Only the numeric issue reference cases differ (see the next test).
+test("recorded phrases parse to the same fields", () => {
+  const recorded = JSON.parse(fs.readFileSync(new URL("./fixtures/quick-add-phrases.json", import.meta.url), "utf8"));
+  assert.ok(recorded.length >= 50);
+  for (const { text, result } of recorded) {
+    assert.deepEqual(plain(lib.parse(text, today, selected, 1, false)), result, JSON.stringify(text));
+  }
+});
+
+test("a number after # stays in the title; hex words with letters stay colors", () => {
+  const issue = parse("Fix bug #123 tomorrow");
+  assert.equal(issue.title, "Fix bug #123");
+  assert.equal(issue.color, null);
+  assert.equal(issue.named.color, false);
+  assert.equal(issue.matches.color, null);
+  assert.equal(issue.date, "2026-09-30");
+  const hex = parse("x #12a");
+  assert.equal(hex.color, "#1122aa");
+  assert.equal(hex.title, "x");
+  // Digits with a leading zero and six digits are still colors.
+  assert.equal(parse("x #000").color, "#000000");
+  assert.equal(parse("x #123456").color, "#123456");
+  // Issue number followed by hex color: issue stays in title, color is read.
+  const issueAndColor = parse("Fix bug #123 #f00 tomorrow");
+  assert.equal(issueAndColor.title, "Fix bug #123");
+  assert.equal(issueAndColor.color, "#ff0000");
+  assert.equal(issueAndColor.named.color, true);
+  assert.equal(issueAndColor.date, "2026-09-30");
+});
