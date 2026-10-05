@@ -35,7 +35,7 @@ Rectangle {
     ColorFade on color { duration: Theme.stateMs }
     ColorFade on border.color { duration: Theme.stateMs }
     Behavior on scale {
-        NumberAnimation { duration: 400; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+        StandardMotion { duration: 400 }
     }
 
     Column {

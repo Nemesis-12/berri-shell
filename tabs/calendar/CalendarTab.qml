@@ -241,15 +241,13 @@ Item {
     /** 0 = old page fully shown, 1 = new page fully shown. */
     property real progress: 1
 
-    NumberAnimation {
+    StandardMotion {
         id: fade
         target: root
         property: "progress"
         from: 0
         to: 1
         duration: 240
-        easing.type: Easing.BezierSpline
-        easing.bezierCurve: Theme.standardCurve
     }
 
     Rectangle {
@@ -628,29 +626,23 @@ Item {
     ParallelAnimation {
         id: settle
 
-        NumberAnimation {
+        StandardMotion {
             id: settleX
             target: ghost
             property: "x"
             duration: 220
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: Theme.standardCurve
         }
-        NumberAnimation {
+        StandardMotion {
             id: settleY
             target: ghost
             property: "y"
             duration: 220
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: Theme.standardCurve
         }
-        NumberAnimation {
+        StandardMotion {
             target: ghost
             property: "opacity"
             to: 0
             duration: 220
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: Theme.standardCurve
         }
     }
 }

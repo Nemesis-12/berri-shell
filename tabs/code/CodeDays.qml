@@ -95,8 +95,8 @@ Rectangle {
                     Component.onCompleted: Qt.callLater(() => column.settled = true)
                     property real claudeShare: settled && root.peak > 0 ? Math.min(1, modelData.claude / root.peak) : 0
                     property real codexShare: settled && root.peak > 0 ? Math.min(1, modelData.codex / root.peak) : 0
-                    Behavior on claudeShare { NumberAnimation { duration: 450; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve } }
-                    Behavior on codexShare { NumberAnimation { duration: 450; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve } }
+                    Behavior on claudeShare { StandardMotion { duration: 450 } }
+                    Behavior on codexShare { StandardMotion { duration: 450 } }
                     readonly property real claudeH: Math.max(0, Math.min(chart.barHeight, claudeShare * chart.barHeight))
                     readonly property real codexH: Math.max(0, Math.min(chart.barHeight - claudeH, codexShare * chart.barHeight))
                     readonly property bool today: index === root.days.length - 1

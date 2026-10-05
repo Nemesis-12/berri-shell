@@ -1,4 +1,5 @@
 import QtQuick
+import qs.common
 import qs.services
 
 /**
@@ -23,10 +24,8 @@ Item {
     property real blend: showB ? 1 : 0
 
     Behavior on blend {
-        NumberAnimation {
+        StandardMotion {
             duration: 260
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: Theme.standardCurve
         }
     }
 

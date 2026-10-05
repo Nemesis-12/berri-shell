@@ -28,7 +28,7 @@ Rectangle {
 
     ColorFade on border.color {}
     Behavior on scale {
-        NumberAnimation { duration: 400; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+        StandardMotion { duration: 400 }
     }
 
     Icon {

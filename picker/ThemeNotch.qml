@@ -256,19 +256,17 @@ Item {
         // rounded half-width, so they land on a whole device pixel.
         property real hoverProgress: root.pointerInside ? 1 : 0
         Behavior on hoverProgress {
-            NumberAnimation {
+            SpringMotion {
                 duration: root.narrowMs
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: Theme.springCurve
             }
         }
         property real restBodyHeight: root.pointerInside ? root.hoverHeight : root.restHeight
         property real restRadius: root.pointerInside ? root.hoverCornerRadius : root.restCornerRadius
         Behavior on restBodyHeight {
-            NumberAnimation { duration: root.riseMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springCurve }
+            SpringMotion { duration: root.riseMs }
         }
         Behavior on restRadius {
-            NumberAnimation { duration: root.riseMs; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.springCurve }
+            SpringMotion { duration: root.riseMs }
         }
 
         readonly property real restHalfWidth: (root.restWidth + (root.hoverWidth - root.restWidth) * hoverProgress) / 2

@@ -88,11 +88,9 @@ Item {
                 Behavior on sweepAngle {
                     id: arcBehavior
                     enabled: false
-                    NumberAnimation {
+                    StandardMotion {
                         id: arcAnimation
                         duration: Theme.stateMs
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: Theme.standardCurve
                     }
                 }
             }

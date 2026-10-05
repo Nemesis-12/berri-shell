@@ -57,11 +57,11 @@ Item {
     property real shownSize: fitSize
 
     Behavior on titleHeight {
-        NumberAnimation { duration: 180; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+        StandardMotion { duration: Theme.hoverMs }
     }
 
     Behavior on shownSize {
-        NumberAnimation { duration: 180; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve }
+        StandardMotion { duration: Theme.hoverMs }
     }
 
     // Picks the biggest size (normal down to minimum) where the text needs 3 lines or fewer.

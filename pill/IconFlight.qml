@@ -49,7 +49,7 @@ Item {
     readonly property int flightMs: 500
     readonly property int colorMs: 400
     readonly property int fadeOutDelayMs: 660
-    readonly property int fadeOutMs: 180
+    readonly property int fadeOutMs: Theme.hoverMs
 
     /** When the squares start to fade out; from here on they hide the real spine. */
     readonly property int fadeOutStartMs: startMs + fadeOutDelayMs

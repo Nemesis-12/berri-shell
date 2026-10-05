@@ -84,7 +84,7 @@ Item {
     /** Applies the currently focused theme (Enter key). */
     function applyFocused() {
         var p = Theme.palettes[root.focusIndex];
-        if (p) Theme.apply(p.key, true, true, Theme.transitionDurationMs);
+        if (p) Theme.apply(p.key, { wallpaper: true, durationMs: Theme.transitionDurationMs });
     }
 
     clip: true
@@ -97,10 +97,8 @@ Item {
         // Centers the focused card: -(focusIndex * step - (viewport - card) / 2).
         x: PixelGrid.snap(-(root.focusIndex * root.cardStep - (root.viewportWidth - root.cardWidth) / 2), root.dpr)
         Behavior on x {
-            NumberAnimation {
+            SpringMotion {
                 duration: 500
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: Theme.springCurve
             }
         }
 
@@ -130,10 +128,8 @@ Item {
                     opacity: focused ? 1 : 0.72
 
                     Behavior on scale {
-                        NumberAnimation {
+                        SpringMotion {
                             duration: 450
-                            easing.type: Easing.BezierSpline
-                            easing.bezierCurve: Theme.springCurve
                         }
                     }
                     Fade on opacity { duration: Theme.stateMs }
@@ -144,7 +140,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             root.focusIndex = card.index;
-                            Theme.apply(card.modelData.key, true, true, Theme.transitionDurationMs);
+                            Theme.apply(card.modelData.key, { wallpaper: true, durationMs: Theme.transitionDurationMs });
                         }
                     }
 

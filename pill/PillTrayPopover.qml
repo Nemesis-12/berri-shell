@@ -27,10 +27,8 @@ Item {
     // 0 = closed pose (6px up, 97% size), 1 = open pose.
     property real progress: open ? 1 : 0
     Behavior on progress {
-        NumberAnimation {
+        SpringMotion {
             duration: 380
-            easing.type: Easing.BezierSpline
-            easing.bezierCurve: Theme.springCurve
         }
     }
     transform: [

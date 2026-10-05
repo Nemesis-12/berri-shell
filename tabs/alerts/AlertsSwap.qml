@@ -1,4 +1,5 @@
 import QtQuick
+import qs.common
 import qs.services
 
 /**
@@ -31,15 +32,13 @@ Item {
         slide.restart();
     }
 
-    NumberAnimation {
+    StandardMotion {
         id: slide
         target: root
         property: "progress"
         from: 0
         to: 1
         duration: 260
-        easing.type: Easing.BezierSpline
-        easing.bezierCurve: Theme.standardCurve
     }
 
     Text {

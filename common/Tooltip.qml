@@ -82,10 +82,8 @@ Item {
         y: root.bubbleY
 
         Behavior on opacity {
-            NumberAnimation {
+            StandardMotion {
                 duration: 200
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: Theme.standardCurve
             }
         }
 

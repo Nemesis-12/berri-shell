@@ -29,7 +29,7 @@ Item {
     property real phase: root.shown ? 1 : 0
 
     Behavior on phase {
-        NumberAnimation { duration: 180; easing.type: Easing.Linear }
+        NumberAnimation { duration: Theme.hoverMs; easing.type: Easing.Linear }
     }
 
     readonly property real progress: Theme.easeOut(root.phase)

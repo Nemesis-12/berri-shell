@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import qs.common
 import qs.services
 
 /**
@@ -68,7 +69,7 @@ Variants {
             sourceSize.width: layer.width * modelData.devicePixelRatio
             sourceSize.height: layer.height * modelData.devicePixelRatio
             opacity: 0
-            Behavior on opacity { id: behaviorA; NumberAnimation { duration: 450; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve } }
+            Behavior on opacity { id: behaviorA; StandardMotion { duration: 450 } }
             onOpacityChanged: layer.freeHiddenImage(imageA)
         }
 
@@ -82,7 +83,7 @@ Variants {
             sourceSize.width: layer.width * modelData.devicePixelRatio
             sourceSize.height: layer.height * modelData.devicePixelRatio
             opacity: 0
-            Behavior on opacity { id: behaviorB; NumberAnimation { duration: 450; easing.type: Easing.BezierSpline; easing.bezierCurve: Theme.standardCurve } }
+            Behavior on opacity { id: behaviorB; StandardMotion { duration: 450 } }
             onOpacityChanged: layer.freeHiddenImage(imageB)
         }
 

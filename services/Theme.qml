@@ -3,14 +3,15 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "../logic/Ease.js" as Ease
+import "../logic/ThemeColors.js" as Colors
 import qs.common
 import qs.picker
 
 /**
  * Holds the 9 berri palettes and the currently applied one. apply(key)
- * computes every token's target color once in JS (including the OKLab
- * mixes and alpha variants), then runs one ParallelAnimation of
- * ColorAnimations (450ms, cubic-bezier(.4,0,.2,1) by default) that drives
+ * computes every token's target color once in JS (logic/ThemeColors.js,
+ * including the OKLab mixes and alpha variants), then runs one
+ * StandardColorMotion per token (450ms by default) that drives
  * each token property straight to its target in C++. Every token below is
  * a plain `property color`, not a binding on a rebuilt JS object, so a
  * theme switch never re-evaluates the ~190 bindings elsewhere in the shell
@@ -39,10 +40,6 @@ Singleton {
         }
         return palettes[0];
     }
-
-    // The 9 raw palette tokens Theme derives everything else from.
-    readonly property var rawKeys: ["dark_background", "bright_foreground", "foreground",
-        "dark_foreground", "background", "lighter_background", "selection", "accent", "darker_background"]
 
     // fromRaw is a one-shot snapshot of the palette a transition started
     // from (the previous toRaw), used only by WallpaperLayer's shader to
@@ -127,84 +124,47 @@ Singleton {
     /** Emitted right after currentKey/fromRaw/toRaw are set for a transitioned apply(); each WallpaperLayer screen runs its own shader transition off this. */
     signal wallpaperTransition(string mode, int durationMs)
 
-    /** Raw color set for a palette key, or null if unknown. */
+    /** Raw color set for a palette key, or null if unknown. Always has all nine raw colors. */
     function paletteRaw(key) {
         for (var i = 0; i < palettes.length; i++) {
-            if (palettes[i].key === key) {
-                var c = palettes[i].c;
-                var out = {};
-                for (var j = 0; j < rawKeys.length; j++) {
-                    var k = rawKeys[j];
-                    out[k] = c[k] ? hexToColor(c[k]) : defaultColor(k);
-                }
-                return out;
-            }
+            if (palettes[i].key === key) return root.toQtColors(Colors.rawPalette(palettes[i].c));
         }
         return null;
     }
 
-    function defaultColor(key) {
-        var fallback = {
-            dark_background: "#0c0c10", bright_foreground: "#f2f1f5", foreground: "#d6d4dc",
-            dark_foreground: "#a4a4b0", background: "#17141f", lighter_background: "#241e2e",
-            selection: "#3a2f52", accent: "#c28bf2", darker_background: "#0c0c10"
-        };
-        return hexToColor(fallback[key] || "#0c0c10");
+    /** Turns a map of { r, g, b, a } colors into a map of Qt colors. */
+    function toQtColors(map) {
+        var out = {};
+        for (var name in map) out[name] = Qt.rgba(map[name].r, map[name].g, map[name].b, map[name].a);
+        return out;
     }
 
     /**
      * Computes every exposed token's target value from a raw palette map
-     * (rawKeys -> color), once. Includes the OKLab mixes and the accent
-     * alpha variants. Called once per apply(), never per animation frame.
+     * (raw palette key -> color), once. Called once per apply(), never per animation frame.
      */
     function computeTokens(raw) {
-        var t = {};
-        t.shell = raw.dark_background || root.defaultColor("dark_background");
-        t.fg = raw.bright_foreground || root.defaultColor("bright_foreground");
-        t.fg2 = raw.foreground || root.defaultColor("foreground");
-        t.dim = raw.dark_foreground || root.defaultColor("dark_foreground");
-        t.card = raw.background || root.defaultColor("background");
-        t.raised = raw.lighter_background || root.defaultColor("lighter_background");
-        t.selection = raw.selection || root.defaultColor("selection");
-        t.accent = raw.accent || root.defaultColor("accent");
-        t.onAccentValue = raw.darker_background || root.defaultColor("darker_background");
-        t.darkerBackground = raw.darker_background || root.defaultColor("darker_background");
-
-        t.accentFill = Qt.rgba(t.accent.r, t.accent.g, t.accent.b, 0.18);
-        t.accentLine = Qt.rgba(t.accent.r, t.accent.g, t.accent.b, 0.45);
-
-        t.sunk = (raw.dark_background && raw.background)
-            ? oklabMix(raw.dark_background, raw.background, 55) : t.shell;
-        t.accentLight = (raw.accent && raw.bright_foreground)
-            ? oklabMix(raw.accent, raw.bright_foreground, 70) : t.accent;
-        t.accentSecondary = (raw.accent && raw.darker_background)
-            ? oklabMix(raw.accent, raw.darker_background, 70) : t.accent;
-        t.border = (raw.lighter_background && raw.bright_foreground)
-            ? oklabMix(raw.lighter_background, raw.bright_foreground, 84) : t.raised;
-
-        return t;
+        return root.toQtColors(Colors.computeTokens(raw));
     }
 
     /**
-     * Applies a theme by key: switches every token, animating the blend
-     * unless animate is false (used only to restore the saved theme on
-     * start, with no flash). duration defaults to 450ms; a real theme
-     * switch (ThemesCarousel, the notch, pickertest) passes
-     * transitionDurationMs, which also fires wallpaperTransition so each
-     * monitor's wallpaper runs a matching shader transition (28a).
-     * Persists the choice by default.
+     * Applies a theme by key. Options (all optional):
+     *   animate     false switches with no blend or flash (used to restore the saved theme on start). Default true.
+     *   persist     false does not save the choice. Default true.
+     *   durationMs  length of the color blend, and of the wallpaper transition. Default 450.
+     *   wallpaper   true also fires wallpaperTransition once, so each monitor's wallpaper runs a
+     *               matching shader transition (28a). Default false; the duration never decides it.
+     * ThemesCarousel, the notch and pickertest pass wallpaper: true with durationMs: transitionDurationMs.
      */
-    function apply(key, animate, persist, duration) {
-        if (animate === undefined) animate = true;
-        if (persist === undefined) persist = true;
-        if (duration === undefined) duration = 450;
+    function apply(key, options) {
+        var plan = Colors.switchPlan(options);
 
         var newRaw = paletteRaw(key);
         if (!newRaw) return;
 
         var targets = root.computeTokens(newRaw);
 
-        if (animate) {
+        if (plan.animate) {
             // Snapshot the palette the shader is transitioning from (the
             // previous target); WallpaperLayer reads this once when its
             // own transition begins.
@@ -214,31 +174,28 @@ Singleton {
             root.currentKey = key;
             root.transitioning = false;
 
-            tokenAnim.stop();
             for (var name in tokenAnims) {
                 var anim = tokenAnims[name];
+                anim.stop();
                 anim.to = targets[name];
-                anim.duration = duration;
-                anim.easing.type = Easing.BezierSpline;
-                anim.easing.bezierCurve = root.standardCurve;
+                anim.duration = plan.durationMs;
+                anim.start();
             }
-            tokenAnim.start();
 
-            if (duration !== 450) {
-                root.wallpaperTransition(root.pickTransitionMode(), duration);
-            }
+            if (plan.wallpaper) root.wallpaperTransition(root.pickTransitionMode(), plan.durationMs);
         } else {
-            tokenAnim.stop();
+            for (var stopName in tokenAnims) tokenAnims[stopName].stop();
             root.fromRaw = newRaw;
             root.toRaw = newRaw;
             root.currentKey = key;
             for (var key2 in targets) root[key2] = targets[key2];
         }
 
-        if (persist) root.save(key);
+        if (plan.persist) root.save(key);
     }
 
-    // --- Exposed tokens: plain writable properties, driven by tokenAnim. ---
+    // --- Exposed tokens: plain writable properties, driven by tokenAnims. ---
+    // Each needs one entry in the token table of logic/ThemeColors.js, and the other way round.
 
     property color shell: "#0c0c10"
     property color fg: "#f2f1f5"
@@ -251,8 +208,8 @@ Singleton {
 
     // QML forbids a property named "on<Upper...>" as a direct animation
     // target (ambiguous with signal-handler syntax), so onAccent is a
-    // readonly alias over the writable onAccentValue, which tokenAnim
-    // actually drives.
+    // readonly alias over the writable onAccentValue, which tokenAnims
+    // actually drive.
     property color onAccentValue: "#0c0c10"
     readonly property color onAccent: onAccentValue
 
@@ -275,87 +232,34 @@ Singleton {
     /** Panel border: 84% lighter_background mixed with 16% bright_foreground, in OKLab. */
     property color border: "#3a3550"
 
-    /** One ColorAnimation per token above, all started/stopped together by apply(). */
-    ParallelAnimation {
-        id: tokenAnim
-        ColorAnimation { id: shellAnim; target: root; property: "shell" }
-        ColorAnimation { id: fgAnim; target: root; property: "fg" }
-        ColorAnimation { id: fg2Anim; target: root; property: "fg2" }
-        ColorAnimation { id: dimAnim; target: root; property: "dim" }
-        ColorAnimation { id: cardAnim; target: root; property: "card" }
-        ColorAnimation { id: raisedAnim; target: root; property: "raised" }
-        ColorAnimation { id: selectionAnim; target: root; property: "selection" }
-        ColorAnimation { id: accentAnim; target: root; property: "accent" }
-        ColorAnimation { id: onAccentAnim; target: root; property: "onAccentValue" }
-        ColorAnimation { id: darkerBackgroundAnim; target: root; property: "darkerBackground" }
-        ColorAnimation { id: accentFillAnim; target: root; property: "accentFill" }
-        ColorAnimation { id: accentLineAnim; target: root; property: "accentLine" }
-        ColorAnimation { id: sunkAnim; target: root; property: "sunk" }
-        ColorAnimation { id: accentLightAnim; target: root; property: "accentLight" }
-        ColorAnimation { id: accentSecondaryAnim; target: root; property: "accentSecondary" }
-        ColorAnimation { id: borderAnim; target: root; property: "border" }
+    /** token name -> its StandardColorMotion. One per entry of the token table, made once at start. */
+    property var tokenAnims: ({})
+
+    Component {
+        id: tokenAnimFactory
+        StandardColorMotion {}
     }
 
-    /** name -> ColorAnimation, keyed the same as computeTokens()'s return, so apply() can set .to/.duration/.easing in a loop. */
-    readonly property var tokenAnims: ({
-        shell: shellAnim, fg: fgAnim, fg2: fg2Anim, dim: dimAnim, card: cardAnim, raised: raisedAnim,
-        selection: selectionAnim, accent: accentAnim, onAccentValue: onAccentAnim, darkerBackground: darkerBackgroundAnim,
-        accentFill: accentFillAnim, accentLine: accentLineAnim, sunk: sunkAnim, accentLight: accentLightAnim,
-        accentSecondary: accentSecondaryAnim, border: borderAnim
-    })
+    Component.onCompleted: {
+        var made = {};
+        for (var i = 0; i < Colors.tokenTable.length; i++) {
+            var name = Colors.tokenTable[i].name;
+            made[name] = tokenAnimFactory.createObject(root, { target: root, property: name });
+        }
+        root.tokenAnims = made;
+    }
 
-    // --- Color helpers ---
+    // --- Color helpers (the math is in logic/ThemeColors.js) ---
 
     function hexToColor(hex) {
-        hex = String(hex).replace("#", "");
-        return Qt.rgba(
-            parseInt(hex.substring(0, 2), 16) / 255,
-            parseInt(hex.substring(2, 4), 16) / 255,
-            parseInt(hex.substring(4, 6), 16) / 255,
-            1
-        );
-    }
-
-    // --- OKLab color-mix helper, mirroring CSS color-mix(in oklab, a p%, b) ---
-    // sRGB <-> linear <-> LMS <-> OKLab, per Björn Ottosson's reference formulas.
-    function srgbToLinear(c) { return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
-    function linearToSrgb(c) {
-        c = Math.max(0, Math.min(1, c));
-        return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
-    }
-
-    function rgbToOklab(r, g, b) {
-        var lr = srgbToLinear(r), lg = srgbToLinear(g), lb = srgbToLinear(b);
-        var l = 0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb;
-        var m = 0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb;
-        var s = 0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb;
-        var l_ = Math.cbrt(l), m_ = Math.cbrt(m), s_ = Math.cbrt(s);
-        return {
-            L: 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
-            a: 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
-            b: 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_
-        };
-    }
-
-    function oklabToRgb(lab) {
-        var l_ = lab.L + 0.3963377774 * lab.a + 0.2158037573 * lab.b;
-        var m_ = lab.L - 0.1055613458 * lab.a - 0.0638541728 * lab.b;
-        var s_ = lab.L - 0.0894841775 * lab.a - 1.2914855480 * lab.b;
-        var l = l_ * l_ * l_, m = m_ * m_ * m_, s = s_ * s_ * s_;
-        return {
-            r: linearToSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
-            g: linearToSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
-            b: linearToSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s)
-        };
+        var c = Colors.hexToRgb(hex);
+        return Qt.rgba(c.r, c.g, c.b, c.a);
     }
 
     /** Mixes colorA and colorB in OKLab space, pctA percent of colorA (CSS color-mix order). */
     function oklabMix(colorA, colorB, pctA) {
-        var la = rgbToOklab(colorA.r, colorA.g, colorA.b), lb = rgbToOklab(colorB.r, colorB.g, colorB.b);
-        var t = pctA / 100;
-        var mixed = { L: la.L * t + lb.L * (1 - t), a: la.a * t + lb.a * (1 - t), b: la.b * t + lb.b * (1 - t) };
-        var rgb = oklabToRgb(mixed);
-        return Qt.rgba(rgb.r, rgb.g, rgb.b, 1);
+        var c = Colors.oklabMix(colorA, colorB, pctA);
+        return Qt.rgba(c.r, c.g, c.b, 1);
     }
 
     /** Absolute path of this project's data/ folder, self-located. */
@@ -413,6 +317,6 @@ Singleton {
         if (root.palettes.length === 0) return;
         root.restored = true;
         var key = (root.savedKey && root.paletteRaw(root.savedKey)) ? root.savedKey : root.palettes[0].key;
-        root.apply(key, false, false);
+        root.apply(key, { animate: false, persist: false });
     }
 }
