@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.common
+import "../logic/SourceFailures.js" as SourceFailures
 
 /**
  * Claude and Codex rate-limit usage: 5-hour and weekly (7-day) percentages
@@ -16,6 +17,10 @@ import qs.common
  * recomputed every minute so they tick down live. The timers run only while
  * a view is visible (`viewers` > 0, see WhileVisible.qml). When the first
  * viewer appears, the clock and the readings are refreshed at once.
+ * A failed read (no output, or output that is not the expected data) keeps the
+ * last reading and writes one line to the shell log. The next line comes at
+ * the earliest one hour later (SourceFailures.PERIOD_MS), however many
+ * refreshes fail. The line names the source and a fixed reason only.
  */
 Singleton {
     id: root
@@ -69,6 +74,15 @@ Singleton {
         return d > 0 ? (d + "D") : (h + "H");
     }
 
+    /** Last log line time of each source (see SourceFailures.js). */
+    property var lastLogged: ({})
+
+    /** Writes the failure line of a source unless it already wrote one in this period. */
+    function logFailure(reason) {
+        var line = SourceFailures.report(root.lastLogged, "usage", reason, Date.now());
+        if (line !== "") console.warn(line);
+    }
+
     function refresh() {
         if (!fetchProcess.running)
             fetchProcess.running = true;
@@ -99,7 +113,8 @@ Singleton {
                     root.applyBucket(codex.session, function (p) { root.codexSessionPercent = p; }, function (r) { root.codexSessionResetAt = r; });
                     root.applyBucket(codex.weekly, function (p) { root.codexWeeklyPercent = p; }, function (r) { root.codexWeeklyResetAt = r; });
                 } catch (e) {
-                    // Malformed/empty output: keep the previous reading, no log spam.
+                    // Malformed/empty output: keep the previous reading and log once per period.
+                    root.logFailure(SourceFailures.outputReason(text));
                 }
             }
         }

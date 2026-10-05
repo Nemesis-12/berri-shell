@@ -7,7 +7,9 @@ import qs.services
  * Current conditions card for one day (mock 5C, first cell, 300x272):
  * side label, location, update time, refresh, big temperature, condition
  * icon, condition, feels like / high / low and sunrise / sunset.
- * Day 0 is now; later days show that day's forecast.
+ * Day 0 is now; later days show that day's forecast. While the last refresh
+ * failed (`Weather.error`), the temperature and condition icon turn dim and
+ * a StaleChip with the data age replaces the update time.
  */
 Item {
     id: root
@@ -18,6 +20,8 @@ Item {
 
     readonly property var detail: { Weather.updatedAt; return Weather.dayDetail(root.day) || ({}); }
     readonly property bool isNow: root.day === 0
+    /** True while the last refresh failed: the readout turns dim and a chip shows the age. */
+    readonly property bool stale: Weather.error !== ""
     readonly property bool byDay: root.detail.isDay === undefined ? (root.isNow ? Weather.isDay : true) : root.detail.isDay
     readonly property string group: Weather.weatherGroup(root.detail.code === undefined ? 3 : root.detail.code)
     readonly property bool hasFeelsLike: root.detail.feelsLikeC !== undefined && root.detail.feelsLikeC !== null
@@ -59,8 +63,10 @@ Item {
                 font.letterSpacing: 1.2
             }
             MonoText {
+                visible: !root.stale
                 text: Weather.updatedAt > 0 ? "Updated " + Fmt.clock(Weather.updatedAt, root.clock24) : ""
             }
+            StaleChip {}
         }
 
         Rectangle {
@@ -116,6 +122,8 @@ Item {
             CondensedText {
                 id: big
                 text: root.temp(root.detail.tempC)
+                color: root.stale ? Theme.dim : Theme.fg
+                Behavior on color { StandardColorMotion { duration: Theme.stateMs } }
                 font.pixelSize: 128
                 font.letterSpacing: -5.12
                 x: -2
@@ -135,7 +143,8 @@ Item {
                 name: Weather.iconForGroup(root.group, root.byDay)
                 size: 48
                 strokeWidth: 1.4
-                color: Theme.accentLight
+                color: root.stale ? Theme.dim : Theme.accentLight
+                Behavior on color { StandardColorMotion { duration: Theme.stateMs } }
             }
         }
 

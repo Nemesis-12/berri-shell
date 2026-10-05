@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "../logic/WeatherParse.js" as WeatherParse
+import "../logic/SourceFailures.js" as SourceFailures
 
 /**
  * Weather data for the pill, the Home cell and the Weather tab. Location comes from Omarchy's own weather
@@ -10,7 +11,11 @@ import "../logic/WeatherParse.js" as WeatherParse
  * lookup. Actual conditions come from Open-Meteo. Refreshes every 15 min,
  * resolves location each hour, and retries failed calls after 45 seconds.
  * One Open-Meteo request per refresh gives current values, 7 days and hourly data.
- * On failure the last good data stays and `error` holds a short text.
+ * On failure the last good data stays and `error` holds a short text: "Offline",
+ * "Bad data" or "No location". The views dim the readout and show the age of the
+ * data while `error` is set. A failure also writes one line to the shell log
+ * (name and fixed reason only). The next line comes at the earliest one hour
+ * later (SourceFailures.PERIOD_MS), however many retries fail.
  * Temperatures are in Celsius.
  * Times: `sunrise`, `sunset` are local "HH:MM" strings; `hours[].time` and `days[].date` are Dates.
  */
@@ -36,6 +41,15 @@ Singleton {
     property bool loading: false
     /** "" or a short text about the last failed refresh. */
     property string error: ""
+
+    /** Last log line time of each source (see SourceFailures.js). */
+    property var lastLogged: ({})
+
+    /** Writes the failure line unless one was written in this period. */
+    function logFailure(reason) {
+        var line = SourceFailures.report(root.lastLogged, "weather", reason, Date.now());
+        if (line !== "") console.warn(line);
+    }
 
     // Other current readouts (same names as dayDetail(0)).
     readonly property int feelsLikeC: current ? current.feelsLikeC : 0
@@ -179,6 +193,7 @@ Singleton {
                 } catch (e) {
                     // No location available; leave the placeholder showing.
                     root.error = "No location";
+                    root.logFailure("no location");
                     retryTimer.restart();
                 }
             }
@@ -234,6 +249,8 @@ Singleton {
                 } catch (e) {
                     // Keep the last good data on failure.
                     root.error = "Bad data";
+                    // An empty answer is logged at exit: the exit code tells offline from bad data.
+                    if (text !== "") root.logFailure("bad data");
                     retryTimer.restart();
                 }
                 root.loading = false;
@@ -242,9 +259,10 @@ Singleton {
         onExited: (code) => {
             if (code !== 0) {
                 root.error = "Offline";
+                root.logFailure("offline");
                 root.loading = false;
                 retryTimer.restart();
-            }
+            } else if (root.error === "Bad data") root.logFailure("bad data");
         }
     }
 

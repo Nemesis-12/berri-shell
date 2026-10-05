@@ -32,6 +32,7 @@ function runWeather(scenario) {
       .replace(/^import Quickshell\n/m, 'import "Io"\n')
       .replace(/^import Quickshell.Io\n/m, "")
       .replace('"../logic/WeatherParse.js"', JSON.stringify(path.join(repo, "logic/WeatherParse.js")))
+      .replace('"../logic/SourceFailures.js"', JSON.stringify(path.join(repo, "logic/SourceFailures.js")))
       .replace('Quickshell.env("HOME")', '"/synthetic-home"');
     fs.writeFileSync(path.join(folder, "WeatherUnderTest.qml"), source);
     const config = { scenario, forecast, timeScale: Number(process.env.WEATHER_TEST_TIME_SCALE || 0.01) };
