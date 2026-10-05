@@ -13,7 +13,7 @@ import qs.services
  *
  * Items come from the Calendar store: it is asked once per month shown
  * (previous, this, next) each time Calendar.revision changes, and not once
- * per cell.
+ * per cell. A hidden page does not ask. It builds again when it is shown.
  */
 Item {
     id: root
@@ -59,9 +59,13 @@ Item {
     // Room under the 16px number row (5px padding top and bottom, 3px gap).
     readonly property int chipsThatFit: Math.max(0, Math.floor((cellHeight - 10 - 16) / (chipHeight + chipGap)))
 
-    // Day cells: date, and the items of that day.
-    readonly property var cells: {
-        var revision = Calendar.revision;
+    // Day cells: date, and the items of that day. A hidden page keeps its last cells and builds again when shown.
+    property var cells: []
+    property bool cellsStale: true
+
+    function refreshCells(): void {
+        if (!root.visible) { root.cellsStale = true; return; }
+        root.cellsStale = false;
         var first = new Date(root.year, root.month, 1);
         var offset = (first.getDay() - root.weekStart + 7) % 7;
         // Calendar.itemsInMonth gives { "YYYY-MM-DD": [item] } for one month (months 1..12).
@@ -78,7 +82,18 @@ Item {
             var day = new Date(dayKey + "T00:00:00");
             out.push({ date: day, items: byDay[dayKey] || [] });
         }
-        return out;
+        root.cells = out;
+    }
+
+    onYearChanged: refreshCells()
+    onMonthChanged: refreshCells()
+    onWeekStartChanged: refreshCells()
+    onVisibleChanged: if (visible && cellsStale) refreshCells()
+    Component.onCompleted: refreshCells()
+
+    Connections {
+        target: Calendar
+        function onRevisionChanged() { root.refreshCells(); }
     }
 
     /** The day under a scene point, or null when the point is outside the grid. */

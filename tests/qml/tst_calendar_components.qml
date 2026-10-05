@@ -11,6 +11,9 @@ TestCase {
     name: "CalendarComponents"
     width: 900
     height: 600
+    // A hidden tab does not load its rows, so the check shows the window.
+    visible: true
+    when: windowShown
 
     Component {
         id: tabComponent

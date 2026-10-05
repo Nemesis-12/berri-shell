@@ -433,6 +433,7 @@ Item {
                     selectedDate: root.selectedDate
                     today: root.today
                     opacity: root.frontIsA ? root.progress : 1 - root.progress
+                    visible: opacity > 0.001
                     transform: Translate { y: 10 * root.slideSign * (root.frontIsA ? 1 - root.progress : -root.progress) }
                     z: root.frontIsA ? 1 : 0
                     enabled: root.frontIsA
@@ -455,6 +456,7 @@ Item {
                     selectedDate: root.selectedDate
                     today: root.today
                     opacity: root.frontIsA ? 1 - root.progress : root.progress
+                    visible: opacity > 0.001
                     transform: Translate { y: 10 * root.slideSign * (root.frontIsA ? -root.progress : 1 - root.progress) }
                     z: root.frontIsA ? 0 : 1
                     enabled: !root.frontIsA
