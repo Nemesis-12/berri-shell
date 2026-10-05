@@ -222,5 +222,15 @@ Item {
             compare(writes, [["brightnessctl", "set", "-d", "panel", "60%"],
                              ["brightnessctl", "set", "-d", "panel", "65%"]]);
         }
+
+        // Checks that a drag to zero writes one percent, not zero.
+        function test_brightness_never_goes_below_one_percent() {
+            const commandCount = ProcessLog.commands.length;
+            Brightness.setValue(0);
+            compare(Brightness.value, 1);
+            tryCompare(ProcessLog, "brightness", 1);
+            const writes = ProcessLog.commands.slice(commandCount).filter(command => command.indexOf("set") >= 0);
+            compare(writes, [["brightnessctl", "set", "-d", "panel", "1%"]]);
+        }
     }
 }

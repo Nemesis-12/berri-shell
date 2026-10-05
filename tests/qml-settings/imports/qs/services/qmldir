@@ -1,0 +1,7 @@
+module qs.services
+singleton Theme 1.0 Theme.qml
+singleton SystemUsage 1.0 SystemUsage.qml
+singleton Clock 1.0 Clock.qml
+singleton AutoPowerProfile 1.0 AutoPowerProfile.qml
+singleton Nightlight 1.0 Nightlight.qml
+singleton PowerModes 1.0 PowerModes.qml

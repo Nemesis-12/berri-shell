@@ -32,6 +32,8 @@ ShellRoot {
     readonly property var notificationService: Notifications
     readonly property var lowBatteryService: LowBatteryAlert
     readonly property var reminderService: ReminderNotifier
+    // The saved power mode applies at start, before any view creates PowerModes.
+    readonly property var powerModesService: PowerModes
 
     // berri's own desktop background (28), on every monitor, and the
     // "identify monitors" number flash. Both are self-contained Variants
