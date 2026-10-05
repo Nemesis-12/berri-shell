@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import "../logic/CalendarIcs.js" as Ics
 import "../logic/CalendarSave.js" as Save
+import "../logic/SavedCalendars.js" as SavedCalendars
 import "../logic/CalendarZone.js" as Zone
 import "../logic/Times.js" as Times
 import qs.common
@@ -277,8 +278,11 @@ Singleton {
     function refresh(id: string): void {
         var meta = _calendars[id];
         if (!meta || meta.kind !== "link" || meta.refreshing) return;
+        // A saved link is checked like a typed one: no download for a rejected link.
+        var https = Ics.feedUrl(meta.url);
+        if (!https) { meta.error = "Use an https:// or webcal:// link"; return; }
         meta.refreshing = true;
-        _download("refresh", meta.url, Ics.feedUrl(meta.url) || meta.url, id);
+        _download("refresh", meta.url, https, id);
     }
 
     /** Removes a file or link calendar and its file. The local calendar stays. */
@@ -672,7 +676,8 @@ Singleton {
             var s = saved[i];
             if (!s || typeof s.id !== "string" || typeof s.file !== "string" || meta[s.id]) continue;
             if (s.id === "berri") { local.color = Ics.cleanColor(s.color) || "accent"; local.hidden = !!s.hidden; continue; }
-            if ((s.kind !== "file" && s.kind !== "link") || s.file.indexOf("..") >= 0) continue;
+            // Saved names become file paths: skip any entry that could reach outside the calendar folder.
+            if (!SavedCalendars.isSafeEntry(s)) continue;
             meta[s.id] = { id: s.id, kind: s.kind, name: String(s.name || ""), color: Ics.cleanColor(s.color) || "accent",
                 hidden: !!s.hidden, url: s.kind === "link" ? String(s.url || "") : "", file: s.file, updatedAt: +s.updatedAt || 0,
                 colorOverrides: s.kind === "link" ? Ics.pruneColorOverrides(s.colorOverrides, null) : ({}),
