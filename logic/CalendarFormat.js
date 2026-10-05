@@ -299,14 +299,8 @@ function zonedSeries(start, endValue, localZone) {
 
 function parseItem(node, localZone) {
     var isTodo = node.name === "VTODO";
-    var item = {
-        uid: "", kind: isTodo ? "task" : "event", title: "",
-        date: null, time: null, end: null, endDate: null,
-        color: "accent", repeat: "none", interval: 1, byDay: [], monthWeekday: null, until: null, count: null,
-        exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: null, ruleRest: null,
-        zoned: null, changedOccurrences: [],
-        raw: [], rawChildren: []
-    };
+    var item = Items.blankItem();
+    if (isTodo) item.kind = "task";
     var start = null, endValue = null, sawDoneCompleted = false;
     var sourceDates = { start: null, end: null, until: null, exdates: [] };
     var ownColor = null, legacyColor = null;
