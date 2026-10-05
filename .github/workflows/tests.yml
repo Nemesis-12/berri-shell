@@ -1,0 +1,47 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QT_QUICK_BACKEND: software
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '26'
+          package-manager-cache: false
+      - name: Install Qt Quick Test
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+        with:
+          version: '6.11.2'
+          archives: qtbase qtdeclarative icu
+          aqtversion: '==3.3.0'
+          py7zrversion: '==1.1.3'
+      - name: Install Qt system libraries
+        run: sudo apt-get install --yes --no-install-recommends libegl1 libfontconfig1 libgl1 libxkbcommon0
+      - name: Set QML runners
+        # Tests call `qml6` by name and read QMLTESTRUNNER for qmltestrunner.
+        run: |
+          mkdir -p "$RUNNER_TEMP/qt-bin"
+          ln -s "$QT_ROOT_DIR/bin/qml" "$RUNNER_TEMP/qt-bin/qml6"
+          echo "$RUNNER_TEMP/qt-bin" >> "$GITHUB_PATH"
+          echo "QMLTESTRUNNER=$QT_ROOT_DIR/bin/qmltestrunner" >> "$GITHUB_ENV"
+      - name: JavaScript and QML tests
+        run: node --test tests/
+      - name: Python tests
+        working-directory: scripts
+        run: python3 -m unittest test-*.py
+      - name: Rust tests
+        run: cargo test --manifest-path tools/feed-to-records/Cargo.toml --locked --offline
