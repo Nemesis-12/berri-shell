@@ -25,3 +25,8 @@ check because an unknown Connections handler can warn while Qt returns success.
 Mutation tests prove that comment braces pass, renamed component and service
 signals fail, and an added required row property fails. Each mutation changes
 only its test copy. The runner removes the copy after the test.
+
+The call-order check (`tst_calendar_order.qml`) reads `TestIo.events`. The fake file
+view logs each write there, and the check logs each `revisionChanged` and `saveFailed`
+signal with the titles the views read at that moment. It proves the order: save,
+rebuild, signal. A failed save is undone and rebuilt before `saveFailed`.
