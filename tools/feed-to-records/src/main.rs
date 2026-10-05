@@ -2,8 +2,10 @@
 //! Usage: feed-to-records INPUT.ics OUTPUT.json
 
 use std::{
-    env, fs, io,
+    env, fs,
+    io::{self, Write},
     os::raw::{c_char, c_int, c_long},
+    os::unix::fs::OpenOptionsExt,
     path::Path,
 };
 
@@ -1025,7 +1027,15 @@ fn convert(input: &Path, output: &Path) -> io::Result<()> {
     }
     let feed = read_feed(text);
     let temporary = output.with_extension(format!("json.tmp.{}", std::process::id()));
-    fs::write(&temporary, feed_json(&feed))?;
+    // The records file is owner-only, whatever the creation mask is.
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(&temporary)?;
+    file.write_all(feed_json(&feed).as_bytes())?;
+    drop(file);
     fs::rename(temporary, output)
 }
 

@@ -175,9 +175,8 @@ Scope {
         Process {
             required property string jsonPath
             running: true
-            command: ["sh", "-c",
-                '[ -f "$2" ] || exit 0; [ -x "$1" ] || exit ' + root.exitParserMissing + '; "$1" "$2" "$3"',
-                "sh", root.parser, jsonPath.replace(/\.json$/, ".ics"), jsonPath]
+            command: ["sh", Quickshell.shellPath("scripts/refresh-records.sh"), root.parser,
+                jsonPath.replace(/\.json$/, ".ics"), jsonPath, String(root.exitParserMissing)]
             onExited: (code, status) => {
                 delete root.freshening[jsonPath];
                 if (code === root.exitParserMissing) root.parserMissing();

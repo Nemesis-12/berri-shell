@@ -22,7 +22,12 @@ def read_recent_answer(path: Path, max_age: float | None = None) -> str | None:
 def save_answer(path: Path, text: str) -> None:
     """Save text; a failed cache write must not stop a script."""
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(path.parent, 0o700)
+        # Answers are private: the file is owner-only, whatever the creation mask is.
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            os.fchmod(f.fileno(), 0o600)
+            f.write(text)
     except OSError:
         pass
