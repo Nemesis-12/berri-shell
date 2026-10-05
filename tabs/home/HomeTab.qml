@@ -25,18 +25,18 @@ Item {
     }
 
     // The panel sits on the Overlay layer above a normal dialog window, so a
-    // chooser would open hidden underneath it. The panel starts to close first.
+    // chooser would open hidden underneath it. The chooser opens once the panel is closed.
     Connections {
         target: profileCell
         function onPictureClicked() {
-            root.requests.dialogRequested(() => profileCell.openPictureChooser(), false);
+            root.requests.dialogRequested(() => profileCell.openPictureChooser(), true);
         }
     }
 
     Connections {
         target: stickerCell
         function onStickerClicked() {
-            root.requests.dialogRequested(() => stickerCell.openStickerChooser(), false);
+            root.requests.dialogRequested(() => stickerCell.openStickerChooser(), true);
         }
     }
 
