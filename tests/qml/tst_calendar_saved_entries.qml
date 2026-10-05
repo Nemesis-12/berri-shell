@@ -52,7 +52,10 @@ TestCase {
         // Only the valid link starts a download, into its own file name.
         compare(TestIo.downloads.length, 1);
         compare(TestIo.downloads[0].request.url, "https://ok.example.test/a.ics");
-        compare(TestIo.downloads[0].command[4], Calendar.dir + "/subscriptions/l-d");
+        var command = TestIo.downloads[0].command;
+        verify(command.indexOf(Calendar.dir + "/subscriptions/l-d") !== -1);
+        compare(TestIo.downloads[0].environment.BERRI_FEED_URL, "https://ok.example.test/a.ics");
+        compare(command.indexOf("https://ok.example.test/a.ics"), -1);
         compare(Calendar._calendars["l-a"].error, "Use an https:// or webcal:// link");
         compare(Calendar._calendars["l-a"].refreshing, false);
     }
