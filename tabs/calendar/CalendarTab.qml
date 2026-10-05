@@ -61,7 +61,18 @@ Item {
     property int viewYear: new Date().getFullYear()
     property int viewMonth: new Date().getMonth()
 
-    onPanelOpenChanged: if (!root.panelOpen) sourcesView.releaseFocus()
+    /** Day text of `today` at the last close; "" until the panel closes once. */
+    property string closedDay: ""
+
+    // Reopening on a later day selects the current day.
+    onPanelOpenChanged: {
+        if (!root.panelOpen) {
+            sourcesView.releaseFocus();
+            root.closedDay = Times.dayKey(root.today);
+        } else if (root.closedDay !== "" && Times.dayKey(root.today) !== root.closedDay) {
+            root.today_();
+        }
+    }
 
     // ---- calendars view (flip with the month grid)
 
@@ -219,9 +230,8 @@ Item {
     }
 
     function today_() {
-        var now = new Date();
-        root.selectedDate = now;
-        root.showMonth(now.getFullYear(), now.getMonth());
+        root.selectedDate = root.today;
+        root.showMonth(root.today.getFullYear(), root.today.getMonth());
     }
 
     // Slide direction of the last month change: 1 forward, -1 back.

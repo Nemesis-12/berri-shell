@@ -1,4 +1,5 @@
 import QtQuick
+import "../../logic/CalendarDrag.js" as Drag
 import "../../logic/Times.js" as Times
 import qs.common
 import qs.services
@@ -48,9 +49,6 @@ Item {
 
     /** Day text ("YYYY-MM-DD") of the cell that would take the drop, or "". */
     property string dropKey: ""
-
-    /** Pointer movement (px) before a press on a chip becomes a drag. */
-    readonly property int dragThreshold: 5
 
     readonly property int rows: 6
     readonly property int columns: 7
@@ -131,6 +129,16 @@ Item {
             color: isDropTarget ? Theme.hover : (isSelected ? Theme.selectionSoft : (inMonth ? Theme.card : Theme.shell))
 
             ColorFade on color { duration: Theme.stateMs }
+
+            // Blank-cell click selects the day. It sits below the chips, so a chip gets its own clicks and drags.
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.dayPicked(cell.day)
+                onDoubleClicked: root.dayAddRequested(cell.day)
+            }
+
+            HoverHandler { id: cellHover }
 
             Item {
                 anchors.fill: parent
@@ -214,7 +222,7 @@ Item {
                                 onPositionChanged: mouse => {
                                     if (!pressed || chip.modelData.readOnly) return;
                                     if (!dragging) {
-                                        if (Math.hypot(mouse.x - pressAt.x, mouse.y - pressAt.y) < root.dragThreshold) return;
+                                        if (!Drag.pastThreshold(mouse.x - pressAt.x, mouse.y - pressAt.y)) return;
                                         dragging = true;
                                         moved = true;
                                         root.dragStarted({
@@ -281,18 +289,9 @@ Item {
             Rectangle {
                 anchors.fill: parent
                 color: Theme.fg
-                opacity: cellMouse.containsMouse ? 0.06 : 0
+                opacity: cellHover.hovered ? 0.06 : 0
 
                 Fade on opacity {}
-            }
-
-            MouseArea {
-                id: cellMouse
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.dayPicked(cell.day)
-                onDoubleClicked: root.dayAddRequested(cell.day)
             }
         }
     }
