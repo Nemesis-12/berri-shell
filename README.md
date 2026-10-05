@@ -107,13 +107,3 @@ Icons come from [Lucide](https://lucide.dev/) under the ISC license. The bundled
 ## Development
 
 Development also needs `node` for the JavaScript tests and Qt's `qmltestrunner` with QtTest for offscreen QML tests. Set `QMLTESTRUNNER` if it is not at `/usr/lib/qt6/bin/qmltestrunner`. It also needs `qml6` for isolated weather service tests. These tests use Qt's offscreen platform, fake services or synthetic data. They do not start a shell instance or make network requests. Python tests use the standard library. The pre-push hook needs `node`, `qmltestrunner`, `qml6`, `python3` and `cargo`.
-
-### Worktrees and agent rules
-
-`AGENTS.md` holds the rules for coding agents. It is private: git ignores it, so it is never committed and git does not copy it to a new worktree. Create each new worktree with the script, which copies `AGENTS.md` from your main clone:
-
-```sh
-tools/new-worktree.sh my-branch ../berri-my-branch
-```
-
-Run `tools/setup.sh` once in each new clone. It also turns on the pre-push hook. Temporary screenshots in the repository root are ignored by git.
