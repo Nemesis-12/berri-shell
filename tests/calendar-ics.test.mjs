@@ -589,3 +589,23 @@ test("an overnight moved occurrence shows on both of its days", () => {
   assert.deepEqual(one("2026-10-09"), [["Moved", "2026-10-08"]]);
   assert.deepEqual(one("2026-10-10"), [["Moved", "2026-10-08"]]);
 });
+
+test("folding keeps 75-octet ASCII lines whole and folds longer or non-ASCII lines", () => {
+  const edge = "X:" + "a".repeat(73);
+  assert.equal(Format.foldLine(edge), edge);
+  assert.equal(Format.foldLine(edge + "a"), edge + "\r\n a");
+  const wide = "X:" + "é".repeat(40);
+  assert.equal(Format.foldLine(wide), "X:" + "é".repeat(36) + "\r\n " + "é".repeat(4));
+});
+
+test("a large calendar is written as the same lines as its parts in order", () => {
+  const cal = Format.emptyCalendar();
+  cal.raw = ["X-WR-CALNAME:Big"];
+  cal.rawComponents = [["BEGIN:VTIMEZONE", "TZID:Zone", "END:VTIMEZONE"]];
+  for (let i = 0; i < 3000; i++) cal.items.push(item({ uid: "u" + i, title: "Event " + i, date: "2026-10-05", time: "09:00", stamp: "20261001T000000Z" }));
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:" + Format.calendarProduct, "X-WR-CALNAME:Big",
+    "BEGIN:VTIMEZONE", "TZID:Zone", "END:VTIMEZONE"];
+  for (const each of cal.items) lines.push(...Format.itemLines(each));
+  lines.push("END:VCALENDAR");
+  assert.equal(Format.writeCalendar(cal), lines.map(Format.foldLine).join("\r\n") + "\r\n");
+});
