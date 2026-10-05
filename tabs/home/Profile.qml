@@ -10,8 +10,10 @@ import "../../logic/SystemFormat.js" as Fmt
 /**
  * Profile cell (ticket 13): account picture on the left, username and
  * uptime on the right. Mirrors the mock's 5C profile row (Berri Dashboard
- * v2.dc.html, ~line 342). Picture source, in order: AccountsService's icon
- * for this user, then ~/.face, then a solid Theme.accent square. Both files
+ * v2.dc.html, ~line 342). Picture source, in order: ~/.face (the picture the
+ * user chose, or put there), then AccountsService's icon for this user, then
+ * a solid Theme.accent square. The chosen picture is never replaced by the
+ * system icon. Both files
  * are re-checked every minute so a newly added ~/.face appears without a
  * restart. SystemUsage supplies the same uptime snapshot as the System tab.
  * Picture checks run only while visible, and once when it shows again.
@@ -72,23 +74,23 @@ Item {
     }
 
     function checkPicture() {
-        accountsIconCheck.running = true;
-    }
-
-    Process {
-        id: accountsIconCheck
-        command: ["test", "-f", root.accountsIconPath]
-        onExited: (exitCode) => {
-            if (exitCode === 0) root.pictureSource = "file://" + root.accountsIconPath;
-            else faceCheck.running = true;
-        }
+        faceCheck.running = true;
     }
 
     Process {
         id: faceCheck
         command: ["test", "-f", root.facePath]
         onExited: (exitCode) => {
-            root.pictureSource = exitCode === 0 ? ("file://" + root.facePath) : "";
+            if (exitCode === 0) root.pictureSource = "file://" + root.facePath;
+            else accountsIconCheck.running = true;
+        }
+    }
+
+    Process {
+        id: accountsIconCheck
+        command: ["test", "-f", root.accountsIconPath]
+        onExited: (exitCode) => {
+            root.pictureSource = exitCode === 0 ? ("file://" + root.accountsIconPath) : "";
         }
     }
 

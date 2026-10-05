@@ -12,6 +12,9 @@ Singleton {
     // Reads brightnessctl every 2 seconds while a view is visible.
     property real value: 0
     property bool dragging: false
+
+    /** Lowest value the screen accepts. Zero would turn the backlight off. */
+    readonly property int minimumPercent: 1
     property real pendingBrightnessSet: -1
 
     // Which backlight device to drive. brightnessctl with no -d picks the
@@ -97,7 +100,7 @@ Singleton {
         running: root.pendingBrightnessSet >= 0
         onTriggered: {
             if (!brightnessSetProc.running) {
-                brightnessSetProc.command = ["brightnessctl", "set"].concat(root.deviceArgs()).concat([Math.round(root.pendingBrightnessSet) + "%"]);
+                brightnessSetProc.command = ["brightnessctl", "set"].concat(root.deviceArgs()).concat([Math.max(root.minimumPercent, Math.round(root.pendingBrightnessSet)) + "%"]);
                 brightnessSetProc.running = true;
                 root.pendingBrightnessSet = -1;
             }
@@ -108,9 +111,10 @@ Singleton {
         id: brightnessSetProc
     }
 
-    /** Queues the latest drag value while a previous write finishes. */
+    /** Queues the latest drag value (at least minimumPercent) while a previous write finishes. */
     function setValue(newValue) {
-        root.value = newValue;
-        root.pendingBrightnessSet = newValue;
+        var wanted = Math.max(root.minimumPercent, newValue);
+        root.value = wanted;
+        root.pendingBrightnessSet = wanted;
     }
 }
