@@ -217,8 +217,8 @@ test("looksLikeCalendar, unusedColor and shortHash", () => {
   assert.equal(Queries.looksLikeCalendar("<html>nope</html>"), false);
   assert.equal(Queries.unusedColor(["accent", "blue"]), "green");
   assert.equal(Queries.unusedColor(plain(Items.itemColors)), "accent");
-  assert.equal(Queries.shortHash("a"), Queries.shortHash("a"));
-  assert.notEqual(Queries.shortHash("a"), Queries.shortHash("b"));
+  assert.equal(Items.shortHash("a"), Items.shortHash("a"));
+  assert.notEqual(Items.shortHash("a"), Items.shortHash("b"));
 });
 
 test("curlError gives a short message", () => {
@@ -505,40 +505,6 @@ test("new floating recurrence limits keep their floating date-time form", () => 
   const cal = Format.emptyCalendar();
   cal.items.push(item({ date: "2026-10-05", time: "09:30", repeat: "daily", until: "2026-10-08" }));
   assert.match(Format.writeCalendar(cal), /UNTIL=20261008T235959\r\n/);
-});
-
-test("one calendar change updates rows, month items and reminders together", () => {
-  const local = {
-    id: "berri", name: "berri", kind: "local", color: "accent", hidden: false,
-    file: "berri.ics", path: "/cal/berri.ics", updatedAt: 0, error: "",
-    document: Format.emptyCalendar(),
-  };
-  const feed = {
-    id: "feed", name: "Feed", kind: "link", color: "blue", hidden: false,
-    file: "subscriptions/feed.ics", path: "/cal/subscriptions/feed.ics",
-    url: "https://calendar.example.test/feed", updatedAt: 10, error: "",
-    document: Format.emptyCalendar(),
-  };
-  local.document.items.push(item({ uid: "local", kind: "reminder", date: "2026-10-01", time: "09:00" }));
-  feed.document.items.push(item({ uid: "remote", title: "Feed event", date: "2026-10-02" }));
-  const check = (calendars, counts, shownDays, reminderUids) => {
-    const result = Queries.projectCalendars(calendars);
-    assert.deepEqual(plain(result.calendars.map((calendar) => calendar.itemCount)), counts);
-    assert.deepEqual(Object.keys(Queries.itemsInMonth(result.items, 2026, 10, result.names)), shownDays);
-    assert.deepEqual(plain(result.reminders.map((reminder) => reminder.uid)), reminderUids);
-    return result;
-  };
-  const first = check([local, feed], [1, 1], ["2026-10-01", "2026-10-02"], ["local"]);
-  assert.equal(first.itemPaths[Items.itemKey("feed", "remote")], feed.path);
-  feed.document = Format.readCalendar("BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:new\nDTSTART;VALUE=DATE:20261003\nSUMMARY:Refreshed\nEND:VEVENT\nEND:VCALENDAR\n");
-  const refreshed = check([local, feed], [1, 1], ["2026-10-01", "2026-10-03"], ["local"]);
-  assert.equal(refreshed.itemPaths[Items.itemKey("feed", "remote")], undefined);
-  local.hidden = true;
-  check([local, feed], [1, 1], ["2026-10-03"], []);
-  local.hidden = false;
-  local.document.items = [];
-  check([local, feed], [0, 1], ["2026-10-03"], []);
-  check([local], [0], [], []);
 });
 
 test("calendar date helpers keep day keys at month and year changes", () => {

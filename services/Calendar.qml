@@ -1,7 +1,10 @@
 pragma Singleton
 import QtQuick
 import Quickshell
-import "../logic/CalendarIcs.js" as Ics
+import "../logic/CalendarFormat.js" as Format
+import "../logic/CalendarItems.js" as Items
+import "../logic/CalendarMonths.js" as Months
+import "../logic/CalendarQueries.js" as Queries
 import "../logic/CalendarSave.js" as Save
 import "../logic/SavedCalendars.js" as SavedCalendars
 import "../logic/CalendarZone.js" as Zone
@@ -18,14 +21,14 @@ import qs.notifications
  * Name, color, hidden and link data are kept in ~/.local/state/berri-shell/calendars.json.
  * Answers day and month queries and saves each change at once (atomic write).
  * New items go to berri.ics. The file format and the item shape are described
- * at the top of CalendarIcs.js.
+ * at the top of CalendarItems.js.
  *
  * Views read Calendar.itemsOn(date) or Calendar.itemsInMonth(year, month) inside
  * a binding. Both read `revision`, so the binding runs again after every change.
  * The cache limit is CalendarMonths.js MONTH_CACHE_LIMIT (eight months). Item edits keep
  * unchanged months; imports and calendar-wide settings clear them.
  * Do not edit the arrays.
- * The same event in several calendars shows once (see CalendarIcs.js): the copy
+ * The same event in several calendars shows once (see CalendarItems.js): the copy
  * of the calendar added first, or the copy with its own color. It has `alsoIn`
  * and `alsoInIds`.
  * View uid values encode [calendarId, file UID]. Pass them unchanged to actions.
@@ -79,7 +82,7 @@ Singleton {
 
     /** Occurrences on one day, in day order (all-day first, then by time). */
     function itemsOn(date): var {
-        var key = Ics.toKey(date);
+        var key = Items.toKey(date);
         var month = itemsInMonth(+key.slice(0, 4), +key.slice(5, 7));
         return month[key] || [];
     }
@@ -87,7 +90,7 @@ Singleton {
     /** { "YYYY-MM-DD": [occurrence] } for one month. Each occurrence has a `color` (a preset key or "#rrggbb"), `hasOwnColor`, `calendarId`, `readOnly`, `alsoIn` (names of the calendars with a duplicate) and `alsoInIds`. Hidden calendars give nothing. */
     function itemsInMonth(year: int, month: int): var {
         void root.revision;
-        return Ics.cachedItemsInMonth(_months, year, month);
+        return Months.cachedItemsInMonth(_months, year, month);
     }
 
     /** The selected item for the detail form, or null. Editable items keep their full document fields. */
@@ -95,13 +98,13 @@ Singleton {
         void root.revision;
         var found = _locate(uid, false);
         if (!found) return null;
-        return Ics.shownItem(Ics.withColorOverride(_storedItem(found), found.meta.colorOverrides));
+        return Items.shownItem(Queries.withColorOverride(_storedItem(found), found.meta.colorOverrides));
     }
 
     /** The selected item as a projected item: a copy with its calendarId and readOnly. Link records become stored items first. */
     function _storedItem(found: var): var {
-        if (found.doc) return Ics.projectedItem(found.doc.items[found.index], found.meta.id, false);
-        return Ics.projectedItem(Ics.expandCompactItem(found.meta.records[found.index]), found.meta.id, true);
+        if (found.doc) return Items.projectedItem(found.doc.items[found.index], found.meta.id, false);
+        return Items.projectedItem(Format.expandCompactItem(found.meta.records[found.index]), found.meta.id, true);
     }
 
     /**
@@ -114,7 +117,7 @@ Singleton {
         var found = _locate(uid, false);
         if (!found) return false;
         var clear = color === null || color === undefined || color === "";
-        var clean = clear ? "" : Ics.cleanColor(color);
+        var clean = clear ? "" : Items.cleanColor(color);
         if (!clear && !clean) return false;
         var item = _storedItem(found);
         if (!item.readOnly) return update(uid, { color: clean || "accent" });
@@ -132,7 +135,7 @@ Singleton {
 
     // ---- changes. Each one saves the file and bumps revision.
 
-    /** Adds an item to berri.ics, or to the file calendar in `calendarId` (fields as in CalendarIcs.js, at least date; `color` is a preset key or "#rrggbb", default "accent"). Returns true when the item is saved. */
+    /** Adds an item to berri.ics, or to the file calendar in `calendarId` (fields as in CalendarItems.js, at least date; `color` is a preset key or "#rrggbb", default "accent"). Returns true when the item is saved. */
     function add(fields: var): bool {
         var path = defaultPath;
         var target = fields.calendarId ? _calendars[fields.calendarId] : null;
@@ -140,8 +143,8 @@ Singleton {
         if (target) path = dir + "/" + target.file;
         var calendar = target || _calendars.berri;
         if (!_canWrite(calendar)) return false;
-        var doc = calendar.document || Ics.emptyCalendar();
-        var item = Ics.makeItem(_cleanDates(fields));
+        var doc = calendar.document || Format.emptyCalendar();
+        var item = Items.makeItem(_cleanDates(fields));
         doc.items.push(item);
         calendar.document = doc;
         return _commitItems(path, [item.uid]);
@@ -151,7 +154,7 @@ Singleton {
     function update(uid: string, changes: var): bool {
         var found = _locate(uid, true);
         if (!found) return false;
-        found.doc.items[found.index] = Ics.applyChanges(found.doc.items[found.index], _cleanDates(changes));
+        found.doc.items[found.index] = Items.applyChanges(found.doc.items[found.index], _cleanDates(changes));
         return _commitItems(found.path, [found.doc.items[found.index].uid]);
     }
 
@@ -161,7 +164,7 @@ Singleton {
         if (!found) return false;
         var item = found.doc.items[found.index];
         var day = _optionalKey(occurrenceDate);
-        var kept = day ? Ics.withoutOccurrence(item, day) : null;
+        var kept = day ? Items.withoutOccurrence(item, day) : null;
         if (kept) found.doc.items[found.index] = kept;
         else found.doc.items.splice(found.index, 1);
         return _commitItems(found.path, [item.uid]);
@@ -172,7 +175,7 @@ Singleton {
         var found = _locate(uid, true);
         if (!found) return false;
         var item = found.doc.items[found.index];
-        found.doc.items[found.index] = Ics.withDone(item, _optionalKey(occurrenceDate) || item.date, done);
+        found.doc.items[found.index] = Items.withDone(item, _optionalKey(occurrenceDate) || item.date, done);
         return _commitItems(found.path, [item.uid]);
     }
 
@@ -184,7 +187,7 @@ Singleton {
     function move(uid: string, fromDate, toDate, changes: var): bool {
         var found = _locate(uid, true);
         if (!found) return false;
-        var moved = Ics.moveOccurrence(found.doc.items[found.index], Ics.toKey(fromDate), Ics.toKey(toDate), _cleanDates(changes || {}));
+        var moved = Items.moveOccurrence(found.doc.items[found.index], Items.toKey(fromDate), Items.toKey(toDate), _cleanDates(changes || {}));
         found.doc.items[found.index] = moved.item;
         if (moved.created) found.doc.items.push(moved.created);
         return _commitItems(found.path, moved.created ? [moved.item.uid, moved.created.uid] : [moved.item.uid]);
@@ -199,7 +202,7 @@ Singleton {
         if (!item || item.readOnly) return false;
         var now = new Date();
         var nowTime = Times.pad(now.getHours()) + ":" + Times.pad(now.getMinutes());
-        var to = Ics.snoozeReminder(item.time, Ics.toKey(occurrenceDate), item.alarmMinutes, amount, Ics.toKey(now), nowTime);
+        var to = Items.snoozeReminder(item.time, Items.toKey(occurrenceDate), item.alarmMinutes, amount, Items.toKey(now), nowTime);
         var changes = { time: to.time };
         if (item.alarmMinutes > 0 && to.alarmMinutes !== item.alarmMinutes) changes.alarmMinutes = to.alarmMinutes;
         return move(uid, occurrenceDate, to.date, changes);
@@ -226,7 +229,7 @@ Singleton {
         if (!/\.ics$/i.test(from)) return _fail("Not an .ics file");
         var text = files.readNow(from);
         if (text === null) return _fail("Cannot read the file");
-        if (!Ics.looksLikeCalendar(text)) return _fail("Not a calendar file");
+        if (!Queries.looksLikeCalendar(text)) return _fail("Not a calendar file");
         for (var i = 0; i < _order.length; i++) {
             var other = _calendars[_order[i]];
             if (other.kind === "file" && other.text === text) return other.id;
@@ -235,15 +238,15 @@ Singleton {
         var stem = base.replace(/\.ics$/i, "");
         var file = stem + ".ics";
         for (var n = 2; _fileTaken(file); n++) file = stem + "-" + n + ".ics";
-        var doc = Ics.readCalendar(text, _localZone);
-        var duplicates = Ics.countDuplicates(doc.items, _existingItems());
+        var doc = Format.readCalendar(text, _localZone);
+        var duplicates = Queries.countDuplicates(doc.items, _existingItems());
         var dest = dir + "/" + file;
         var written = _write(dest, text, "", "Could not import calendar");
         if (!written.saved) { lastError = written.error; return ""; }
-        var meta = _addCalendar("f-" + Ics.shortHash(file), "file", Ics.calendarName(doc) || stem, file, "", color);
+        var meta = _addCalendar("f-" + Items.shortHash(file), "file", Queries.calendarName(doc) || stem, file, "", color);
         meta.document = doc;
         meta.text = text;
-        meta.signature = text.length + ":" + Ics.shortHash(text);
+        meta.signature = text.length + ":" + Items.shortHash(text);
         meta.loaded = true;
         _finishAdd();
         lastImportDuplicates = duplicates;
@@ -252,7 +255,7 @@ Singleton {
 
     /** Downloads a link and reports what is in it. Nothing is saved. Result: `linkChecked`. */
     function checkLink(url: string): void {
-        var https = Ics.feedUrl(url);
+        var https = Queries.feedUrl(url);
         if (!https) { Qt.callLater(function () { root.linkChecked(url, false, "", 0, "Use an https:// or webcal:// link", 0); }); return; }
         _download("check", url, https, "");
     }
@@ -260,12 +263,12 @@ Singleton {
     /** Returns the request id. The subscribed result carries the same id. */
     function subscribe(url: string, color): int {
         var requestId = ++_nextSubscription;
-        var https = Ics.feedUrl(url);
+        var https = Queries.feedUrl(url);
         if (!https) {
             Qt.callLater(function () { root.subscribed(url, "", "Use an https:// or webcal:// link", requestId); });
             return requestId;
         }
-        var id = "l-" + Ics.shortHash(https);
+        var id = "l-" + Items.shortHash(https);
         if (_calendars[id]) {
             Qt.callLater(function () { root.subscribed(url, id, "", requestId); });
             return requestId;
@@ -279,7 +282,7 @@ Singleton {
         var meta = _calendars[id];
         if (!meta || meta.kind !== "link" || meta.refreshing) return;
         // A saved link is checked like a typed one: no download for a rejected link.
-        var https = Ics.feedUrl(meta.url);
+        var https = Queries.feedUrl(meta.url);
         if (!https) { meta.error = "Use an https:// or webcal:// link"; return; }
         meta.refreshing = true;
         _download("refresh", meta.url, https, id);
@@ -299,7 +302,7 @@ Singleton {
     }
 
     function setCalendarColor(id: string, color: string): void {
-        var clean = Ics.cleanColor(color);
+        var clean = Items.cleanColor(color);
         if (!_calendars[id] || !clean || _calendars[id].color === clean) return;
         _calendars[id].color = clean;
         _saveState();
@@ -311,7 +314,7 @@ Singleton {
      * calendar uses (berri counts, so "accent" is taken when berri uses it).
      */
     function nextCalendarColor(): string {
-        return Ics.newCalendarColor("", _usedColors());
+        return Queries.newCalendarColor("", _usedColors());
     }
 
     /**
@@ -322,7 +325,7 @@ Singleton {
      */
     function applyColorToCalendar(id: string, color: string): bool {
         var meta = _calendars[id];
-        var clean = Ics.cleanColor(color);
+        var clean = Items.cleanColor(color);
         if (!meta || meta.kind === "local" || !clean) return false;
         var previousColor = meta.color;
         meta.color = clean;
@@ -330,7 +333,7 @@ Singleton {
         var doc = meta.document;
         var fileChanged = false;
         if (meta.kind === "link") meta.colorOverrides = ({});
-        else if (doc) fileChanged = Ics.clearItemColors(doc.items) > 0;
+        else if (doc) fileChanged = Items.clearItemColors(doc.items) > 0;
         if (fileChanged && !_commitCalendar(path)) {
             meta.color = previousColor;
             _rebuild();
@@ -353,14 +356,14 @@ Singleton {
     // Editable calendars keep documents and text; links keep compact records.
     property var _calendars: ({})
     property var _order: []
-    property var _months: Ics.createMonthCache([])
+    property var _months: Months.createMonthCache([])
     property bool _stateRead: false
     property int _nextSubscription: 0
 
     /** Day key for an optional date argument; anything that is not a date counts as "no date". */
     function _optionalKey(date): var {
         if (!date) return null;
-        var key = Ics.toKey(date);
+        var key = Items.toKey(date);
         return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : null;
     }
 
@@ -368,7 +371,7 @@ Singleton {
         var out = {};
         for (var k in fields) {
             var v = fields[k];
-            out[k] = (k === "date" || k === "endDate" || k === "until") && v && typeof v !== "string" ? Ics.toKey(v) : v;
+            out[k] = (k === "date" || k === "endDate" || k === "until") && v && typeof v !== "string" ? Items.toKey(v) : v;
         }
         return out;
     }
@@ -382,7 +385,7 @@ Singleton {
             var doc = meta.document;
             var items = doc ? doc.items : meta.records || [];
             for (var i = 0; i < items.length; i++) {
-                out.push(Ics.projectedItem(doc ? items[i] : Ics.expandCompactItem(items[i]), id, !doc));
+                out.push(Items.projectedItem(doc ? items[i] : Format.expandCompactItem(items[i]), id, !doc));
             }
         }
         return out;
@@ -395,13 +398,13 @@ Singleton {
 
     /** The item and its file, or null. Items of link calendars are found only for reading. */
     function _locate(uid: string, forEdit: bool): var {
-        var identity = Ics.itemIdentity(uid);
+        var identity = Items.itemIdentity(uid);
         var meta = identity ? _calendars[identity.calendarId] : null;
         if (!meta || forEdit && meta.kind === "link") return null;
         if (forEdit && !_canWrite(meta)) return null;
         var doc = meta.document;
         var items = doc ? doc.items : meta.records || [];
-        var index = Ics.itemIndex(items, uid, meta.id);
+        var index = Items.itemIndex(items, uid, meta.id);
         return index < 0 ? null : { path: meta.path, doc: doc, meta: meta, index: index };
     }
 
@@ -424,7 +427,7 @@ Singleton {
     }
 
     function _newMeta(id: string, kind: string, name: string, file: string, color): var {
-        return { id: id, kind: kind, name: name, color: kind === "local" ? "accent" : Ics.newCalendarColor(color, _usedColors()),
+        return { id: id, kind: kind, name: name, color: kind === "local" ? "accent" : Queries.newCalendarColor(color, _usedColors()),
             hidden: false, url: "", file: file, updatedAt: 0, colorOverrides: ({}),
             path: dir + "/" + file, document: null, records: null, text: "", signature: "", error: "", convertError: "", refreshing: false, loaded: false, readFailed: false };
     }
@@ -449,19 +452,19 @@ Singleton {
 
     // Replace every derived list together before notifying the views.
     function _rebuild(): void {
-        _months = Ics.createMonthCache(_order.map(function (id) { return _calendars[id]; }));
+        _months = Months.createMonthCache(_order.map(function (id) { return _calendars[id]; }));
         revision++;
     }
 
     // Shows the new update time of a feed that did not change. Cached months stay.
     function _refreshRow(calendar: var): void {
-        Ics.refreshCalendarRow(_months, calendar);
+        Months.refreshCalendarRow(_months, calendar);
         revision++;
     }
 
     // Reproject one calendar and keep months whose edited occurrences did not change.
     function _rebuildItem(calendar: var, uids: var): void {
-        Ics.editMonthCache(_months, calendar, uids);
+        Months.editMonthCache(_months, calendar, uids);
         revision++;
     }
 
@@ -520,7 +523,7 @@ Singleton {
             return;
         }
         if (!failed) { calendar.readFailed = false; if (calendar.kind !== "link") calendar.error = ""; }
-        var signature = text.length + ":" + Ics.shortHash(text);
+        var signature = text.length + ":" + Items.shortHash(text);
         if (failed && calendar.kind === "link") { _recordsFailed(calendar, calendar.convertError || parserError || recordsErrorText); return; }
         if ((!calendar.document && !calendar.records) || !failed && calendar.signature !== signature) {
             var unnamed = !calendar.name;
@@ -533,12 +536,12 @@ Singleton {
                 // Old records stay on screen as a fallback while a failed conversion shows its error.
                 calendar.error = calendar.convertError || "";
             } else {
-                calendar.document = Ics.readCalendar(text, _localZone);
+                calendar.document = Format.readCalendar(text, _localZone);
                 calendar.text = text;
                 calendar.signature = signature;
             }
             if (unnamed && calendar.kind !== "link") {
-                calendar.name = Ics.calendarName(calendar.document) || calendar.file.replace(/\.ics$/i, "");
+                calendar.name = Queries.calendarName(calendar.document) || calendar.file.replace(/\.ics$/i, "");
             }
             if (unnamed) _saveState();
             _rebuild();
@@ -578,14 +581,14 @@ Singleton {
      */
     function _saveAndRebuild(path: string, rebuild: var): bool {
         var calendar = _calendars[_idOfPath(path)];
-        var nextText = Ics.writeCalendar(calendar.document, _localZone);
+        var nextText = Format.writeCalendar(calendar.document, _localZone);
         var written = _write(path, nextText, calendar.text, "Could not save " + calendar.name);
         if (written.saved) {
             calendar.text = written.text;
-            calendar.signature = written.text.length + ":" + Ics.shortHash(written.text);
+            calendar.signature = written.text.length + ":" + Items.shortHash(written.text);
             calendar.loaded = true;
         } else {
-            calendar.document = Ics.readCalendar(written.text, _localZone);
+            calendar.document = Format.readCalendar(written.text, _localZone);
         }
         lastError = written.error;
         rebuild(calendar);
@@ -603,7 +606,7 @@ Singleton {
     function _downloaded(purpose: string, shownUrl: string, url: string, id: string, code: int, jsonPath: string, color: string, requestId: int): void {
         var error = code === files.exitParserMissing ? parserMissingText :
             code === files.exitNotCalendar ? "Not a calendar feed or parser failed" :
-            code === files.exitSaveFailed ? "Could not save calendar" : code !== 0 ? Ics.curlError(code) : "";
+            code === files.exitSaveFailed ? "Could not save calendar" : code !== 0 ? Queries.curlError(code) : "";
         var doc = null;
         var json = "";
         if (!error) {
@@ -618,18 +621,18 @@ Singleton {
             console.error("Calendar: " + error);
             if (code === files.exitParserMissing) parserError = error;
         } else parserError = "";
-        var name = doc ? doc.name || Ics.linkHost(url) : "";
+        var name = doc ? doc.name || Queries.linkHost(url) : "";
         if (purpose === "check") {
             var records = doc ? doc.records : [];
             var calendars = _order.map(function (key) { return _calendars[key]; });
             linkChecked(shownUrl, !error, name, records.length, error,
-                doc ? Ics.countStoredDuplicates(records, calendars) : 0);
+                doc ? Queries.countStoredDuplicates(records, calendars) : 0);
         } else if (purpose === "subscribe") {
             if (error) { subscribed(shownUrl, "", error, requestId); return; }
             if (_calendars[id]) { subscribed(shownUrl, id, "", requestId); return; }
             var calendar = _addCalendar(id, "link", name, "subscriptions/" + id + ".ics", url, color);
             calendar.records = doc.records;
-            calendar.signature = json.length + ":" + Ics.shortHash(json);
+            calendar.signature = json.length + ":" + Items.shortHash(json);
             calendar.loaded = true;
             _finishAdd();
             subscribed(shownUrl, id, "", requestId);
@@ -638,8 +641,8 @@ Singleton {
             if (!meta) return;
             meta.refreshing = false;
             // A feed with the same text and no error to clear keeps its cached months.
-            var signature = json.length + ":" + Ics.shortHash(json);
-            var overrides = error ? null : Ics.pruneRecordColorOverrides(meta.colorOverrides, doc.records);
+            var signature = json.length + ":" + Items.shortHash(json);
+            var overrides = error ? null : Queries.pruneRecordColorOverrides(meta.colorOverrides, doc.records);
             var same = !error && meta.signature === signature && !meta.error && !meta.convertError &&
                 JSON.stringify(overrides) === JSON.stringify(meta.colorOverrides);
             if (error) {
@@ -687,12 +690,12 @@ Singleton {
         for (var i = 0; i < saved.length; i++) {
             var s = saved[i];
             if (!s || typeof s.id !== "string" || typeof s.file !== "string" || meta[s.id]) continue;
-            if (s.id === "berri") { local.color = Ics.cleanColor(s.color) || "accent"; local.hidden = !!s.hidden; continue; }
+            if (s.id === "berri") { local.color = Items.cleanColor(s.color) || "accent"; local.hidden = !!s.hidden; continue; }
             // Saved names become file paths: skip any entry that could reach outside the calendar folder.
             if (!SavedCalendars.isSafeEntry(s)) continue;
-            meta[s.id] = { id: s.id, kind: s.kind, name: String(s.name || ""), color: Ics.cleanColor(s.color) || "accent",
+            meta[s.id] = { id: s.id, kind: s.kind, name: String(s.name || ""), color: Items.cleanColor(s.color) || "accent",
                 hidden: !!s.hidden, url: s.kind === "link" ? String(s.url || "") : "", file: s.file, updatedAt: +s.updatedAt || 0,
-                colorOverrides: s.kind === "link" ? Ics.pruneColorOverrides(s.colorOverrides, null) : ({}),
+                colorOverrides: s.kind === "link" ? Queries.pruneColorOverrides(s.colorOverrides, null) : ({}),
                 path: dir + "/" + s.file, document: null, records: null, text: "", signature: "", error: "", convertError: "", refreshing: false, loaded: false, readFailed: false };
             order.push(s.id);
         }
@@ -757,7 +760,7 @@ Singleton {
         for (var path in present) {
             var file = path.slice(dir.length + 1);
             if (file.toLowerCase() === "berri.ics" || _idOfPath(path)) continue;
-            _addCalendar("f-" + Ics.shortHash(file), "file", "", file, "");
+            _addCalendar("f-" + Items.shortHash(file), "file", "", file, "");
             changed = true;
         }
         _syncPaths();

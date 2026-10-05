@@ -19,8 +19,8 @@ Item {
         return TestIo.texts[path] || "";
     }
     function setText(value) {
-        if (TestIo.failWrite) saveFailed(FileViewError.PermissionDenied);
-        else { TestIo.texts[path] = value; TestIo.writes = TestIo.writes.concat([path]); saved(); }
+        if (TestIo.failWrite) { TestIo.note("write-failed"); saveFailed(FileViewError.PermissionDenied); }
+        else { TestIo.texts[path] = value; TestIo.writes = TestIo.writes.concat([path]); TestIo.note("write"); saved(); }
     }
     function reload() { loaded(); }
     // A preloading view reports its first read like Quickshell does.

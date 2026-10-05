@@ -150,23 +150,6 @@ test("duplicate counting reads malformed link records without throwing", () => {
   assert.equal(Queries.countStoredDuplicates(records, existing), 1);
 });
 
-// ---- the QML boundary
-
-test("CalendarIcs exports exactly the names that QML calls", () => {
-  const exported = [...fs.readFileSync(new URL("../logic/CalendarIcs.js", import.meta.url), "utf8").matchAll(/^var (\w+) = /gm)].map((m) => m[1]);
-  const called = new Set();
-  const walk = (dir) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const path = new URL(entry.name + (entry.isDirectory() ? "/" : ""), dir);
-      if (entry.isDirectory()) walk(path);
-      else if (entry.name.endsWith(".qml"))
-        for (const m of fs.readFileSync(path, "utf8").matchAll(/\bIcs\.(\w+)/g)) called.add(m[1]);
-    }
-  };
-  for (const folder of ["services", "notifications", "tabs", "dashboard", "pill", "common", "picker"]) walk(new URL(`../${folder}/`, import.meta.url));
-  assert.deepEqual([...exported].sort(), [...called].filter((name) => !/^js$/.test(name)).sort());
-});
-
 // ---- timed events across midnight
 
 const timedFile = (start, end) => ["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:night", "SUMMARY:Night",

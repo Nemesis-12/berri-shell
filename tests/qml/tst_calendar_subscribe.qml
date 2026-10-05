@@ -3,6 +3,7 @@ import QtTest
 import Quickshell.Io
 import qs.services
 import qs.tabs.calendar
+import "../logic/CalendarItems.js" as Items
 import "../logic/CalendarQueries.js" as Queries
 
 TestCase {
@@ -104,7 +105,7 @@ TestCase {
         TestIo.downloads[1].exited(0, 0);
         TestIo.downloads[0].exited(0, 0);
         compare(results.signalArguments.map(function (result) { return result[3]; }), [1, 3, 2]);
-        Calendar._calendars["l-" + Queries.shortHash("https://example.test/a")] = { id: "existing" };
+        Calendar._calendars["l-" + Items.shortHash("https://example.test/a")] = { id: "existing" };
         var existing = Calendar.subscribe("https://example.test/a", "blue");
         tryCompare(results, "count", 4);
         compare(results.signalArguments[3][3], existing);

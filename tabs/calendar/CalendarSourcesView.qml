@@ -1,5 +1,6 @@
 import QtQuick
-import "../../logic/CalendarIcs.js" as Ics
+import "../../logic/CalendarItems.js" as Items
+import "../../logic/CalendarQueries.js" as Queries
 import "../../logic/ShownRows.js" as ShownRows
 import qs.common
 import qs.services
@@ -80,9 +81,9 @@ Item {
 
     // Name of the calendar that already holds this link, or "".
     readonly property string subscribedName: {
-        var feed = Ics.feedUrl(root.link);
+        var feed = Queries.feedUrl(root.link);
         if (!root.linkValid || !feed) return "";
-        var id = "l-" + Ics.shortHash(feed);
+        var id = "l-" + Items.shortHash(feed);
         var list = Calendar.calendars || [];
         for (var i = 0; i < list.length; i++) {
             if (list[i].id === id) return list[i].name;

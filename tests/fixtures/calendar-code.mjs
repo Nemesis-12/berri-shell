@@ -3,7 +3,8 @@ import vm from "node:vm";
 
 // Read one calendar module and its QML imports into separate test contexts.
 // A test names the module it tests, for example calendarModule("CalendarItems.js").
-export function calendarModule(name) {
+// A test may pass another logic folder (a URL that ends with /) to load an edited copy.
+export function calendarModule(name, logicFolder = new URL("../../logic/", import.meta.url)) {
   const files = new Map();
   function readCode(path) {
     if (files.has(path.href)) return files.get(path.href);
@@ -17,5 +18,5 @@ export function calendarModule(name) {
     files.set(path.href, code);
     return code;
   }
-  return readCode(new URL(`../../logic/${name}`, import.meta.url));
+  return readCode(new URL(name, logicFolder));
 }

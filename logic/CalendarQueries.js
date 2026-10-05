@@ -182,8 +182,6 @@ function linkHost(url) {
     return m ? m[1].replace(/^.*@/, "") : "";
 }
 
-var shortHash = Items.shortHash;
-
 /** The first preset color that no calendar uses yet (used = list of colors); repeats when all are taken. */
 function unusedColor(used) {
     for (var i = 0; i < Items.itemColors.length; i++)
@@ -278,29 +276,6 @@ function curlError(code) {
     case 63: return "The feed is too large";
     default: return "Download failed";
     }
-}
-
-/** Builds the calendar rows, month inputs and reminders from the same calendars. */
-function projectCalendars(calendars) {
-    var rows = [];
-    var names = {};
-    var itemPaths = {};
-    var lists = [];
-    for (var c = 0; c < calendars.length; c++) {
-        var calendar = calendars[c];
-        var items = calendar.document ? calendar.document.items : [];
-        for (var i = 0; i < items.length; i++) itemPaths[Items.itemKey(calendar.id, items[i].uid)] = calendar.path;
-        names[calendar.id] = calendar.name;
-        lists.push({ id: calendar.id, color: calendar.color, hidden: calendar.hidden,
-            readOnly: calendar.kind === "link", colorOverrides: calendar.colorOverrides, items: items });
-        rows.push({ id: calendar.id, name: calendar.name, kind: calendar.kind, color: calendar.color,
-            hidden: calendar.hidden, itemCount: items.length,
-            source: calendar.kind === "link" ? linkHost(calendar.url) : calendar.kind === "file" ? calendar.file : "",
-            updatedAt: calendar.updatedAt, readOnly: calendar.kind === "link", error: calendar.error || "" });
-    }
-    var shownItems = mergeCalendars(lists);
-    return { calendars: rows, items: shownItems, names: names, itemPaths: itemPaths,
-        reminders: dropDuplicateItems(shownItems.filter(function (item) { return !item.readOnly; })) };
 }
 
 /** Keep feed records in the projection. Create feed items only for a requested month. */
