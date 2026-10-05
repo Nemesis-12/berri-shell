@@ -55,7 +55,7 @@ function feedSetup() {
 
 function download({ root, sub, env }) {
   return runOpen("feed-download.sh",
-    ["https://example.test/f.ics", path.join(root, "bin", "parser"), path.join(sub, "l-x"), sub, "127", "70", "71"], env);
+    [path.join(root, "bin", "parser"), path.join(sub, "l-x"), sub, "127", "70", "71"], { ...env, BERRI_FEED_URL: "https://example.test/f.ics" });
 }
 
 test("a first feed download makes folder 700 and files 600", () => {

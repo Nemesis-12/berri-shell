@@ -22,8 +22,8 @@ function setup(failNewRecordsMove) {
 }
 
 function run(root) {
-  return spawnSync("sh", [script, "https://example.test/f.ics", path.join(root, "bin", "parser"), path.join(root, "sub", "l-x"), path.join(root, "sub"), "127", "70", "71"],
-    { env: { ...process.env, PATH: `${root}/bin:${process.env.PATH}` }, encoding: "utf8" });
+  return spawnSync("sh", [script, path.join(root, "bin", "parser"), path.join(root, "sub", "l-x"), path.join(root, "sub"), "127", "70", "71"],
+    { env: { ...process.env, BERRI_FEED_URL: "https://example.test/f.ics", PATH: `${root}/bin:${process.env.PATH}` }, encoding: "utf8" });
 }
 
 const read = (root, name) => fs.readFileSync(path.join(root, "sub", name), "utf8");

@@ -1,10 +1,13 @@
 #!/bin/sh
 # Downloads one calendar feed and converts it to compact records.
-# Usage: feed-download.sh URL PARSER DEST_BASE TEMP_PARENT EXIT_PARSER_MISSING EXIT_NOT_CALENDAR EXIT_SAVE_FAILED
+# Usage: BERRI_FEED_URL=URL feed-download.sh PARSER DEST_BASE TEMP_PARENT EXIT_PARSER_MISSING EXIT_NOT_CALENDAR EXIT_SAVE_FAILED
+# The link is private (it can hold a token). It comes in the environment and goes to curl on its
+# standard input, so it is in no argument list that other users can read with ps.
 # DEST_BASE "" (a link check): prints the path of the new .json file in a temporary folder.
 # DEST_BASE set: replaces DEST_BASE.ics and DEST_BASE.json together and prints DEST_BASE.json.
 # If either replacement fails, both files go back to their old content.
-url=$1 parser=$2 dest=$3 parent=$4 missing=$5 notcalendar=$6 savefailed=$7
+url=${BERRI_FEED_URL-} parser=$1 dest=$2 parent=$3 missing=$4 notcalendar=$5 savefailed=$6
+unset BERRI_FEED_URL
 
 [ -x "$parser" ] || exit "$missing"
 # Feeds are private: new files get mode 600 and the folder mode 700.
@@ -13,7 +16,13 @@ sh "$(dirname "$0")/private-folder.sh" "$parent" || exit "$savefailed"
 d=$(mktemp -d "$parent/.feed.XXXXXX") || exit 1
 cleanup() { rm -f "$d/feed.ics" "$d/feed.json"; rmdir "$d" 2>/dev/null; }
 
-curl -fsSL --max-time 15 --max-filesize 10485760 -o "$d/feed.ics" "$url" || { c=$?; cleanup; exit $c; }
+# Only HTTPS, also after a redirect, and at most 5 redirects. A line break would end the quoted link.
+case $url in ''|*'
+'*) cleanup; exit 3 ;; esac
+# printf is part of the shell, so the link is not in any argument list. The sed escapes \ and " for the curl config.
+printf 'url = "%s"\n' "$(printf '%s' "$url" | sed 's/\\/\\\\/g; s/"/\\"/g')" |
+  curl -fsSL -K - --proto '=https' --proto-redir '=https' --max-redirs 5 --max-time 15 --max-filesize 10485760 -o "$d/feed.ics" ||
+  { c=$?; cleanup; exit $c; }
 [ "$(wc -c <"$d/feed.ics")" -gt 10485760 ] && { cleanup; exit 63; }
 "$parser" "$d/feed.ics" "$d/feed.json" || { cleanup; exit "$notcalendar"; }
 

@@ -249,7 +249,9 @@ Scope {
             required property var request
             property bool cancelled: false
             running: true
-            command: ["sh", Quickshell.shellPath("scripts/feed-download.sh"), request.url, root.parser,
+            // The link can hold a token, so it goes in the environment and not in the arguments.
+            environment: ({ BERRI_FEED_URL: request.url })
+            command: ["sh", Quickshell.shellPath("scripts/feed-download.sh"), root.parser,
                 request.purpose === "check" ? "" : root.folder + "/subscriptions/" + request.calendarId,
                 root.folder + "/subscriptions",
                 String(root.exitParserMissing), String(root.exitNotCalendar), String(root.exitSaveFailed)]

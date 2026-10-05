@@ -340,8 +340,31 @@ function weekdayInMonth(year, month, nth, day) {
     return n >= first && n <= last ? n : null;
 }
 
-/** Start days (as day numbers) of a repeating item that fall in [fromN, toN]. */
-function startDays(item, fromN, toN) {
+/**
+ * Work limits for one month query. A feed is outside input, so it can hold an event
+ * that covers 8000 years or 60,000 repeating items. Each loop step and each shown
+ * occurrence costs one step. One item may use `itemSteps`; one query may use `steps`
+ * for all its items and `items` records. An item over its limit adds nothing, and the
+ * query budget is marked `limited` so the caller knows the answer is not complete.
+ * These numbers are a default for the maintainer to confirm. A normal month needs under
+ * 2,000 steps.
+ */
+var workLimits = { steps: 10000, itemSteps: 3000, items: 2000 };
+
+function newWorkBudget() {
+    return { steps: workLimits.steps, limited: false };
+}
+
+/** Spends `n` steps. Returns false (and marks the budget limited) when they are gone. */
+function spend(budget, n) {
+    budget.steps -= n;
+    if (budget.steps >= 0) return true;
+    budget.limited = true;
+    return false;
+}
+
+/** Start days (as day numbers) of a repeating item that fall in [fromN, toN]. Stops early when `budget` has no steps left. */
+function startDays(item, fromN, toN, budget) {
     var out = [];
     if (item.date === null) return out;
     var s = Times.dayNum(item.date);
@@ -357,8 +380,10 @@ function startDays(item, fromN, toN) {
     var weekStart = s - ((weekdayOf(s) + 6) % 7); // Monday of the first week
     var byDay = item.byDay.map(function (d) { return (d + 6) % 7; }).sort(function (a, b) { return a - b; });
 
+    // Daily and plain weekly series emit exactly one start per step, so a count can be skipped to as well.
+    var oneEach = item.repeat === "daily" || (item.repeat === "weekly" && !byDay.length);
     var lowK = 0;
-    if (!limit) {
+    if (!limit || oneEach) {
         var fromDate = Times.keyOfDayNum(fromN);
         var fy = +fromDate.slice(0, 4), fm = +fromDate.slice(5, 7);
         if (item.repeat === "daily") lowK = Math.floor((fromN - s) / iv);
@@ -368,8 +393,9 @@ function startDays(item, fromN, toN) {
         lowK = Math.max(0, lowK - 1);
     }
 
-    var emitted = 0;
+    var emitted = limit && oneEach ? lowK : 0;
     for (var k = lowK; k < lowK + 200000; k++) {
+        if (budget && !spend(budget, 1)) return out;
         var base, list;
         if (item.repeat === "daily") { base = s + k * iv; list = [base]; }
         else if (item.repeat === "weekly") {
@@ -478,15 +504,28 @@ function spanDays(item) {
  * Occurrences of one item on the days from..to (inclusive keys). A multi-day item shows on every day it covers.
  * A cancelled item has none. An occurrence the feed cancelled has none. An occurrence the feed moved shows at its new time.
  */
-function expand(item, fromKey, toKey) {
+function expand(item, fromKey, toKey, query) {
     if (item.status === "CANCELLED") return [];
+    if (!query) query = newWorkBudget();
+    if (query.steps <= 0) { query.limited = true; return []; }
+    var budget = { steps: Math.min(workLimits.itemSteps, query.steps), limited: false };
+    var allowed = budget.steps;
+    var out = expandWithin(item, fromKey, toKey, budget);
+    query.steps -= allowed - Math.max(budget.steps, 0);
+    if (budget.limited) query.limited = true;
+    return budget.limited ? [] : out;
+}
+
+function expandWithin(item, fromKey, toKey, budget) {
     var fromN = Times.dayNum(fromKey), toN = Times.dayNum(toKey);
     var out = [];
     function addShownDays(variant, startN) {
+        // Only the days inside from..to are visited, so a very long event costs no more than a short one.
         var span = spanDays(variant);
-        for (var d = 0; d <= span; d++) {
-            var day = startN + d;
-            if (day >= fromN && day <= toN) out.push(occurrenceOf(variant, startN, day));
+        var last = Math.min(span, toN - startN);
+        for (var d = Math.max(0, fromN - startN); d <= last; d++) {
+            if (!spend(budget, 1)) return;
+            out.push(occurrenceOf(variant, startN, startN + d));
         }
     }
     function addStart(variant, startN) {
@@ -502,19 +541,21 @@ function expand(item, fromKey, toKey) {
     }
     if (item.zoned && item.repeat !== "none") {
         var back = item.zoned.length ? Math.ceil(item.zoned.length / 1440) : 0;
-        var walls = startDays(zonedRule(item), fromN - back - 2, toN + 2);
-        for (var w = 0; w < walls.length; w++) {
+        var walls = startDays(zonedRule(item), fromN - back - 2, toN + 2, budget);
+        for (var w = 0; w < walls.length && !budget.limited; w++) {
+            if (!spend(budget, 1)) break;
             var shown = zonedVariant(item, walls[w]);
             var shownN = Times.dayNum(shown.date);
             if (shownN + spanDays(shown) >= fromN && shownN <= toN && !(item.until && shown.date > item.until)) addStart(shown, shownN);
         }
     } else {
-        var starts = startDays(item, fromN - spanDays(item), toN);
-        for (var i = 0; i < starts.length; i++) addStart(item, starts[i]);
+        var starts = startDays(item, fromN - spanDays(item), toN, budget);
+        for (var i = 0; i < starts.length && !budget.limited; i++) addStart(item, starts[i]);
     }
     var changes = item.changedOccurrences || [];
-    for (var c = 0; c < changes.length; c++) {
+    for (var c = 0; c < changes.length && !budget.limited; c++) {
         var change = changes[c];
+        if (!spend(budget, 1)) break;
         if (change.cancelled || change.date === null || item.exdates.indexOf(change.from) >= 0) continue;
         var moved = shallowCopy(item);
         moved.date = change.date;

@@ -122,11 +122,16 @@ function countStoredDuplicates(feedRecords, calendars) {
     return countDuplicates(feedRecords, existing);
 }
 
-/** { "YYYY-MM-DD": [Occurrence] } for days from..to. Shared events show once. */
+/**
+ * { "YYYY-MM-DD": [Occurrence] } for days from..to. Shared events show once.
+ * The work is limited (Items.workLimits). When an item or the whole query is over
+ * the limit, those items are left out and the hidden property `limited` is true.
+ */
 function occurrencesByDay(items, fromKey, toKey, names) {
     var all = [];
+    var budget = Items.newWorkBudget();
     for (var i = 0; i < items.length; i++) {
-        var list = Items.expand(items[i], fromKey, toKey);
+        var list = Items.expand(items[i], fromKey, toKey, budget);
         for (var j = 0; j < list.length; j++) all.push(list[j]);
     }
     var days = {};
@@ -135,6 +140,7 @@ function occurrencesByDay(items, fromKey, toKey, names) {
         (days[shown[s].date] = days[shown[s].date] || []).push(shown[s]);
     }
     for (var key in days) days[key].sort(compareOccurrences);
+    Object.defineProperty(days, "limited", { value: budget.limited, configurable: true });
     return days;
 }
 
@@ -268,6 +274,7 @@ function curlError(code) {
     case 22: return "The server refused the request";
     case 28: return "Timed out";
     case 35: case 51: case 58: case 60: case 77: case 83: return "Secure connection failed";
+    case 47: return "Too many redirects";
     case 63: return "The feed is too large";
     default: return "Download failed";
     }
@@ -352,6 +359,7 @@ function storedItemsInMonth(projection, year, month) {
     var first = Times.pad(year, 4) + "-" + Times.pad(month) + "-01";
     var last = Times.pad(year, 4) + "-" + Times.pad(month) + "-" + Times.pad(Items.daysInMonth(year, month));
     var shown = [];
+    var tooMany = false;
     for (var f = 0; f < projection.sources.length; f++) {
         var feed = projection.sources[f];
         if (feed.items) {
@@ -362,6 +370,7 @@ function storedItemsInMonth(projection, year, month) {
         for (var i = 0; i < records.length; i++) {
             var r = records[i];
             if (r.date > last) break;
+            if (shown.length >= Items.workLimits.items) { tooMany = true; break; }
             if (r.repeat === "none" && Items.addDays(r.date, Items.spanDays(r)) < first) continue;
             if (r.repeat !== "none" && r.until) {
                 var span = Items.spanDays(r);
@@ -372,5 +381,7 @@ function storedItemsInMonth(projection, year, month) {
             shown.push(item);
         }
     }
-    return itemsInMonth(shown, year, month, projection.names);
+    var days = itemsInMonth(shown, year, month, projection.names);
+    if (tooMany) Object.defineProperty(days, "limited", { value: true });
+    return days;
 }
