@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell.Bluetooth
 import qs.common
 import qs.services
+import "../../logic/ListSync.js" as ListSync
 
 /**
  * Bluetooth device list (ticket 17): swaps into the toggle grid's cell when
@@ -18,8 +19,11 @@ Item {
     /** The Quickshell.Bluetooth adapter this list reads and drives, or null. */
     property var adapter: null
 
-    /** True while this list is the active panel (drives discovery). */
+    /** True while this list is the active panel. */
     property bool open: false
+
+    /** True while the list is open and on screen. Hidden lists do no work. */
+    readonly property bool active: open && visible
 
     signal backClicked
 
@@ -40,7 +44,7 @@ Item {
 
     function refreshDevices() {
         if (!root.adapter) {
-            root.devices = [];
+            if (root.devices.length > 0) root.devices = [];
             return;
         }
         var list = root.adapter.devices ? root.adapter.devices.values.slice() : [];
@@ -56,7 +60,8 @@ Item {
             if (a.paired && a.connected !== b.connected) return a.connected ? -1 : 1;
             return a.name.localeCompare(b.name);
         });
-        root.devices = list;
+        // The same list again must not rebuild the rows.
+        if (!ListSync.sameItems(root.devices, list)) root.devices = list;
     }
 
     function chooseDevice(device) {
@@ -97,22 +102,30 @@ Item {
         }
     }
 
-    onAdapterChanged: if (open) refreshDevices()
+    onAdapterChanged: if (active) refreshDevices()
 
-    onOpenChanged: {
-        if (open) {
+    onActiveChanged: {
+        if (active) {
             refreshDevices();
         } else {
             root.pendingPairAddress = "";
         }
-        if (adapter) adapter.discovering = open && adapter.enabled;
+    }
+
+    // Discovery runs while the list is on screen and Bluetooth is on. It
+    // starts when Bluetooth is switched on with the list open, and it stays
+    // on while another monitor still shows a list.
+    RadioRequest {
+        kind: "discovery"
+        device: root.adapter
+        wanted: root.active && root.adapter !== null && root.adapter.enabled
     }
 
     Timer {
         id: scanPoll
         interval: 2000
         repeat: true
-        running: root.open && root.adapter !== null
+        running: root.active && root.adapter !== null
         onTriggered: root.refreshDevices()
     }
 

@@ -8,9 +8,9 @@ import Quickshell.Io
  * Claude and Codex logs, cached 10 minutes); the contribution
  * calendar comes from scripts/github-stats.py (GitHub CLI, cached 30
  * minutes); commits come from scripts/local-commits.py (local git folders
- * merged with the GitHub commits, cached 10 minutes). Each open CodeTab calls
- * watch() while it is visible. The minute timer updates captions. Each source
- * has its own refresh timer while at least one tab is watching. Limits are not
+ * merged with the GitHub commits, cached 10 minutes). Each visible CodeTab counts
+ * in `viewers` (see WhileVisible.qml). The minute timer updates captions. Each source
+ * has its own refresh timer while at least one tab is visible. Limits are not
  * here: the tab reads them from AgentUsage.
  */
 Singleton {
@@ -38,8 +38,8 @@ Singleton {
     /** Ticks every minute so "12m ago" captions stay right. */
     property date now: new Date()
 
-    /** Number of tabs that are visible now. */
-    property int watchers: 0
+    /** How many Code tabs are visible now (see WhileVisible.qml). */
+    property int viewers: 0
 
     /** Cache ages for local data and GitHub data. */
     readonly property int localAge: 10 * 60000
@@ -58,13 +58,12 @@ Singleton {
         return Quickshell.shellPath("scripts/" + name);
     }
 
-    /** A tab calls this with true when it shows and with false when it hides. */
-    function watch(on) {
-        root.watchers = Math.max(0, root.watchers + (on ? 1 : -1));
-        if (on) {
+    /** The first tab that shows starts the sources. The last tab that hides stops them. */
+    onViewersChanged: {
+        if (root.viewers === 1) {
             root.now = new Date();
             root.checkFreshData();
-        } else if (root.watchers === 0) {
+        } else if (root.viewers === 0) {
             statsTimer.stop();
             githubTimer.stop();
             commitsTimer.stop();
@@ -97,14 +96,14 @@ Singleton {
 
     /** Start one old source or wait until its cache age ends. */
     function checkSource(checkedAt, age, timer, start) {
-        if (root.watchers === 0) return;
+        if (root.viewers === 0) return;
         if (Date.now() - checkedAt >= age) start();
         else root.scheduleSource(timer, checkedAt, age);
     }
 
     /** Set a source timer to the time left in its cache age. */
     function scheduleSource(timer, checkedAt, age) {
-        if (root.watchers === 0) return;
+        if (root.viewers === 0) return;
         timer.interval = Math.max(1, age - (Date.now() - checkedAt));
         timer.restart();
     }
@@ -169,17 +168,17 @@ Singleton {
         id: githubProcess
         onExited: {
             // Commits include GitHub data, so rebuild them after its cache changes.
-            if (root.watchers > 0) root.startCommits();
+            if (root.viewers > 0) root.startCommits();
         }
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
                 try {
                     var data = JSON.parse(text);
-                    if (root.watchers > 0) {
+                    if (root.viewers > 0) {
                         root.githubCheckedAt = root.cacheAgeStart(Date.parse(data.fetchedAt), root.githubAge);
                     }
-                    if (root.watchers > 0 && data.fetchedAt !== root.githubVersion) {
+                    if (root.viewers > 0 && data.fetchedAt !== root.githubVersion) {
                         root.githubVersion = data.fetchedAt;
                         root.calendar = data.days;
                         root.calendarTotal = data.total;
@@ -200,10 +199,10 @@ Singleton {
             onStreamFinished: {
                 try {
                     var data = JSON.parse(text);
-                    if (root.watchers > 0) {
+                    if (root.viewers > 0) {
                         root.commitsCheckedAt = root.cacheAgeStart(data.version, root.localAge);
                     }
-                    if (root.watchers > 0 && data.version !== root.commitsVersion) {
+                    if (root.viewers > 0 && data.version !== root.commitsVersion) {
                         root.commitsVersion = data.version;
                         root.commits = data.commits;
                     }
@@ -217,7 +216,7 @@ Singleton {
 
     Timer {
         interval: 60000
-        running: root.watchers > 0
+        running: root.viewers > 0
         repeat: true
         onTriggered: root.now = new Date()
     }

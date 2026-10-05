@@ -19,6 +19,7 @@ Item {
     id: root
 
     WhileVisible { service: AgentUsage }
+    WhileVisible { service: CodeData }
 
     /** Picked agent: "claude" or "codex". */
     property string agent: "claude"
@@ -38,9 +39,6 @@ Item {
     function periodTokens(period) { return agentUsage[period] ? agentUsage[period].tokens : 0; }
     function periodCost(period) { return agentUsage[period] ? agentUsage[period].cost : 0; }
 
-    Component.onCompleted: if (visible) CodeData.watch(true)
-    onVisibleChanged: CodeData.watch(visible)
-    Component.onDestruction: if (visible) CodeData.watch(false)
 
     Rectangle {
         anchors.fill: parent

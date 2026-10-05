@@ -69,8 +69,10 @@ Singleton {
     signal subscribed(string url, string id, string error, int requestId)
     /** A calendar edit could not be saved and was undone. */
     signal saveFailed(string message)
-    /** True while a Calendar tab shows `saveFailed` messages. The tab sets it. When false, the notifier shows them as a desktop notification. */
-    property bool saveErrorShown: false
+    /** How many Calendar tabs show `saveFailed` messages (see WhileVisible.qml, counter "saveErrorViewers"). */
+    property int saveErrorViewers: 0
+    /** True while a Calendar tab shows `saveFailed` messages. When false, the notifier shows them as a desktop notification. */
+    readonly property bool saveErrorShown: saveErrorViewers > 0
 
     // ---- queries
 

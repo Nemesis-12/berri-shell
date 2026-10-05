@@ -33,7 +33,7 @@ Item {
     WhileVisible { service: MediaPlayer }
 
     // While the seek bar is dragged, the shown position is not overwritten.
-    Binding { target: MediaPlayer; property: "seeking"; value: scrub.pressed }
+    WhileVisible { service: MediaPlayer; counter: "seekers"; when: scrub.pressed }
 
     readonly property bool hasPlayer: activePlayer !== null
     readonly property bool isPlaying: MediaPlayer.isPlaying

@@ -26,8 +26,11 @@ Singleton {
     /** Play position in seconds, as shown. */
     property real displayPosition: 0
 
-    /** True while the user drags the seek bar; the position is then not overwritten. */
-    property bool seeking: false
+    /** How many seek bars are being dragged now (see WhileVisible.qml, counter "seekers"). */
+    property int seekers: 0
+
+    /** True while the user drags a seek bar; the position is then not overwritten. */
+    readonly property bool seeking: seekers > 0
 
     readonly property bool isPlaying: activePlayer !== null && activePlayer.playbackState === MprisPlaybackState.Playing
     readonly property string titleText: activePlayer ? (activePlayer.trackTitle || "Unknown title") : "Nothing playing"
