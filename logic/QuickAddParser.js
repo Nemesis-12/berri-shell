@@ -89,11 +89,8 @@ function toTime(h, mi, ap) {
 var hasNoTime = function (o) { return !o.time; };
 var hasNoDate = function (o) { return !o.date; };
 
-// A "#123" word names an issue, not a color: three digits, none leading zero.
+// An issue number is three digits with no leading zero ("#123"). It is not a color and stays in the title.
 var ISSUE_NUMBER_PATTERN = "[1-9][0-9]{2}";
-function isIssueNumber(hex) {
-    return new RegExp("^" + ISSUE_NUMBER_PATTERN + "$").test(hex);
-}
 
 /**
  * The rules, in the order they run. Each step cuts its words from the line and
