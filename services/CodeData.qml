@@ -2,6 +2,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../logic/SourceFailures.js" as SourceFailures
 
 /**
  * Data of the Code tab. Token totals and estimated costs (tokens times list prices in data/model-prices.json) come from scripts/code-stats.py (local
@@ -12,6 +13,10 @@ import Quickshell.Io
  * in `viewers` (see WhileVisible.qml). The minute timer updates captions. Each source
  * has its own refresh timer while at least one tab is visible. Limits are not
  * here: the tab reads them from AgentUsage.
+ * A source with no output or unreadable output keeps its last data and writes
+ * one line to the shell log. Each source has its own period of one hour
+ * (SourceFailures.PERIOD_MS), however many refreshes fail. The line names the
+ * source and a fixed reason only.
  */
 Singleton {
     id: root
@@ -76,6 +81,15 @@ Singleton {
             root.githubVersion = "";
             root.commitsVersion = 0;
         }
+    }
+
+    /** Last log line time of each source (see SourceFailures.js). */
+    property var lastLogged: ({})
+
+    /** Writes the failure line of a source unless it already wrote one in this period. */
+    function logFailure(source, text) {
+        var line = SourceFailures.report(root.lastLogged, source, SourceFailures.outputReason(text), Date.now());
+        if (line !== "") console.warn(line);
     }
 
     /** A user request gets a new answer from every source. */
@@ -158,6 +172,7 @@ Singleton {
                     }
                 } catch (e) {
                     // Empty or bad output: keep what the tab shows now.
+                    root.logFailure("code stats", text);
                 }
                 root.scheduleSource(statsTimer, root.statsCheckedAt, root.localAge);
             }
@@ -186,6 +201,7 @@ Singleton {
                     }
                 } catch (e) {
                     // Offline with no cache: keep what the tab shows now.
+                    root.logFailure("code github", text);
                 }
                 root.scheduleSource(githubTimer, root.githubCheckedAt, root.githubAge);
             }
@@ -208,6 +224,7 @@ Singleton {
                     }
                 } catch (e) {
                     // Empty or bad output: keep what the tab shows now.
+                    root.logFailure("code commits", text);
                 }
                 root.scheduleSource(commitsTimer, root.commitsCheckedAt, root.localAge);
             }
