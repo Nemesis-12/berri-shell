@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import "../../logic/CalendarDrag.js" as Drag
 import "../../logic/Times.js" as Times
 import qs.common
 import qs.services
@@ -12,7 +13,6 @@ Item {
     property bool shownIsToday: false
     property string nowTime: ""
     property bool clock24: false
-    property int dragThreshold: 5
 
     signal itemClicked(string uid, string occurrenceDate)
     signal dragStarted(var info)
@@ -85,7 +85,7 @@ Item {
         onPositionChanged: mouse => {
             if (!pressed || row.readOnly) return;
             if (!dragging) {
-                if (Math.hypot(mouse.x - pressAt.x, mouse.y - pressAt.y) < row.dragThreshold) return;
+                if (!Drag.pastThreshold(mouse.x - pressAt.x, mouse.y - pressAt.y)) return;
                 dragging = true;
                 moved = true;
                 row.dragStarted({

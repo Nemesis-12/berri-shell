@@ -362,10 +362,10 @@ function storedItemsInMonth(projection, year, month) {
         for (var i = 0; i < records.length; i++) {
             var r = records[i];
             if (r.date > last) break;
-            if (r.repeat === "none" && (r.endDate || r.date) < first) continue;
+            if (r.repeat === "none" && Items.addDays(r.date, Items.spanDays(r)) < first) continue;
             if (r.repeat !== "none" && r.until) {
-                var spanDays = r.time === null && r.endDate ? Times.dayNum(r.endDate) - Times.dayNum(r.date) : 0;
-                if (r.until < Items.addDays(first, -spanDays)) continue;
+                var span = Items.spanDays(r);
+                if (r.until < Items.addDays(first, -span)) continue;
             }
             var item = Items.projectedItem(Format.expandCompactItem(r), feed.id, true);
             applyCalendarColor(item, feed.color, feed.colorOverrides);

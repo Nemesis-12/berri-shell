@@ -388,13 +388,13 @@ function startDays(item, fromN, toN) {
 
 function occurrenceOf(item, startN, dayN) {
     var start = Times.keyOfDayNum(startN);
-    var spanDays = item.endDate ? Times.dayNum(item.endDate) - Times.dayNum(item.date) : 0;
+    var lengthDays = item.endDate ? Times.dayNum(item.endDate) - Times.dayNum(item.date) : 0;
     return {
         uid: item.uid, kind: item.kind, title: item.title, color: item.color,
         calendarId: item.calendarId || "berri", readOnly: !!item.readOnly, hasOwnColor: !!item.hasOwnColor,
         date: Times.keyOfDayNum(dayN), occurrenceDate: start,
         time: item.time, end: item.end,
-        endDate: item.endDate ? Times.keyOfDayNum(startN + spanDays) : null,
+        endDate: item.endDate ? Times.keyOfDayNum(startN + lengthDays) : null,
         allDay: item.time === null,
         repeat: item.repeat, recurring: item.repeat !== "none",
         done: item.doneDates.indexOf(start) >= 0,
@@ -448,6 +448,18 @@ function changeFor(item, key) {
 }
 
 /**
+ * How many days after its start day an item still covers. An all-day item covers its endDate.
+ * A timed event covers the day of its end, unless it ends exactly at 00:00 (that day is free).
+ */
+function spanDays(item) {
+    if (!item.endDate) return 0;
+    var days = Times.dayNum(item.endDate) - Times.dayNum(item.date);
+    if (item.time === null) return days;
+    if (item.kind !== "event" || days < 1) return 0;
+    return item.end === "00:00" ? days - 1 : days;
+}
+
+/**
  * Occurrences of one item on the days from..to (inclusive keys). A multi-day item shows on every day it covers.
  * A cancelled item has none. An occurrence the feed cancelled has none. An occurrence the feed moved shows at its new time.
  */
@@ -456,7 +468,7 @@ function expand(item, fromKey, toKey) {
     var fromN = Times.dayNum(fromKey), toN = Times.dayNum(toKey);
     var out = [];
     function addShownDays(variant, startN) {
-        var span = variant.endDate && variant.time === null ? Times.dayNum(variant.endDate) - Times.dayNum(variant.date) : 0;
+        var span = spanDays(variant);
         for (var d = 0; d <= span; d++) {
             var day = startN + d;
             if (day >= fromN && day <= toN) out.push(occurrenceOf(variant, startN, day));
@@ -474,15 +486,15 @@ function expand(item, fromKey, toKey) {
         addShownDays(variant, startN);
     }
     if (item.zoned && item.repeat !== "none") {
-        var walls = startDays(zonedRule(item), fromN - 2, toN + 2);
+        var back = item.zoned.length ? Math.ceil(item.zoned.length / 1440) : 0;
+        var walls = startDays(zonedRule(item), fromN - back - 2, toN + 2);
         for (var w = 0; w < walls.length; w++) {
             var shown = zonedVariant(item, walls[w]);
             var shownN = Times.dayNum(shown.date);
-            if (shownN >= fromN && shownN <= toN && !(item.until && shown.date > item.until)) addStart(shown, shownN);
+            if (shownN + spanDays(shown) >= fromN && shownN <= toN && !(item.until && shown.date > item.until)) addStart(shown, shownN);
         }
     } else {
-        var span = item.endDate && item.time === null ? Times.dayNum(item.endDate) - Times.dayNum(item.date) : 0;
-        var starts = startDays(item, fromN - span, toN);
+        var starts = startDays(item, fromN - spanDays(item), toN);
         for (var i = 0; i < starts.length; i++) addStart(item, starts[i]);
     }
     var changes = item.changedOccurrences || [];

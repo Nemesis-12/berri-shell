@@ -166,3 +166,29 @@ test("CalendarIcs exports exactly the names that QML calls", () => {
   for (const folder of ["services", "notifications", "tabs", "dashboard", "pill", "common", "picker"]) walk(new URL(`../${folder}/`, import.meta.url));
   assert.deepEqual([...exported].sort(), [...called].filter((name) => !/^js$/.test(name)).sort());
 });
+
+// ---- timed events across midnight
+
+const timedFile = (start, end) => ["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:night", "SUMMARY:Night",
+  `DTSTART:${start}`, `DTEND:${end}`, "END:VEVENT", "END:VCALENDAR", ""].join("\r\n");
+
+test("a timed event across midnight shows once on each day it overlaps", () => {
+  const items = Format.readCalendar(timedFile("20261001T230000", "20261002T010000")).items;
+  assert.equal(Queries.itemsOn(items, "2026-10-01").length, 1);
+  const second = plain(Queries.itemsOn(items, "2026-10-02"));
+  assert.equal(second.length, 1);
+  assert.equal(second[0].title, "Night");
+  assert.equal(Queries.itemsOn(items, "2026-10-03").length, 0);
+});
+
+test("a timed event that ends exactly at midnight does not show on the next day", () => {
+  const items = Format.readCalendar(timedFile("20261001T230000", "20261002T000000")).items;
+  assert.equal(Queries.itemsOn(items, "2026-10-01").length, 1);
+  assert.equal(Queries.itemsOn(items, "2026-10-02").length, 0);
+});
+
+test("a repeating timed event across midnight shows its tail on the next day", () => {
+  const text = timedFile("20261001T230000", "20261002T010000").replace("END:VEVENT", "RRULE:FREQ=WEEKLY;COUNT=2\r\nEND:VEVENT");
+  const items = Format.readCalendar(text).items;
+  assert.deepEqual(plain(Queries.itemsOn(items, "2026-10-09").map((o) => o.occurrenceDate)), ["2026-10-08"]);
+});

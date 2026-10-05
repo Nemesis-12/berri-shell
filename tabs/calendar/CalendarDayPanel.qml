@@ -44,9 +44,6 @@ Item {
     signal dragFinished(point scenePoint)
     signal dragAborted
 
-    /** Pointer movement (px) before a press on a row becomes a drag. */
-    readonly property int dragThreshold: 5
-
     // Day shown in header and list. It follows selectedDate in the middle of the fade.
     property date shownDate: root.selectedDate
     readonly property string shownKey: Times.dayKey(root.shownDate)
@@ -402,7 +399,6 @@ Item {
                 shownIsToday: root.shownIsToday
                 nowTime: root.nowTime
                 clock24: root.clock24
-                dragThreshold: root.dragThreshold
                 onItemClicked: (uid, occurrenceDate) => root.itemClicked(uid, occurrenceDate)
                 onDragStarted: info => root.dragStarted(info)
                 onDragMoved: scenePoint => root.dragMoved(scenePoint)

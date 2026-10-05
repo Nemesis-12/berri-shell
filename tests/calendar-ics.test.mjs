@@ -567,3 +567,25 @@ test("editing the start of a zoned series drops its zone data, and editing the t
   assert.ok(Items.applyChanges(series, { title: "y" }).zoned);
   assert.equal(Items.applyChanges(series, { time: "10:00" }).zoned, null);
 });
+
+test("an overnight zoned weekly event shows on both of its local days", () => {
+  // Berlin 06:00-08:00 is Chicago 23:00-01:00 on the day before.
+  const cal = Format.readCalendar(["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:zn", "SUMMARY:Zoned night",
+    "DTSTART;TZID=Europe/Berlin:20261005T060000", "DTEND;TZID=Europe/Berlin:20261005T080000", "RRULE:FREQ=WEEKLY",
+    "END:VEVENT", "END:VCALENDAR", ""].join("\r\n"));
+  const one = (day) => plain(Queries.itemsOn(cal.items, day).map((o) => [o.occurrenceDate, o.time]));
+  assert.deepEqual(one("2026-10-11"), [["2026-10-11", "23:00"]]);
+  assert.deepEqual(one("2026-10-12"), [["2026-10-11", "23:00"]]);
+  assert.deepEqual(one("2026-10-13"), []);
+});
+
+test("an overnight moved occurrence shows on both of its days", () => {
+  const cal = Format.readCalendar(["BEGIN:VCALENDAR",
+    "BEGIN:VEVENT", "UID:mv", "SUMMARY:Series", "DTSTART:20261001T100000", "DTEND:20261001T110000", "RRULE:FREQ=WEEKLY", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:mv", "SUMMARY:Moved", "RECURRENCE-ID:20261008T100000", "DTSTART:20261009T230000", "DTEND:20261010T010000", "END:VEVENT",
+    "END:VCALENDAR", ""].join("\r\n"));
+  const one = (day) => plain(Queries.itemsOn(cal.items, day).map((o) => [o.title, o.occurrenceDate]));
+  assert.deepEqual(one("2026-10-08"), []);
+  assert.deepEqual(one("2026-10-09"), [["Moved", "2026-10-08"]]);
+  assert.deepEqual(one("2026-10-10"), [["Moved", "2026-10-08"]]);
+});
