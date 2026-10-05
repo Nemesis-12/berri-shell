@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.common
+import "../logic/WallpaperPaths.js" as WallpaperPaths
 
 /**
  * One shared wallpaper library for every theme (28). Each theme remembers
@@ -134,7 +135,7 @@ Singleton {
         }
     }
 
-    /** Removes path from the library, deletes our copy, and clears every
+    /** Removes path from the library, deletes our copy (only when it is in our folder), and clears every
      *  assignment (in every theme) that used it. */
     function remove(path) {
         var next = [];
@@ -155,7 +156,12 @@ Singleton {
         root.assignments = nextAssignments;
         root.save();
 
-        removeProc.command = ["rm", "-f", path];
+        // A saved entry is not trusted: only a file directly in our folder is deleted.
+        if (!WallpaperPaths.isLibraryFile(root.wallpapersDir, path)) {
+            console.warn("Wallpapers.remove: not deleting a file outside the wallpaper folder: " + path);
+            return;
+        }
+        removeProc.command = ["rm", "-f", "--", path];
         removeProc.running = true;
     }
 
