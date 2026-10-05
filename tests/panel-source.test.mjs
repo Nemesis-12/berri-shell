@@ -22,3 +22,9 @@ test("the pill and the shell hold no tab-specific state", () => {
   const hits = sources.filter(file => /^(pill|dashboard)\/|^shell\.qml$/.test(file.replaceAll("\\", "/")) && tabState.test(read(file)));
   assert.deepEqual(hits, []);
 });
+
+test("the Home tab opens the profile and sticker choosers after the panel closes", () => {
+  const calls = read(path.join("tabs", "home", "HomeTab.qml")).match(/dialogRequested\([^\n]*\)/g);
+  assert.equal(calls.length, 2);
+  assert.ok(calls.every(call => call.endsWith(", true)")));
+});
