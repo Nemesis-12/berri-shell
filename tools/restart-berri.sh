@@ -23,4 +23,4 @@ if [ -n "$pids" ]; then
   fi
 fi
 
-setsid qs -p "$repo" >/dev/null 2>&1 </dev/null &
+setsid "$repo/tools/start-berri.sh" >/dev/null 2>&1 </dev/null &

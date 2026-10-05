@@ -25,14 +25,13 @@ git clone https://github.com/Nemesis-12/berri-shell.git
 cd berri-shell
 ```
 
-Build the calendar parser from the repository root:
+Run the setup script from the repository root. It builds the calendar parser:
 
 ```sh
-cargo build --release --manifest-path tools/feed-to-records/Cargo.toml
-cp tools/feed-to-records/target/release/feed-to-records tools/feed-to-records/feed-to-records
+tools/setup.sh
 ```
 
-If the binary is missing, the Calendar source view shows a warning. Rebuild it with the same commands.
+If the binary is missing, the Calendar source view shows a warning. Run `tools/setup.sh` again.
 
 ## Run
 
@@ -53,7 +52,7 @@ qs -p "$PWD"
 For daily use, add one autostart entry to Hyprland. Replace the path with your clone path:
 
 ```ini
-exec-once = qs -n -d -p /absolute/path/to/berri-shell
+exec-once = /absolute/path/to/berri-shell/tools/start-berri.sh -n -d
 ```
 
 Use only one autostart entry and one clone for daily use. Keep the Omarchy app menu running. berri is the sole notification server. See "Notification ownership".
@@ -89,6 +88,8 @@ Back up these folders before you change or remove saved data:
 | `~/.config/berri-shell/` | Home sticker source and display copy. |
 | `~/.cache/berri-shell/` | Code statistics, GitHub data, local commit and agent usage caches. |
 
+berri keeps the state and calendar folders private: folder mode 700 and file mode 600. A feed download keeps the same modes.
+
 The Home profile image uses `~/.face`. Weather can read the Omarchy location at `~/.local/state/omarchy/settings/weather.json`.
 
 ### Weather location
@@ -104,3 +105,13 @@ Icons come from [Lucide](https://lucide.dev/) under the ISC license. The bundled
 ## Development
 
 Development also needs `node` for the JavaScript tests and Qt's `qmltestrunner` with QtTest for offscreen QML tests. Set `QMLTESTRUNNER` if it is not at `/usr/lib/qt6/bin/qmltestrunner`. It also needs `qml6` for isolated weather service tests. These tests use Qt's offscreen platform, fake services or synthetic data. They do not start a shell instance or make network requests. Python tests use the standard library. The pre-push hook needs `node`, `qmltestrunner`, `qml6`, `python3` and `cargo`.
+
+### Worktrees and agent rules
+
+`AGENTS.md` holds the rules for coding agents. It is private: git ignores it, so it is never committed and git does not copy it to a new worktree. Create each new worktree with the script, which copies `AGENTS.md` from your main clone:
+
+```sh
+tools/new-worktree.sh my-branch ../berri-my-branch
+```
+
+Run `tools/setup.sh` once in each new clone. It also turns on the pre-push hook. Temporary screenshots in the repository root are ignored by git.

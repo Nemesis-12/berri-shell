@@ -8,3 +8,8 @@ node_modules/
 AGENTS.md
 tools/feed-to-records/target/
 tools/feed-to-records/feed-to-records
+# Temporary screenshots in the repository root
+/*.png
+/*.jpg
+/*.jpeg
+/*.webp
