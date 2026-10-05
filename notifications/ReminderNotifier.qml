@@ -3,13 +3,16 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "../logic/CalendarIcs.js" as Ics
+import "../logic/ReminderDelivery.js" as Delivery
 import qs.common
 import qs.services
 
 /**
  * Shows a desktop notification when a reminder is due, with the actions
- * +15m, +1d and Done. Works with the dashboard closed. shell.qml keeps
- * this singleton active.
+ * +15m and Done (the pop-up shows two buttons). Works with the dashboard
+ * closed. shell.qml keeps this singleton active. The notification goes to
+ * org.freedesktop.Notifications, which berri owns, so it shows in Alerts and
+ * as a pop-up. A failed delivery is tried again every 30 s.
  *
  * One Timer waits for the nearest due time. It starts again after every
  * calendar change and every alert. The Timer never waits more than 30 s: a
@@ -27,6 +30,7 @@ Singleton {
     readonly property int maxWaitMs: 30000
     readonly property real missedWindowMs: 7 * 86400000
     readonly property real horizonDays: 400
+    readonly property int retryMs: 30000
 
     property bool _started: false
     property bool _stateRead: false
@@ -64,7 +68,7 @@ Singleton {
             var keyWithoutCalendar = due[i].uid + "|" + due[i].dueMs;
             if (_alreadyShown.indexOf(key) >= 0 || _alreadyShown.indexOf(keyWithoutCalendar) >= 0) continue;
             _alreadyShown.push(key);
-            _notify(due[i]);
+            _notify(due[i], key);
         }
         _lastCheck = now;
         var cutoff = now - missedWindowMs;
@@ -75,7 +79,7 @@ Singleton {
 
     function _arm(): void {
         var next = Ics.nextDueMs(Calendar.allItems(), _lastCheck, horizonDays);
-        _nextDueMs = next === null ? 0 : next;
+        _nextDueMs = Delivery.nextWake(next === null ? 0 : next, Date.now(), retryMs);
         _wait();
     }
 
@@ -89,7 +93,7 @@ Singleton {
         id: timer
         onTriggered: {
             var now = Date.now();
-            if (root._nextDueMs > 0 && now >= root._nextDueMs) root._sweep(root._lastCheck, now);
+            if (root._nextDueMs > 0 && now >= root._nextDueMs) root._sweep(Math.max(root._lastCheck, now - root.missedWindowMs), now);
             else root._wait();
         }
     }
@@ -113,15 +117,23 @@ Singleton {
         }
     }
 
-    function _notify(reminder: var): void {
-        notifierComponent.createObject(root, { reminder: reminder });
+    function _notify(reminder: var, key: string): void {
+        notifierComponent.createObject(root, { reminder: reminder, key: key });
+    }
+
+    // The delivery failed: the alert counts as not shown, so the next scan finds it again.
+    function _deliveryFailed(key: string, dueMs: real): void {
+        var state = Delivery.afterFailedDelivery({ lastCheck: _lastCheck, shown: _alreadyShown }, key, dueMs);
+        _lastCheck = state.lastCheck;
+        _alreadyShown = state.shown;
+        _save();
+        _arm();
     }
 
     /** Applies the action the person chose in the notification. */
     function applyAction(action: string, calendarId: string, uid: string, occurrenceDate: string): void {
         var key = Ics.itemKey(calendarId, uid);
         if (action === "plus15") Calendar.snooze(key, occurrenceDate, 15);
-        else if (action === "plus1d") Calendar.snooze(key, occurrenceDate, "1d");
         else if (action === "done") Calendar.setDone(key, true, occurrenceDate);
     }
 
@@ -131,14 +143,16 @@ Singleton {
         Process {
             id: proc
             required property var reminder
+            required property string key
             running: true
-            command: ["notify-send", "-a", "berri", "-i", "appointment-soon", "-u", "normal", "-t", "60000", "--wait",
-                "-A", "plus15=+15m", "-A", "plus1d=+1d", "-A", "done=Done",
-                reminder.title || "Reminder", reminder.time]
+            command: Delivery.notifyCommand(reminder)
             stdout: StdioCollector {
                 onStreamFinished: root.applyAction(text.trim(), proc.reminder.calendarId, proc.reminder.uid, proc.reminder.occurrenceDate)
             }
-            onExited: proc.destroy()
+            onExited: exitCode => {
+                if (exitCode !== 0) root._deliveryFailed(proc.key, proc.reminder.dueMs);
+                proc.destroy();
+            }
         }
     }
 

@@ -316,6 +316,23 @@ function snoozeTarget(time, dateKey, amount, nowKey, nowTime) {
     return { date: date, time: Times.pad(Math.floor(mins / 60)) + ":" + Times.pad(mins % 60) };
 }
 
+/**
+ * Where a reminder snooze puts it, counted from its alert time (start minus
+ * alarmMinutes), or from now when the alert time is past. amount is minutes
+ * or "1d". Returns { date, time, alarmMinutes }: a minute snooze clears the
+ * alarm offset, a day snooze keeps it.
+ */
+function snoozeReminder(time, dateKey, alarmMinutes, amount, nowKey, nowTime) {
+    var t = time || "09:00";
+    var alarm = alarmMinutes || 0;
+    if (amount === "1d") return { date: addDays(dateKey, 1), time: t, alarmMinutes: alarm };
+    var start = Times.dayNum(dateKey) * 1440 + +t.slice(0, 2) * 60 + +t.slice(3, 5);
+    var now = Times.dayNum(nowKey) * 1440 + +nowTime.slice(0, 2) * 60 + +nowTime.slice(3, 5);
+    var at = Math.max(start - alarm, now) + amount;
+    var day = Math.floor(at / 1440);
+    return { date: addDays(dateKey, day - Times.dayNum(dateKey)), time: Times.pad(Math.floor(at % 1440 / 60)) + ":" + Times.pad(at % 60), alarmMinutes: 0 };
+}
+
 /** Day number of the nth weekday (day 0 = Sunday) of a month. nth is 1 to 5, or -1 for the last. Null when the month has no such day. */
 function weekdayInMonth(year, month, nth, day) {
     var first = Math.floor(Date.UTC(year, month - 1, 1) / 86400000);
@@ -513,6 +530,9 @@ function shallowCopy(object) {
     return copy;
 }
 
+/** An alarm offset above 4 weeks is ignored by reminder scans (an imported file can hold any number). */
+var maxAlarmMinutes = 4 * 7 * 1440;
+
 /**
  * Reminder occurrences whose alert time (start minus alarmMinutes, local time)
  * lies in (fromMs, toMs], oldest first. Ticked-off ones are left out.
@@ -526,6 +546,7 @@ function dueBetween(items, fromMs, toMs) {
         var item = items[i];
         if (item.kind !== "reminder" || item.time === null || item.date === null) continue;
         var alarm = item.alarmMinutes || 0;
+        if (alarm > maxAlarmMinutes) continue;
         var list = expand(item, fromKey, addDays(toDay, Math.ceil(alarm / 1440) + 1));
         for (var j = 0; j < list.length; j++) {
             var occ = list[j];
