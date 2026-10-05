@@ -198,15 +198,9 @@ Singleton {
         if (!item || item.readOnly) return false;
         var now = new Date();
         var nowTime = Times.pad(now.getHours()) + ":" + Times.pad(now.getMinutes());
-        var time = item.time;
-        var changes = {};
-        if (amount !== "1d" && item.alarmMinutes > 0 && time) {
-            var early = Math.max(0, +time.slice(0, 2) * 60 + +time.slice(3, 5) - item.alarmMinutes);
-            time = Times.pad(Math.floor(early / 60)) + ":" + Times.pad(early % 60);
-            changes.alarmMinutes = 0;
-        }
-        var to = Ics.snoozeTarget(time, Ics.toKey(occurrenceDate), amount, Ics.toKey(now), nowTime);
-        changes.time = to.time;
+        var to = Ics.snoozeReminder(item.time, Ics.toKey(occurrenceDate), item.alarmMinutes, amount, Ics.toKey(now), nowTime);
+        var changes = { time: to.time };
+        if (item.alarmMinutes > 0 && to.alarmMinutes !== item.alarmMinutes) changes.alarmMinutes = to.alarmMinutes;
         return move(uid, occurrenceDate, to.date, changes);
     }
 

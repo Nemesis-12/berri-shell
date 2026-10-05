@@ -67,6 +67,8 @@ berri starts its notification server by default. There is no setting to turn it 
 
 If another daemon already owns the name, berri leaves it running. Quickshell writes a warning to the berri log and retries when that daemon releases the name. Until then, the other daemon receives notifications; berri receives none. Use `qs log -i <instance-id>` to check for the warning. berri does not stop or disable other daemons.
 
+Reminders and the low-battery alert follow the same rule. Both call `notify-send`, so the owner of `org.freedesktop.Notifications` receives them. With berri as sole owner, they show in Alerts and as pop-ups. A reminder pop-up has two actions: +15m and Done. If a reminder cannot be sent, berri tries again every 30 seconds.
+
 The old `serverEnabled` key in saved notification state is ignored. Saved history and do not disturb state still load. No saved-data reset is needed.
 
 ## Use
