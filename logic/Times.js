@@ -32,6 +32,35 @@ function keyOfDayNum(n) {
     return pad(d.getUTCFullYear(), 4) + "-" + pad(d.getUTCMonth() + 1) + "-" + pad(d.getUTCDate());
 }
 
+/** The "YYYY-MM-DD" key `days` days after `key` (negative: before). */
+function addDays(key, days) {
+    return keyOfDayNum(dayNum(key) + days);
+}
+
+/** Whole days from key `a` to key `b`. */
+function daysBetween(a, b) {
+    return dayNum(b) - dayNum(a);
+}
+
+/**
+ * Length of time in seconds as text: "2H 05M", or "3D 4H" from a day on.
+ * Missing or negative seconds count as 0. Options for older wording:
+ *   round: false (default) cuts to whole minutes; true rounds them.
+ *   pad:   true (default) writes minutes with two digits.
+ *   days:  true (default) shows days from 24 hours on; false keeps hours.
+ *   lower: true writes "2h 05m".
+ */
+function duration(seconds, options) {
+    var o = options || {};
+    var secs = Math.max(0, seconds || 0);
+    var minutes = o.round ? Math.round(secs / 60) : Math.floor(secs / 60);
+    var days = o.days === false ? 0 : Math.floor(minutes / 1440);
+    var hours = Math.floor((minutes - days * 1440) / 60);
+    var text = days > 0 ? days + "D " + hours + "H"
+        : hours + "H " + (o.pad === false ? minutes % 60 : pad(minutes % 60)) + "M";
+    return o.lower ? text.toLowerCase() : text;
+}
+
 /** Seconds -> "3:07". Missing or negative seconds count as 0. */
 function minutesSeconds(seconds) {
     var total = Math.max(0, Math.floor(seconds || 0));

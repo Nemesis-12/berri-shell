@@ -3,6 +3,7 @@ import QtQuick.Window
 import Quickshell.Services.Mpris
 import Quickshell.Services.Pipewire
 import "../../logic/ArtUrl.js" as ArtUrl
+import "../../logic/PixelGrid.js" as PixelGrid
 import "../../logic/Times.js" as Times
 import qs.common
 import qs.services
@@ -19,7 +20,7 @@ import qs.tabs.home
 Item {
     id: root
 
-    readonly property real dpr: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
+    readonly property real dpr: PixelGrid.dpr(Screen.devicePixelRatio)
 
     readonly property int gap: 1
     readonly property int artSize: 363

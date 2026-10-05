@@ -42,22 +42,12 @@ function keyToDate(key) {
     return new Date(a[0], a[1] - 1, a[2]);
 }
 
-function addDays(key, n) {
-    var d = keyToDate(key);
-    d.setDate(d.getDate() + n);
-    return Times.dayKey(d);
-}
-
-function daysBetween(a, b) {
-    return Math.round((keyToDate(b) - keyToDate(a)) / 864e5);
-}
-
 // Month and day as the next such date. Null for 31 Feb and the like. A date more than 60 days back means next year.
 function monthDay(month, day, today) {
     var year = keyToDate(today).getFullYear();
     var key = Times.dayKey(new Date(year, month, day));
     if (keyToDate(key).getMonth() !== month) return null;
-    if (daysBetween(today, key) < -60) key = Times.dayKey(new Date(year + 1, month, day));
+    if (Times.daysBetween(today, key) < -60) key = Times.dayKey(new Date(year + 1, month, day));
     return key;
 }
 
@@ -70,7 +60,7 @@ function formatDay(key) {
 // Next date with that weekday, today included.
 function nextWeekday(name, today) {
     var target = WEEKDAY_NUMBER[name.slice(0, 3).toLowerCase()];
-    return addDays(today, (target - keyToDate(today).getDay() + 7) % 7);
+    return Times.addDays(today, (target - keyToDate(today).getDay() + 7) % 7);
 }
 
 // "HH:MM" from a clock reading, or null when the hour or minute is out of range.
@@ -163,13 +153,13 @@ var STEPS = [
         }
     } },
     { name: "tomorrow", fields: ["date"], when: hasNoDate, pattern: /\s(?:on\s+)?(tomorrow|tmrw|tmr)\b/i,
-      accept: function (m, o, today) { o.date = addDays(today, 1); } },
+      accept: function (m, o, today) { o.date = Times.addDays(today, 1); } },
     { name: "in N days", fields: ["date"], when: hasNoDate, pattern: /\sin\s+(\d{1,2})\s+days?\b/i,
-      accept: function (m, o, today) { o.date = addDays(today, +m[1]); } },
+      accept: function (m, o, today) { o.date = Times.addDays(today, +m[1]); } },
     { name: "in N weeks", fields: ["date"], when: hasNoDate, pattern: /\sin\s+(\d{1,2})\s+weeks?\b/i,
-      accept: function (m, o, today) { o.date = addDays(today, 7 * m[1]); } },
+      accept: function (m, o, today) { o.date = Times.addDays(today, 7 * m[1]); } },
     { name: "next week", fields: ["date"], when: hasNoDate, pattern: /\snext\s+week\b/i,
-      accept: function (m, o, today) { o.date = addDays(today, 7); } },
+      accept: function (m, o, today) { o.date = Times.addDays(today, 7); } },
     { name: "month then day", fields: ["date"], when: hasNoDate,
       pattern: new RegExp("\\s(?:on\\s+)?" + MONTH_PATTERN + "\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b", "i"),
       accept: function (m, o, today) {

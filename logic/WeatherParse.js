@@ -1,5 +1,6 @@
 .pragma library
 .import "WeatherFormat.js" as WeatherFormat
+.import "Times.js" as Times
 
 // Pure parsing helpers for Weather.qml. No QML types, so node can test them.
 // Open-Meteo times are local to the place ("2026-09-30T06:15"); they are read as system-local Dates.
@@ -13,10 +14,7 @@ function uvLabel(uv) {
 }
 
 // Seconds -> "12h 13m".
-function duration(seconds) {
-    var minutes = Math.round(seconds / 60);
-    return Math.floor(minutes / 60) + "h " + (minutes % 60) + "m";
-}
+var daylightWording = { round: true, pad: false, days: false, lower: true };
 
 function round1(value) {
     return Math.round(value * 10) / 10;
@@ -64,7 +62,7 @@ function parse(data) {
             feelsLikeMax: Math.round(d.apparent_temperature_max[j]),
             windDirection: WeatherFormat.compass(d.wind_direction_10m_dominant[j], 16),
             pressureHpa: Math.round(d.surface_pressure_mean[j]),
-            daylight: duration(d.daylight_duration[j])
+            daylight: Times.duration(d.daylight_duration[j], daylightWording)
         });
     }
 
