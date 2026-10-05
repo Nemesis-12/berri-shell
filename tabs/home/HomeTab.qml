@@ -19,11 +19,26 @@ Item {
 
     readonly property int gap: 1
 
-    /** Exposes the Profile cell so Pill can close the panel before it opens the picture chooser. */
-    property alias profileCell: profileCell
+    /** What this tab asks of the panel: keyboard focus for the Wi-Fi password row, and the panel closed before a chooser opens. */
+    readonly property PanelRequests requests: PanelRequests {
+        wantsKeyboard: root.wifiPasswordActive
+    }
 
-    /** Exposes the Sticker cell so Pill can close the panel before it opens the sticker chooser. */
-    property alias stickerCell: stickerCell
+    // The panel sits on the Overlay layer above a normal dialog window, so a
+    // chooser would open hidden underneath it. The panel starts to close first.
+    Connections {
+        target: profileCell
+        function onPictureClicked() {
+            root.requests.dialogRequested(() => profileCell.openPictureChooser(), false);
+        }
+    }
+
+    Connections {
+        target: stickerCell
+        function onStickerClicked() {
+            root.requests.dialogRequested(() => stickerCell.openStickerChooser(), false);
+        }
+    }
 
     /** Top-level item tooltips reparent into so cell clipping never cuts them off. */
     property Item tooltipLayer: null

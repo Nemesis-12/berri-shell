@@ -1,6 +1,5 @@
 pragma Singleton
 import QtQuick
-import qs.picker
 
 /**
  * Per-monitor arbiter between the dashboard (Pill.qml) and the theme picker

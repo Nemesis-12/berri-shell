@@ -1,9 +1,9 @@
 import QtQuick
 import QtQuick.Window
+import "../logic/PanelTimeline.js" as PanelTimeline
 import "../logic/PixelGrid.js" as PixelGrid
 import "../logic/Timeline.js" as Timeline
 import qs.common
-import qs.pill
 import qs.services
 
 /**
@@ -36,35 +36,28 @@ Item {
     readonly property int pickerHeight: 304
     readonly property int pickerCornerRadius: 10
 
-    // Open timeline, in ms after the click.
-    /** The notch widens to the narrow picker. */
-    readonly property int narrowMs: 420
-    /** The notch grows tall and its corners round. */
-    readonly property int riseMs: 480
-    /** The shadow deepens. */
-    readonly property int shadowMs: 400
-    /** The picker widens; starts when the narrow picker is almost done. */
-    readonly property int wideStartMs: 470
-    readonly property int wideMs: 420
-    /** The header and body fade in, a little after the widening starts. */
-    readonly property int headerStartMs: wideStartMs + 40
-    readonly property int headerMs: 280
-    /** The strip fades out once the header is fully opaque. */
-    readonly property int stripFadeStartMs: headerStartMs + headerMs
-    readonly property int stripFadeMs: 160
+    // Open and close timelines, in ms after the click (see PanelTimeline.js).
+    readonly property int narrowMs: PanelTimeline.picker.narrowMs
+    readonly property int riseMs: PanelTimeline.picker.riseMs
+    readonly property int shadowMs: PanelTimeline.picker.shadowMs
+    readonly property int wideStartMs: PanelTimeline.picker.wideStartMs
+    readonly property int wideMs: PanelTimeline.picker.wideMs
+    readonly property int headerStartMs: PanelTimeline.picker.headerStartMs
+    readonly property int headerMs: PanelTimeline.picker.headerMs
+    readonly property int stripFadeStartMs: PanelTimeline.picker.stripFadeStartMs
+    readonly property int stripFadeMs: PanelTimeline.picker.stripFadeMs
     /** The whole open motion. */
-    readonly property int totalMs: stripFadeStartMs + stripFadeMs
+    readonly property int totalMs: PanelTimeline.picker.totalMs
 
-    // Close timeline, in the same ms as the open (the time falls while closing). Each step
-    // ends where the next one is about 3/4 done, so the steps overlap and nothing stalls.
+    readonly property var closeTimes: PanelTimeline.pickerClose(paletteStrip.spanMs)
     /** The strip returns and the header fades out at once; the wide picker narrows 40 ms later. */
-    readonly property int wideCloseAtMs: totalMs - 40
+    readonly property int wideCloseAtMs: closeTimes.wideCloseAtMs
     /** The notch shrinks to its bar when the wide picker has narrowed 3/4. */
-    readonly property int narrowCloseAtMs: Timeline.overlapEnd(wideCloseAtMs, wideMs, Timeline.bigStepHandover)
+    readonly property int narrowCloseAtMs: closeTimes.narrowCloseAtMs
     /** The bars of the strip return with the shrinking. */
-    readonly property int stripCloseAtMs: narrowCloseAtMs + (paletteStrip.spanMs - narrowMs)
+    readonly property int stripCloseAtMs: closeTimes.stripCloseAtMs
     /** The time at which every step of the close is at rest. */
-    readonly property int closeEndMs: Math.min(Timeline.closeEnd(narrowCloseAtMs, riseMs), Timeline.closeEnd(narrowCloseAtMs, narrowMs), stripCloseAtMs - paletteStrip.spanMs)
+    readonly property int closeEndMs: closeTimes.closeEndMs
 
     // Picker layout (see pickerHeader and headerRow below); named here too so
     // the strip's vertical offset can be computed to land exactly on the
@@ -97,22 +90,19 @@ Item {
     property string screenName: ""
 
     /** True from the click until the picker is closed again: where the motion is going. */
-    property bool open: false
+    readonly property bool open: slide.open
 
     /** The open motion, 0 (notch) to 1 (wide picker), in a straight line over `totalMs`. */
-    property real progress: 0
+    readonly property real progress: slide.progress
 
     /** Time since the open started, in ms. Every slice of the motion reads this. */
-    readonly property real elapsedMs: progress * totalMs
+    readonly property real elapsedMs: slide.elapsedMs
 
     /** True while the motion runs toward the notch: every slice then eases out into rest. */
-    readonly property bool closing: !open && closeFromOpen
-
-    /** True when the close started from the fully open picker. A close that starts mid-way plays the open back in a straight line (no jump). */
-    property bool closeFromOpen: false
+    readonly property bool closing: slide.closing
 
     /** True while the picker is open, opening or closing. */
-    readonly property bool pickerOpen: open || progress > 0
+    readonly property bool pickerOpen: slide.active
 
     /** True once the picker is meant to be open and has started to widen: the header may take input. */
     readonly property bool pickerWide: open && elapsedMs >= wideStartMs
@@ -141,20 +131,15 @@ Item {
     implicitWidth: hoverWidth
     implicitHeight: hoverHeight
 
-    // Moves `progress` to `to` in a straight line, at the speed of the full
-    // motion, from where it is now (also when it is mid-way).
-    NumberAnimation {
+    // The one slide operation (see PanelSlide.qml): open, close, close at once, and dialog requests.
+    PanelSlide {
         id: slide
-        target: root
-        property: "progress"
-        easing.type: Easing.Linear
-        // A smooth close ends where all steps are at rest: the last part of the timeline is cut.
-        onFinished: {
-            if (root.open) return;
-            root.progress = 0;
-            root.closeFromOpen = false;
-            if (root.motionTab === "walls") wallBarsReturn.start();
-        }
+        screenName: root.screenName
+        kind: "picker"
+        totalMs: root.totalMs
+        closeEndMs: root.closeEndMs
+        // The notch bars return after a Walls close has finished.
+        onCloseFinished: if (root.motionTab === "walls") wallBarsReturn.start()
     }
 
     NumberAnimation {
@@ -166,22 +151,13 @@ Item {
         easing.type: Easing.OutCubic
     }
 
-    function slideTo(to: real): void {
-        slide.stop();
-        slide.to = to;
-        slide.duration = Timeline.slideDurationMs(root.totalMs, root.progress, to);
-        slide.start();
-    }
-
     /** Starts the open motion; also while a close is running. */
     function openPicker() {
         if (root.open) return;
         wallBarsReturn.stop();
         root.wallRestOpacity = 1;
-        PanelCoordinator.requestOpen(root.screenName, "picker");
         root.motionTab = root.pickerTab;
-        root.open = true;
-        root.slideTo(1);
+        slide.openSlide();
         if (root.pickerTab === "walls") wallpapersCarousel.focusToCurrent();
         else themesCarousel.focusToCurrent();
     }
@@ -192,19 +168,13 @@ Item {
         wallBarsReturn.stop();
         if (root.pickerTab === "walls") root.wallRestOpacity = 0;
         root.motionTab = root.pickerTab;
-        const close = Timeline.startClose(root.progress, root.closeEndMs, root.totalMs);
-        root.closeFromOpen = close.fromOpen;
-        root.open = false;
-        root.slideTo(close.target);
+        slide.closeSlide();
     }
 
     /** Stops the picker motion and closes at once when fullscreen starts. */
     function closeAtOnce() {
-        slide.stop();
         wallBarsReturn.stop();
-        root.open = false;
-        root.progress = 0;
-        root.closeFromOpen = false;
+        slide.closeAtOnce();
         root.wallRestOpacity = 1;
     }
 
@@ -212,25 +182,7 @@ Item {
     // this Overlay panel, so the picker closes first (normal animated close),
     // the dialog opens once the picker is at rest, and the picker reopens on
     // the Wallpapers tab when the dialog is done.
-    property bool addPending: false
     property int focusBeforeAdd: 0
-
-    onPickerOpenChanged: {
-        if (pickerOpen) return;
-        PanelCoordinator.notifyClosed(root.screenName, "picker");
-        if (root.addPending) {
-            root.addPending = false;
-            wallpapersCarousel.chooseFile();
-        }
-    }
-
-    Connections {
-        target: PanelCoordinator
-        function onCloseRequested(screenName, kind) {
-            if (screenName === root.screenName && kind === "picker")
-                root.closePicker();
-        }
-    }
 
     // The shadow at rest or under the pointer; the open motion deepens it.
     PanelShadow {
@@ -526,7 +478,7 @@ Item {
                         anchors.bottomMargin: root.wallsRowGap
                         onAddRequested: {
                             root.focusBeforeAdd = wallpapersCarousel.focusIndex;
-                            root.addPending = true;
+                            slide.runAfterClose(() => wallpapersCarousel.chooseFile());
                             root.closePicker();
                         }
                         onAddDone: (path) => {

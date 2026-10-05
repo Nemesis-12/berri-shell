@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import Quickshell.Services.SystemTray
+import "../logic/PanelTimeline.js" as PanelTimeline
 import "../logic/PixelGrid.js" as PixelGrid
 import "../logic/Timeline.js" as Timeline
 import qs.common
@@ -36,28 +37,23 @@ Item {
     readonly property int panelWidth: 800
     readonly property int panelHeight: 454
 
-    // Open timeline, in ms after the click (the icon flight sets its own length).
-    /** The pill widens. */
-    readonly property int widenMs: 420
-    /** The pill grows tall (starts when it is wide). */
-    readonly property int growMs: 500
-    /** The shadow deepens (starts with the growing). */
-    readonly property int shadowMs: 400
-    /** The clock group fades out. */
-    readonly property int clockFadeMs: 140
+    // Open and close timelines, in ms after the click (see PanelTimeline.js). The icon flight sets its own length.
+    readonly property int widenMs: PanelTimeline.pill.widenMs
+    readonly property int growMs: PanelTimeline.pill.growMs
+    readonly property int shadowMs: PanelTimeline.pill.shadowMs
+    readonly property int clockFadeMs: PanelTimeline.pill.clockFadeMs
     /** The whole open motion: it ends when the icon flight ends. */
     readonly property int totalMs: iconFlight.endMs
 
-    // Close timeline, in the same ms as the open (the time falls while closing). Each step
-    // ends where the next one is about 3/4 done, so the steps overlap and nothing stalls.
-    /** The dashboard fades and slides out, the shadow and the height start to fall, 60 ms after the close starts. */
-    readonly property int growCloseAtMs: totalMs - 60
+    readonly property var closeTimes: PanelTimeline.pillClose(totalMs, iconFlight.closeEndMs)
+    /** The dashboard fades and slides out, the shadow and the height start to fall. */
+    readonly property int growCloseAtMs: closeTimes.growCloseAtMs
     /** The pill narrows when the height has fallen 3/4. */
-    readonly property int widenCloseAtMs: Timeline.overlapEnd(growCloseAtMs, growMs, Timeline.bigStepHandover)
+    readonly property int widenCloseAtMs: closeTimes.widenCloseAtMs
     /** The clock returns when the pill has narrowed 3/5. */
-    readonly property int clockCloseAtMs: Timeline.overlapEnd(widenCloseAtMs, widenMs, Timeline.smallStepHandover)
+    readonly property int clockCloseAtMs: closeTimes.clockCloseAtMs
     /** The time at which every step of the close is at rest. */
-    readonly property int closeEndMs: Math.min(Timeline.closeEnd(widenCloseAtMs, widenMs), Timeline.closeEnd(clockCloseAtMs, clockFadeMs), iconFlight.closeEndMs)
+    readonly property int closeEndMs: closeTimes.closeEndMs
 
     /** True while a fullscreen window owns this monitor and the pill is not revealed; hides the pill. */
     property bool suppressed: false
@@ -69,36 +65,23 @@ Item {
     /** Set by shell.qml (modelData.name); keys this monitor's PanelCoordinator entry. */
     property string screenName: ""
 
-    /** Bubbled up from HomeTab/QuickToggles: true while the Wi-Fi list's
-     *  password row wants real keyboard focus. shell.qml's overlay
-     *  PanelWindow grabs WlrLayershell keyboard focus only while this holds.
-     *  Set by the Home tab body (see homeBody); false until that tab is loaded. */
-    property bool wifiPasswordActive: false
-
-    /** True while a calendar form field or the link box is typed into (same on-demand keyboard focus as the Wi-Fi password).
-     *  Set by the Calendar tab body (see calendarBody); false until that tab is loaded. */
-    property bool textEntryActive: false
-
-    /** The loaded Calendar tab, or null before it is first opened. */
-    property Item calendarTab: null
+    /** True while the active tab asks for real keyboard focus (set from the tab's PanelRequests). shell.qml's overlay window grabs keyboard focus only while a panel needs it. */
+    property bool tabWantsKeyboard: false
 
     /** True from the click until the dashboard is closed again: where the motion is going. */
-    property bool open: false
+    readonly property bool open: slide.open
 
     /** The open motion, 0 (pill) to 1 (dashboard), in a straight line over `totalMs`. */
-    property real progress: 0
+    readonly property real progress: slide.progress
 
     /** Time since the open started, in ms. Every slice of the motion reads this. */
-    readonly property real elapsedMs: progress * totalMs
+    readonly property real elapsedMs: slide.elapsedMs
 
     /** True while the motion runs toward the pill: every slice then eases out into rest. */
-    readonly property bool closing: !open && closeFromOpen
-
-    /** True when the close started from the fully open dashboard. A close that starts mid-way plays the open back in a straight line (no jump). */
-    property bool closeFromOpen: false
+    readonly property bool closing: slide.closing
 
     /** True while the dashboard is open, opening or closing. */
-    readonly property bool panelOpen: open || progress > 0
+    readonly property bool panelOpen: slide.active
 
     /** True once the pill is wide and the dashboard is meant to be open: the tab pages may work. */
     readonly property bool panelReady: open && elapsedMs >= widenMs
@@ -157,70 +140,31 @@ Item {
     // Slides in from the top edge with the fade (same progress: opacity).
     transform: Translate { y: PixelGrid.snap(-(1 - root.opacity) * 8, root.dpr) }
 
-    // Moves `progress` to `to` in a straight line, at the speed of the full
-    // motion, from where it is now (also when it is mid-way).
-    NumberAnimation {
+    // The one slide operation (see PanelSlide.qml): open, close, close at once, and dialog requests.
+    PanelSlide {
         id: slide
-        target: root
-        property: "progress"
-        easing.type: Easing.Linear
-        // A smooth close ends where all steps are at rest: the last part of the timeline is cut.
-        onFinished: if (!root.open) root.progress = 0
-    }
-
-    function slideTo(to: real): void {
-        slide.stop();
-        slide.to = to;
-        slide.duration = Timeline.slideDurationMs(root.totalMs, root.progress, to);
-        slide.start();
+        screenName: root.screenName
+        kind: "pill"
+        totalMs: root.totalMs
+        closeEndMs: root.closeEndMs
     }
 
     /** Starts the open motion; also while a close is running. */
     function openPanel() {
-        if (root.open) return;
-        PanelCoordinator.requestOpen(root.screenName, "pill");
-        root.open = true;
-        root.slideTo(1);
+        slide.openSlide();
     }
 
     /** Starts the close motion: the open steps in reversed order, each one easing out into rest. No-op unless open. */
     function closePanel() {
-        if (!root.open) return;
-        const close = Timeline.startClose(root.progress, root.closeEndMs, root.totalMs);
-        root.closeFromOpen = close.fromOpen;
-        root.open = false;
-        // A smooth close is at rest when `closeEndMs` is reached; the rest of the way is cut.
-        root.slideTo(close.target);
+        slide.closeSlide();
     }
 
     /** Stops the dashboard motion and closes at once when fullscreen starts. */
     function closeAtOnce() {
-        slide.stop();
-        root.open = false;
-        root.progress = 0;
+        slide.closeAtOnce();
     }
 
-    onPanelOpenChanged: {
-        if (panelOpen) trayLayers.closeAll();
-        if (panelOpen) return;
-        PanelCoordinator.notifyClosed(root.screenName, "pill");
-        // IMPORT FILE: the panel is closed now, so the file dialog is not hidden under it.
-        if (root.importPending) {
-            root.importPending = false;
-            root.calendarTab.chooseImportFile();
-        }
-    }
-
-    /** True from IMPORT FILE until the panel is closed and the file dialog opens. */
-    property bool importPending: false
-
-    Connections {
-        target: PanelCoordinator
-        function onCloseRequested(screenName, kind) {
-            if (screenName === root.screenName && kind === "pill")
-                root.closePanel();
-        }
-    }
+    onPanelOpenChanged: if (panelOpen) trayLayers.closeAll()
 
     // The shadow of the pill; the open motion deepens it.
     PanelShadow {
@@ -469,9 +413,33 @@ Item {
                         Component.onCompleted: if (shown) page.everOpened = true
 
                         Loader {
+                            id: body
                             anchors.fill: parent
                             active: page.everOpened
                             sourceComponent: page.modelData.body
+
+                            /** What the tab asks of the panel (its PanelRequests), or null for a tab that asks nothing. */
+                            readonly property PanelRequests requests: item && item.requests ? item.requests : null
+                        }
+
+                        // Only the active tab's keyboard request counts.
+                        Binding {
+                            target: root
+                            property: "tabWantsKeyboard"
+                            value: body.requests ? body.requests.wantsKeyboard : false
+                            when: page.shown
+                            restoreMode: Binding.RestoreNone
+                        }
+
+                        Connections {
+                            target: body.requests
+                            function onDialogRequested(openDialog, afterClose) {
+                                slide.closeThenRun(openDialog, afterClose);
+                            }
+                            function onReopenRequested() {
+                                root.activeTab = root.tabIds.indexOf(page.tabId);
+                                root.openPanel();
+                            }
                         }
                     }
                 }
@@ -530,34 +498,11 @@ Item {
         id: homeBody
 
         HomeTab {
-            id: homeTab
             anchors.fill: parent
             tooltipLayer: dashboard
             panelOpen: root.panelReady
             // Tab area at rest: the panel minus the 1px inset, the spine and its seam.
             restSize: Qt.size(root.panelWidth - 2 - spine.width - 1, root.panelHeight - 2)
-
-            Binding { target: root; property: "wifiPasswordActive"; value: homeTab.wifiPasswordActive }
-
-            // Clicking the profile picture must close the panel first: the
-            // panel sits on the Overlay layer above a normal dialog window,
-            // so the chooser would open hidden underneath it otherwise.
-            Connections {
-                target: homeTab.profileCell
-                function onPictureClicked() {
-                    root.closePanel();
-                    homeTab.profileCell.openPictureChooser();
-                }
-            }
-
-            // Same close-then-open flow for the sticker cell's chooser.
-            Connections {
-                target: homeTab.stickerCell
-                function onStickerClicked() {
-                    root.closePanel();
-                    homeTab.stickerCell.openStickerChooser();
-                }
-            }
         }
     }
 
@@ -580,28 +525,8 @@ Item {
         id: calendarBody
 
         CalendarTab {
-            id: calendarTab
-
             anchors.fill: parent
             panelOpen: root.panelOpen
-
-            Binding { target: root; property: "textEntryActive"; value: calendarTab.textEntryActive }
-            Binding { target: root; property: "calendarTab"; value: calendarTab }
-
-            // IMPORT FILE: close the panel (animated), choose the file, then reopen on the calendars view.
-            onImportRequested: {
-                if (!root.panelOpen) {
-                    calendarTab.chooseImportFile();
-                } else {
-                    root.importPending = true;
-                    root.closePanel();
-                }
-            }
-            onImportFinished: {
-                root.activeTab = root.tabIds.indexOf("calendar");
-                calendarTab.showCalendars = true;
-                root.openPanel();
-            }
         }
     }
 

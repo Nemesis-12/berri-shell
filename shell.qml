@@ -89,8 +89,8 @@ ShellRoot {
             bottomKeepShown: notch.pickerOpen || notch.hovered
             dimmed: pill.panelOpen || notch.pickerOpen
             card: popup
-            // The Wi-Fi password row and text fields need the keyboard while used; the picker needs it for Esc.
-            wantsKeyboard: pill.wifiPasswordActive || pill.textEntryActive || pill.panelOpen || pill.trayLayerOpen || notch.pickerOpen
+            // The active tab's text fields need the keyboard while used; the picker needs it for Esc.
+            wantsKeyboard: pill.tabWantsKeyboard || pill.panelOpen || pill.trayLayerOpen || notch.pickerOpen
 
             onDimClicked: {
                 pill.closePanel();

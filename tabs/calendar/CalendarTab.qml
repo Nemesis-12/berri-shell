@@ -35,6 +35,11 @@ Item {
     /** True while a field of the details form or the link box has keyboard focus. The panel window asks for keyboard input only then. */
     readonly property bool textEntryActive: detailsForm.textEntryActive || sourcesView.textEntryActive
 
+    /** What this tab asks of the panel: keyboard focus while a field is typed into, and the panel closed before the import dialog. */
+    readonly property PanelRequests requests: PanelRequests {
+        wantsKeyboard: root.textEntryActive
+    }
+
     /** True while the calendars view is shown in place of the month grid. */
     property bool showCalendars: false
     property string saveError: ""
@@ -49,10 +54,10 @@ Item {
         }
     }
 
-    /** Asks the host to close the panel first: the file dialog would open under the panel's Overlay window. */
-    signal importRequested
-    /** The file dialog ended (a file was picked or not). The host reopens the panel. */
-    signal importFinished
+    /** Closes the panel first (the file dialog would open under the panel's Overlay window), then opens the file dialog at rest. */
+    function requestImport() {
+        root.requests.dialogRequested(() => root.chooseImportFile(), true);
+    }
 
     /** First weekday column: 1 = Monday, 0 = Sunday. A settings page can change it. */
     property int weekStart: 1
@@ -104,7 +109,11 @@ Item {
         startDir: (Quickshell.env("HOME") || "") + "/Downloads"
         fallbackDir: Quickshell.env("HOME") || ""
         onChosen: path => sourcesView.importPicked(path)
-        onFinished: root.importFinished()
+        // The panel reopens on the calendars view.
+        onFinished: {
+            root.showCalendars = true;
+            root.requests.reopenRequested();
+        }
     }
 
     function dayOf(key: string): date {
@@ -484,7 +493,7 @@ Item {
             enabled: root.flipProgress === 1
             opacity: root.flipProgress
             transform: Translate { y: 10 * (1 - root.flipProgress) }
-            onImportRequested: root.importRequested()
+            onImportRequested: root.requestImport()
         }
     }
 
