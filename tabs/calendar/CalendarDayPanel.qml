@@ -55,9 +55,13 @@ Item {
     readonly property string nowTime: Times.clockOfDate(Clock.minute, true)
     readonly property bool shownIsToday: root.shownKey === Times.dayKey(Clock.minute)
 
+    // A hidden panel keeps its last items and asks the store again when it is shown.
+    readonly property var lastItems: ({ list: [] })
     readonly property var items: {
         void Calendar.revision;
-        return Calendar.itemsOn(root.shownDate);
+        if (!root.visible) return root.lastItems.list;
+        root.lastItems.list = Calendar.itemsOn(root.shownDate);
+        return root.lastItems.list;
     }
 
     property bool resetting: false
