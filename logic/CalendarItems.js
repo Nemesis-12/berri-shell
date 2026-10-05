@@ -3,6 +3,63 @@
 
 /** Changes calendar items and finds their repeated dates and reminder times. */
 
+/*
+ * iCalendar (RFC 5545) subset used by berri's calendar. Pure functions, no QML.
+ * Calendar.qml imports CalendarItems.js, CalendarFormat.js, CalendarQueries.js and CalendarMonths.js directly.
+ *
+ * Calendar shape:  { prodid, raw: [line], rawComponents: [[line]], items: [Item] }
+ *
+ * Item shape (all dates "YYYY-MM-DD", all times "HH:MM", local display time):
+ *   uid, kind ("event" | "task" | "reminder"), title,
+ *   date, time (null = all-day / no time), end (end time, events only),
+ *   endDate (last day of a multi-day all-day event, else null),
+ *   color (preset key "accent" | "blue" | "green" | "yellow" | "red" | "cyan" | "magenta" | "orange",
+ *   or a custom "#rrggbb"; stored as X-BERRI-COLOR, "accent" is not written),
+ *   repeat ("none" | "daily" | "weekly" | "monthly" | "yearly"), interval,
+ *   byDay (weekly only, 0 = Sunday), monthWeekday (monthly only: { nth, day }, nth 1 to 5 or -1 for the last,
+ *   day 0 = Sunday; from BYDAY=2TU), until, count,
+ *   exdates (skipped occurrence dates), doneDates (occurrence dates ticked off),
+ *   alarmMinutes (VALARM minutes before start, null = none), status, stamp,
+ *   ruleRest (RRULE parts berri ignores, written back unchanged),
+ *   zoned (repeating event with a named time zone: { date, time, length, offsets }, the first source clock,
+ *   the length in minutes and the [first day, UTC offset in seconds] changes of that zone, so each
+ *   occurrence follows the daylight-saving changes of the zone; null otherwise),
+ *   changedOccurrences (RECURRENCE-ID components of a repeating event: { from, cancelled, title, date, time, end, endDate },
+ *   from = the day the occurrence had, date null = not moved; the component also stays in rawComponents),
+ *   raw (unknown property lines, kept as is), rawChildren (unknown nested components),
+ *   sourceDates (imported DTSTART, DTEND/DUE, UNTIL and EXDATE source forms).
+ *   This is the stored item. CalendarItems.js checks it when it is built (storedItem).
+ *   A projected item is a copy with calendarId, readOnly and hasOwnColor (projectedItem).
+ *   A shown item is a copy for QML with a pair key in uid and the file UID in sourceUid (shownItem).
+ *
+ * Occurrence shape (what day and month queries return):
+ *   uid, kind, title, color, date (the day shown), occurrenceDate (start day of
+ *   this occurrence, use it for setDone/remove/move), time, end, endDate,
+ *   allDay, repeat, recurring, done, alarmMinutes, calendarId, readOnly,
+ *   hasOwnColor, alsoIn (names of the other calendars that hold the same
+ *   event, [] when none), alsoInIds (their ids).
+ *   (calendarId, readOnly and hasOwnColor come from projectedItem.)
+ *   Subscription detail items also include location from LOCATION.
+ *
+ * Duplicates: an event in several calendars shows once. Two entries of
+ * DIFFERENT calendars are the same event when the uid is the same, or when
+ * start (day and time) and title are the same (see titleKey). Entries of one
+ * calendar are never merged. The kept copy is the one of the calendar that
+ * comes first, unless another copy has its own color.
+ *
+ * Old berri files stored a tag in CATEGORIES (personal, work, health, home).
+ * It is read as a color when X-BERRI-COLOR is missing and is not written back.
+ * CATEGORIES from other apps stay as raw lines.
+ *
+ * Month numbers are 1 to 12 everywhere.
+ * Known limits: unknown TZIDs keep their source clock for display until edited.
+ * A zoned series follows its zone for ten years from its first day.
+ * A moved occurrence without DTEND has no end time. Deleting a moved occurrence of an editable calendar
+ * leaves its RECURRENCE-ID component in the file.
+ * BYMONTHDAY, BYSETPOS, a BYDAY list with week numbers and other rule parts stay raw but are ignored.
+ * A cancelled item (STATUS:CANCELLED) has no occurrences, also in an editable calendar.
+ */
+
 var itemColors = ["accent", "blue", "green", "yellow", "red", "cyan", "magenta", "orange"];
 
 /** 0 = Sunday. */
@@ -201,13 +258,11 @@ function takeCheckedFields(item, fields) {
 }
 
 /**
- * The stored form of an item, from a file, a link record or the edit form.
- * Fields that are missing or malformed get their default. The result is
- * the same for the same fields. A missing uid stays "": makeItem gives a new item its uid.
- * location (links) and sourceDates (imports) pass through. CalendarIcs.js describes the fields.
+ * The one factory of stored items: every field with its default. storedItem (link records, new items)
+ * and the file reader (CalendarFormat.js parseItem) both start from it, so a new field is added here only.
  */
-function storedItem(fields) {
-    var item = {
+function blankItem() {
+    return {
         uid: "", kind: "event", title: "",
         date: null, time: null, end: null, endDate: null,
         color: "accent", repeat: "none", interval: 1, byDay: [], monthWeekday: null, until: null, count: null,
@@ -215,6 +270,16 @@ function storedItem(fields) {
         zoned: null, changedOccurrences: [],
         raw: [], rawChildren: []
     };
+}
+
+/**
+ * The stored form of an item, from a file, a link record or the edit form.
+ * Fields that are missing or malformed get their default. The result is
+ * the same for the same fields. A missing uid stays "": makeItem gives a new item its uid.
+ * location (links) and sourceDates (imports) pass through. The comment at the top of this file describes the fields.
+ */
+function storedItem(fields) {
+    var item = blankItem();
     takeCheckedFields(item, fields);
     if (fields.location !== undefined) item.location = fields.location;
     if (fields.sourceDates !== undefined) item.sourceDates = fields.sourceDates;

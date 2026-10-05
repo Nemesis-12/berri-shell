@@ -2,7 +2,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "../logic/CalendarIcs.js" as Ics
+import "../logic/CalendarItems.js" as Items
 import "../logic/ReminderDelivery.js" as Delivery
 import qs.common
 import qs.services
@@ -62,9 +62,9 @@ Singleton {
 
     // Shows every unshown alert due in (from, now], saves the state, waits for the next.
     function _sweep(from: real, now: real): void {
-        var due = Ics.dueBetween(Calendar.allItems(), from, now);
+        var due = Items.dueBetween(Calendar.allItems(), from, now);
         for (var i = 0; i < due.length; i++) {
-            var key = Ics.itemKey(due[i].calendarId, due[i].uid) + "|" + due[i].dueMs;
+            var key = Items.itemKey(due[i].calendarId, due[i].uid) + "|" + due[i].dueMs;
             var keyWithoutCalendar = due[i].uid + "|" + due[i].dueMs;
             if (_alreadyShown.indexOf(key) >= 0 || _alreadyShown.indexOf(keyWithoutCalendar) >= 0) continue;
             _alreadyShown.push(key);
@@ -78,7 +78,7 @@ Singleton {
     }
 
     function _arm(): void {
-        var next = Ics.nextDueMs(Calendar.allItems(), _lastCheck, horizonDays);
+        var next = Items.nextDueMs(Calendar.allItems(), _lastCheck, horizonDays);
         _nextDueMs = Delivery.nextWake(next === null ? 0 : next, Date.now(), retryMs);
         _wait();
     }
@@ -132,7 +132,7 @@ Singleton {
 
     /** Applies the action the person chose in the notification. */
     function applyAction(action: string, calendarId: string, uid: string, occurrenceDate: string): void {
-        var key = Ics.itemKey(calendarId, uid);
+        var key = Items.itemKey(calendarId, uid);
         if (action === "plus15") Calendar.snooze(key, occurrenceDate, 15);
         else if (action === "done") Calendar.setDone(key, true, occurrenceDate);
     }
