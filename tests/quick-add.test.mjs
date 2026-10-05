@@ -280,3 +280,17 @@ test("a number after # stays in the title; hex words with letters stay colors", 
   assert.equal(issueAndColor.named.color, true);
   assert.equal(issueAndColor.date, "2026-09-30");
 });
+
+test("a range with one am/pm keeps the start before the end", () => {
+  const p = parse("Meet 9-5pm");
+  assert.deepEqual({ time: p.time, end: p.end, title: p.title }, { time: "09:00", end: "17:00", title: "Meet" });
+  assert.equal(parse("Lunch 11-1pm").time, "11:00");
+  assert.equal(parse("Late 10-11pm").time, "22:00");
+  assert.equal(parse("Noon 12-1pm").time, "12:00");
+});
+
+test("a range that ends after midnight and a late default end keep the end clock", () => {
+  const party = parse("Party 11pm-1am fri");
+  assert.deepEqual({ time: party.time, end: party.end, date: party.date }, { time: "23:00", end: "01:00", date: "2026-10-02" });
+  assert.equal(parse("Show 11:30pm").end, "00:30");
+});

@@ -14,6 +14,15 @@ function parseLine(text, base, reference, clock24) {
     };
 }
 
+// The end clock: events follow a typed time range, a task keeps its due time until a time is typed.
+function endField(type, touched, draft, named, parsed, base) {
+    if (type !== "event" && type !== "task") return "";
+    var typedTime = named.time && !touched.time;
+    if (touched.end) return draft.end;
+    if (type === "task") return typedTime ? "" : base.end;
+    return typedTime ? (parsed.end || base.end) : base.end;
+}
+
 // Typed parts fill untouched fields. Deleted parts restore the opening values.
 function fromText(base, touched, draft, text, reference, clock24) {
     var line = parseLine(text, base, reference, clock24);
@@ -27,7 +36,7 @@ function fromText(base, touched, draft, text, reference, clock24) {
             title: parsed.title,
             type: type,
             time: type === "allday" ? "" : touched.time ? draft.time : named.time ? parsed.time : (base.time || (type === "task" ? "" : "09:00")),
-            end: type !== "event" ? "" : touched.end ? draft.end : (named.time && !touched.time) ? (parsed.end || base.end) : base.end,
+            end: endField(type, touched, draft, named, parsed, base),
             date: touched.date ? draft.date : named.date ? parsed.date : base.date,
             repeat: touched.repeat ? draft.repeat : named.repeat ? parsed.repeat : base.repeat,
             byDay: touched.repeat ? draft.byDay : named.repeat ? parsed.byDay : base.byDay,
@@ -53,22 +62,33 @@ function buildHint(line, touched, draft, clock24, readOnly) {
     return { text: parts.join(" · "), swatch: named.color && !touched.color ? draft.color : "" };
 }
 
-// Maps form fields to saved fields. Moving an event keeps its day span.
-function toStoredFields(draft, original) {
+// Maps form fields to saved fields. Moving an item keeps its day span.
+// opening is the draft the form opened with. A field that still has its opening value keeps the
+// stored value: an inherited color stays inherited. A stored end is always after the start.
+function toStoredFields(draft, original, opening) {
     var isEvent = draft.type === "event" || draft.type === "allday";
+    var hasSpan = isEvent || draft.type === "task";
     var time = draft.type === "allday" ? null : (draft.time !== "" ? draft.time : (draft.type === "reminder" ? "09:00" : null));
     var endDate = null;
-    if (isEvent && original && original.endDate) {
+    if (hasSpan && original && original.endDate) {
         endDate = Times.keyOfDayNum(Times.dayNum(original.endDate) + Times.dayNum(draft.date) - Times.dayNum(original.date));
     }
+    var end = hasSpan && draft.type !== "allday" && time !== null && draft.end !== "" ? draft.end : null;
+    if (end !== null && !(opening && draft.end === opening.end && endDate !== null)) {
+        // A new end counts on the start day, or on the next day when it is not later than the start.
+        endDate = null;
+        if (end < time) endDate = Times.keyOfDayNum(Times.dayNum(draft.date) + 1);
+        else if (end === time) end = null;
+    }
+    var unchangedColor = original && opening && draft.color === opening.color;
     return {
         kind: isEvent ? "event" : draft.type,
         title: draft.title.trim(),
         date: draft.date,
         time: time,
-        end: draft.type === "event" && time !== null && draft.end !== "" ? draft.end : null,
+        end: end,
         endDate: endDate,
-        color: draft.color,
+        color: unchangedColor ? original.color : draft.color,
         repeat: draft.repeat,
         byDay: draft.byDay
     };
