@@ -103,3 +103,4 @@ var curlError = Queries.curlError;
 var createMonthCache = Months.createMonthCache;
 var cachedItemsInMonth = Months.cachedItemsInMonth;
 var editMonthCache = Months.editMonthCache;
+var refreshCalendarRow = Months.refreshCalendarRow;

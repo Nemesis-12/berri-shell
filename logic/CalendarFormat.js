@@ -20,6 +20,8 @@ function utf8Length(str, index) {
 
 /** Folds one line to at most 75 octets per physical line, never inside a character. */
 function foldLine(line) {
+    // Fast path: an ASCII line of 75 characters or fewer is 75 octets or fewer.
+    if (line.length <= 75 && !/[^\x00-\x7f]/.test(line)) return line;
     var out = [];
     var current = "";
     var bytes = 0;
@@ -556,16 +558,22 @@ function itemLines(item, localZone) {
         lines.push("BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + escapeText(item.title),
             "TRIGGER:" + (item.alarmMinutes > 0 ? "-PT" + item.alarmMinutes + "M" : "PT0S"), "END:VALARM");
     }
-    for (var c = 0; c < item.rawChildren.length; c++) lines = lines.concat(item.rawChildren[c]);
+    for (var c = 0; c < item.rawChildren.length; c++) appendLines(lines, item.rawChildren[c]);
     lines.push("END:" + name);
     return lines;
 }
 
+/** Adds `extra` to the end of `lines` in place. Repeated concat would copy all earlier lines each time. */
+function appendLines(lines, extra) {
+    for (var i = 0; i < extra.length; i++) lines.push(extra[i]);
+}
+
 /** Writes a calendar as iCalendar text (CRLF lines, folded at 75 octets). */
 function writeCalendar(cal, localZone) {
-    var lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:" + (cal.prodid || calendarProduct)].concat(cal.raw);
-    for (var r = 0; r < cal.rawComponents.length; r++) lines = lines.concat(cal.rawComponents[r]);
-    for (var i = 0; i < cal.items.length; i++) lines = lines.concat(itemLines(cal.items[i], localZone));
+    var lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:" + (cal.prodid || calendarProduct)];
+    appendLines(lines, cal.raw);
+    for (var r = 0; r < cal.rawComponents.length; r++) appendLines(lines, cal.rawComponents[r]);
+    for (var i = 0; i < cal.items.length; i++) appendLines(lines, itemLines(cal.items[i], localZone));
     lines.push("END:VCALENDAR");
     return lines.map(foldLine).join("\r\n") + "\r\n";
 }

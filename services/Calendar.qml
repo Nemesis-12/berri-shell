@@ -22,7 +22,7 @@ import qs.notifications
  *
  * Views read Calendar.itemsOn(date) or Calendar.itemsInMonth(year, month) inside
  * a binding. Both read `revision`, so the binding runs again after every change.
- * The cache limit is CalendarMonths.js MONTH_CACHE_LIMIT. Item edits keep
+ * The cache limit is CalendarMonths.js MONTH_CACHE_LIMIT (eight months). Item edits keep
  * unchanged months; imports and calendar-wide settings clear them.
  * Do not edit the arrays.
  * The same event in several calendars shows once (see CalendarIcs.js): the copy
@@ -453,6 +453,12 @@ Singleton {
         revision++;
     }
 
+    // Shows the new update time of a feed that did not change. Cached months stay.
+    function _refreshRow(calendar: var): void {
+        Ics.refreshCalendarRow(_months, calendar);
+        revision++;
+    }
+
     // Reproject one calendar and keep months whose edited occurrences did not change.
     function _rebuildItem(calendar: var, uids: var): void {
         Ics.editMonthCache(_months, calendar, uids);
@@ -631,19 +637,25 @@ Singleton {
             var meta = _calendars[id];
             if (!meta) return;
             meta.refreshing = false;
+            // A feed with the same text and no error to clear keeps its cached months.
+            var signature = json.length + ":" + Ics.shortHash(json);
+            var overrides = error ? null : Ics.pruneRecordColorOverrides(meta.colorOverrides, doc.records);
+            var same = !error && meta.signature === signature && !meta.error && !meta.convertError &&
+                JSON.stringify(overrides) === JSON.stringify(meta.colorOverrides);
             if (error) {
                 meta.error = error;
             } else {
-                meta.records = doc.records;
-                meta.signature = json.length + ":" + Ics.shortHash(json);
+                if (!same) meta.records = doc.records;
+                meta.signature = signature;
                 meta.loaded = true;
                 meta.error = "";
                 meta.convertError = "";
-                meta.colorOverrides = Ics.pruneRecordColorOverrides(meta.colorOverrides, doc.records);
+                meta.colorOverrides = overrides;
                 meta.updatedAt = Date.now();
                 _saveState();
             }
-            _rebuild();
+            if (same) _refreshRow(meta);
+            else _rebuild();
         }
     }
 
