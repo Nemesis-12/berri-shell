@@ -103,11 +103,7 @@ Singleton {
         }
         addProc.wasEmpty = root.library.length === 0;
         addProc.srcPath = path;
-        addProc.command = ["bash", "-c",
-            'set -e; mkdir -p "$1"; base="$(basename -- "$0")"; name="${base%.*}"; ext="${base##*.}"; ' +
-            'dest="$1/$base"; n=1; while [ -e "$dest" ]; do dest="$1/${name}-${n}.${ext}"; n=$((n+1)); done; ' +
-            'cp -- "$0" "$dest"; printf "%s" "$dest"',
-            path, root.wallpapersDir];
+        addProc.command = ["sh", Quickshell.shellPath("scripts/add-wallpaper.sh"), path, root.wallpapersDir];
         addProc.running = true;
     }
 
