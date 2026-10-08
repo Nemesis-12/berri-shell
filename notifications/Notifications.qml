@@ -27,10 +27,10 @@ import qs.services
  *   invokeAction and dismiss while the sender keeps it open).
  *   updated(item): replaces an open or waiting pop-up without adding a copy.
  *
- * berri starts the server after saved state loads. It must be the sole owner
- * of org.freedesktop.Notifications. Other notification daemons must not run.
- * Quickshell keeps an existing owner on a name conflict,
- * logs a warning and retries when that owner releases the name.
+ * berri starts the server after saved state loads. Quickshell keeps an
+ * existing owner of org.freedesktop.Notifications on a name conflict, logs
+ * a warning and retries when that owner releases the name. berri can receive
+ * notifications only after it owns the name.
  * Like every singleton, this one loads on first use, so
  * something in the shell must reference Notifications for the server to start.
  *

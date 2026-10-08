@@ -119,7 +119,7 @@ function nextHours(model) {
     return model.hoursAll.slice(model.nowIndex, model.nowIndex + 24);
 }
 
-// Detail for day `index`; 0 = current values. Other days use the day's summary values.
+// Detail for day `index`; index 0 is today and uses current values. Other days use their summaries.
 function dayDetail(model, index) {
     if (index <= 0 || index >= model.days.length) return model.current;
     var day = model.days[index];
