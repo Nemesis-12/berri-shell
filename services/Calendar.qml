@@ -1,9 +1,9 @@
 pragma Singleton
 import QtQuick
-import "../logic/CalendarChoices.js" as Choices
 import Quickshell
 import "../logic/CalendarCatalog.js" as Catalog
 import "../logic/CalendarFormat.js" as Format
+import "../logic/CalendarIdentity.js" as Identity
 import "../logic/CalendarItems.js" as Items
 import "../logic/CalendarMonths.js" as Months
 import "../logic/CalendarQueries.js" as Queries
@@ -40,7 +40,7 @@ Singleton {
     property alias viewers: files.viewers
 
     readonly property string dir: FolderRoots.calendar
-    readonly property string defaultPath: dir + "/" + Choices.LOCAL_FILE
+    readonly property string defaultPath: dir + "/" + Identity.LOCAL_FILE
 
     /** Goes up by one on every change (own edit or outside change). */
     property int revision: 0
@@ -135,7 +135,7 @@ Singleton {
         var target = fields.calendarId ? _calendars[fields.calendarId] : null;
         if (fields.calendarId && (!target || target.kind === "link")) return false;
         if (target) path = dir + "/" + target.file;
-        var calendar = target || _calendars[Choices.LOCAL_ID];
+        var calendar = target || _calendars[Identity.LOCAL_ID];
         if (!disk.canWrite(calendar)) return false;
         var doc = calendar.document || Format.emptyCalendar();
         var item = Items.makeItem(Catalog.cleanDates(fields));

@@ -1,5 +1,5 @@
 .pragma library
-.import "CalendarChoices.js" as Choices
+.import "CalendarIdentity.js" as Identity
 .import "Times.js" as Times
 
 /** Finds the occurrences of repeating items on given days, within a work limit. */
@@ -144,7 +144,7 @@ function occurrenceOf(item, startN, dayN) {
     var lengthDays = item.endDate ? Times.dayNum(item.endDate) - Times.dayNum(item.date) : 0;
     return {
         uid: item.uid, kind: item.kind, title: item.title, color: item.color,
-        calendarId: item.calendarId || Choices.LOCAL_ID, readOnly: !!item.readOnly, hasOwnColor: !!item.hasOwnColor,
+        calendarId: item.calendarId || Identity.LOCAL_ID, readOnly: !!item.readOnly, hasOwnColor: !!item.hasOwnColor,
         date: Times.keyOfDayNum(dayN), occurrenceDate: start,
         time: item.time, end: item.end,
         endDate: item.endDate ? Times.keyOfDayNum(startN + lengthDays) : null,

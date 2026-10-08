@@ -1,5 +1,5 @@
 .pragma library
-.import "CalendarChoices.js" as Choices
+.import "CalendarIdentity.js" as Identity
 .import "Times.js" as Times
 .import "CalendarRepeat.js" as Repeat
 
@@ -129,7 +129,7 @@ function shortHash(text) {
 function projectedItem(stored, calendarId, readOnly) {
     var copy = {};
     for (var k in stored) copy[k] = stored[k];
-    copy.calendarId = typeof calendarId === "string" && calendarId !== "" ? calendarId : Choices.LOCAL_ID;
+    copy.calendarId = typeof calendarId === "string" && calendarId !== "" ? calendarId : Identity.LOCAL_ID;
     copy.readOnly = !!readOnly;
     copy.hasOwnColor = copy.readOnly ? false : stored.color !== "accent";
     return copy;
@@ -139,7 +139,7 @@ function projectedItem(stored, calendarId, readOnly) {
 function shownItem(item) {
     var copy = {};
     for (var k in item) copy[k] = item[k];
-    var calendarId = typeof item.calendarId === "string" && item.calendarId !== "" ? item.calendarId : Choices.LOCAL_ID;
+    var calendarId = typeof item.calendarId === "string" && item.calendarId !== "" ? item.calendarId : Identity.LOCAL_ID;
     copy.sourceUid = typeof item.uid === "string" ? item.uid : "";
     copy.uid = itemKey(calendarId, copy.sourceUid);
     return copy;
