@@ -3,7 +3,7 @@ import qs.common
 import qs.services
 
 /**
- * Agents cell (ticket 22): a vertical "AGENTS" label plus three rings fed by
+ * Agents cell: a vertical "AGENTS" label plus three rings fed by
  * AgentUsage — Claude 5-hour, Codex 5-hour, and a double ring for the Claude
  * and Codex weekly resets. Mirrors SystemRings' layout so all ring centers
  * (Agents and System) sit on one line.

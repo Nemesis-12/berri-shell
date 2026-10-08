@@ -12,7 +12,6 @@ import qs.tabs.weather
  * between them show this item's own Theme.border backdrop (the tab area
  * behind it is Theme.card, so the lines need their own backdrop). The
  * backdrop fills the item exactly, so the outer edge gets no extra line.
- * Cell tickets fill in content by targeting these ids later.
  */
 Item {
     id: root

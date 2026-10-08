@@ -64,7 +64,7 @@ ShellRoot {
 
     // One overlay window per monitor (see EdgeWindow.qml): the top pill with its
     // notification card, and the bottom-center theme notch. The notch fades out on
-    // its own in fullscreen (ticket 29) and returns while the cursor touches the
+    // its own in fullscreen and returns while the cursor touches the
     // bottom edge strip.
     Variants {
         id: overlayVariants

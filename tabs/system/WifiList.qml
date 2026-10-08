@@ -5,7 +5,7 @@ import qs.services
 import "../../logic/ListSync.js" as ListSync
 
 /**
- * Wi-Fi network list (ticket 16): swaps into the toggle grid's cell when the
+ * Wi-Fi network list: swaps into the toggle grid's cell when the
  * Wi-Fi tile's chevron is clicked. Header (PanelListHeader) has a back
  * button, the "WI-FI" title and an on/off switch; below it a scrolling list
  * of nearby networks (ListRow rows), connected first then by signal

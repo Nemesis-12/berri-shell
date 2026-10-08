@@ -6,7 +6,7 @@ import "../logic/NotificationLogic.js" as Logic
 import qs.services
 
 /**
- * Notification store (ticket 50): history grouped by app, read/unread,
+ * Notification store: history grouped by app, read/unread,
  * snooze, dismiss, clear, actions and do not disturb. The list logic lives in
  * NotificationLogic.js (tested under node).
  *

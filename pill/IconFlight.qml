@@ -5,8 +5,8 @@ import qs.common
 import qs.services
 
 /**
- * The tab icons that fly between the bar and the spine while the pill opens
- * (ticket 07). One square per tab: a centered row in the bar at the start,
+ * The tab icons that fly between the bar and the spine while the pill opens.
+ * One square per tab: a centered row in the bar at the start,
  * the spine's own buttons at the end. The square of the active tab is the
  * accent one; it becomes the spine's active button.
  *

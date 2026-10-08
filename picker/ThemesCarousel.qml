@@ -4,7 +4,7 @@ import qs.services
 import qs.common
 
 /**
- * The Themes tab body (ticket 26): a horizontal carousel of the 9 palettes
+ * The Themes tab body: a horizontal carousel of the 9 palettes
  * as cards, sliding so the focused card stays centered. Mirrors the mock's
  * Themes tab body (Berri Desktop v2.dc.html: cards ~338-343, thOff ~359,
  * card markup ~91-95).
