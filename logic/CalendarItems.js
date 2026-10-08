@@ -410,61 +410,91 @@ function spend(budget, n) {
     return false;
 }
 
+/** The fixed numbers of a repeating series: its first day, step size, first week and month. */
+function seriesOf(item) {
+    var s = Times.dayNum(item.date);
+    return {
+        s: s,
+        iv: Math.max(1, item.interval || 1),
+        sy: +item.date.slice(0, 4), sm: +item.date.slice(5, 7), sd: +item.date.slice(8, 10),
+        monthIndex: +item.date.slice(0, 4) * 12 + +item.date.slice(5, 7) - 1,
+        weekStart: s - ((weekdayOf(s) + 6) % 7), // Monday of the first week
+        byDay: item.byDay.map(function (d) { return (d + 6) % 7; }).sort(function (a, b) { return a - b; })
+    };
+}
+
+/** The step to begin at, one step early, so a long gap before `fromN` costs no loop steps. */
+function firstStep(item, fromN, c) {
+    var fromDate = Times.keyOfDayNum(fromN);
+    var fy = +fromDate.slice(0, 4), fm = +fromDate.slice(5, 7);
+    var lowK;
+    if (item.repeat === "daily") lowK = Math.floor((fromN - c.s) / c.iv);
+    else if (item.repeat === "weekly") lowK = Math.floor((fromN - c.weekStart) / (7 * c.iv));
+    else if (item.repeat === "monthly") lowK = Math.floor((fy * 12 + fm - 1 - c.monthIndex) / c.iv);
+    else lowK = Math.floor((fy - c.sy) / c.iv);
+    return Math.max(0, lowK - 1);
+}
+
+function dayOfUtc(year, month, day) {
+    return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+}
+
+function weeklyStep(c, k) {
+    if (!c.byDay.length) {
+        var single = c.s + 7 * c.iv * k;
+        return { base: single, list: [single] };
+    }
+    var base = c.weekStart + 7 * c.iv * k;
+    return { base: base, list: c.byDay.map(function (o) { return base + o; }) };
+}
+
+function monthlyStep(item, c, k) {
+    var idx = c.monthIndex + k * c.iv;
+    var y = Math.floor(idx / 12), mo = idx % 12 + 1;
+    var base = dayOfUtc(y, mo, 1);
+    if (item.monthWeekday) {
+        var weekday = weekdayInMonth(y, mo, item.monthWeekday.nth, item.monthWeekday.day);
+        return { base: base, list: weekday === null ? [] : [weekday] };
+    }
+    // No such day this month: skipped, as RFC 5545 says.
+    return { base: base, list: c.sd <= daysInMonth(y, mo) ? [base + c.sd - 1] : [] };
+}
+
+function yearlyStep(c, k) {
+    var yr = c.sy + k * c.iv;
+    return { base: dayOfUtc(yr, 1, 1), list: c.sd <= daysInMonth(yr, c.sm) ? [dayOfUtc(yr, c.sm, c.sd)] : [] };
+}
+
+/** The base day and the start days of loop step k. Stops are decided by the caller from `base`. */
+function stepStarts(item, c, k) {
+    if (item.repeat === "daily") return { base: c.s + k * c.iv, list: [c.s + k * c.iv] };
+    if (item.repeat === "weekly") return weeklyStep(c, k);
+    if (item.repeat === "monthly") return monthlyStep(item, c, k);
+    return yearlyStep(c, k);
+}
+
 /** Start days (as day numbers) of a repeating item that fall in [fromN, toN]. Stops early when `budget` has no steps left. */
 function startDays(item, fromN, toN, budget) {
     var out = [];
     if (item.date === null) return out;
-    var s = Times.dayNum(item.date);
+    var c = seriesOf(item);
     if (item.repeat === "none") {
-        if (s >= fromN && s <= toN) out.push(s);
+        if (c.s >= fromN && c.s <= toN) out.push(c.s);
         return out;
     }
     var hi = item.until ? Math.min(toN, Times.dayNum(item.until)) : toN;
-    var iv = Math.max(1, item.interval || 1);
     var limit = item.count > 0 ? item.count : 0;
-    var sy = +item.date.slice(0, 4), sm = +item.date.slice(5, 7), sd = +item.date.slice(8, 10);
-    var monthIndex = sy * 12 + sm - 1;
-    var weekStart = s - ((weekdayOf(s) + 6) % 7); // Monday of the first week
-    var byDay = item.byDay.map(function (d) { return (d + 6) % 7; }).sort(function (a, b) { return a - b; });
-
     // Daily and plain weekly series emit exactly one start per step, so a count can be skipped to as well.
-    var oneEach = item.repeat === "daily" || (item.repeat === "weekly" && !byDay.length);
-    var lowK = 0;
-    if (!limit || oneEach) {
-        var fromDate = Times.keyOfDayNum(fromN);
-        var fy = +fromDate.slice(0, 4), fm = +fromDate.slice(5, 7);
-        if (item.repeat === "daily") lowK = Math.floor((fromN - s) / iv);
-        else if (item.repeat === "weekly") lowK = Math.floor((fromN - weekStart) / (7 * iv));
-        else if (item.repeat === "monthly") lowK = Math.floor((fy * 12 + fm - 1 - monthIndex) / iv);
-        else lowK = Math.floor((fy - sy) / iv);
-        lowK = Math.max(0, lowK - 1);
-    }
-
+    var oneEach = item.repeat === "daily" || (item.repeat === "weekly" && !c.byDay.length);
+    var lowK = (!limit || oneEach) ? firstStep(item, fromN, c) : 0;
     var emitted = limit && oneEach ? lowK : 0;
     for (var k = lowK; k < lowK + 200000; k++) {
         if (budget && !spend(budget, 1)) return out;
-        var base, list;
-        if (item.repeat === "daily") { base = s + k * iv; list = [base]; }
-        else if (item.repeat === "weekly") {
-            base = (byDay.length ? weekStart : s) + 7 * iv * k;
-            list = byDay.length ? byDay.map(function (o) { return base + o; }) : [base];
-        } else if (item.repeat === "monthly") {
-            var idx = monthIndex + k * iv;
-            var y = Math.floor(idx / 12), mo = idx % 12 + 1;
-            base = Math.floor(Date.UTC(y, mo - 1, 1) / 86400000);
-            if (item.monthWeekday) {
-                var weekday = weekdayInMonth(y, mo, item.monthWeekday.nth, item.monthWeekday.day);
-                list = weekday === null ? [] : [weekday];
-            } else list = sd <= daysInMonth(y, mo) ? [base + sd - 1] : []; // no such day this month: skipped, as RFC 5545 says
-        } else {
-            var yr = sy + k * iv;
-            base = Math.floor(Date.UTC(yr, 0, 1) / 86400000);
-            list = sd <= daysInMonth(yr, sm) ? [Math.floor(Date.UTC(yr, sm - 1, sd) / 86400000)] : [];
-        }
-        if (base > hi) break;
-        for (var i = 0; i < list.length; i++) {
-            var n = list[i];
-            if (n < s) continue;
+        var step = stepStarts(item, c, k);
+        if (step.base > hi) break;
+        for (var i = 0; i < step.list.length; i++) {
+            var n = step.list[i];
+            if (n < c.s) continue;
             emitted++;
             if (limit && emitted > limit) return out;
             if (n > hi) return out;
@@ -563,63 +593,84 @@ function expand(item, fromKey, toKey, query) {
     return budget.limited ? [] : out;
 }
 
-function expandWithin(item, fromKey, toKey, budget) {
-    var fromN = Times.dayNum(fromKey), toN = Times.dayNum(toKey);
-    var out = [];
-    function addShownDays(variant, startN) {
-        // Only the days inside from..to are visited, so a very long event costs no more than a short one.
-        var span = spanDays(variant);
-        var last = Math.min(span, toN - startN);
-        for (var d = Math.max(0, fromN - startN); d <= last; d++) {
-            if (!spend(budget, 1)) return;
-            out.push(occurrenceOf(variant, startN, startN + d));
-        }
+/** Adds the shown days of one occurrence. Only days inside from..to are visited, so a very long event costs no more than a short one. */
+function addShownDays(scan, variant, startN) {
+    var span = spanDays(variant);
+    var last = Math.min(span, scan.toN - startN);
+    for (var d = Math.max(0, scan.fromN - startN); d <= last; d++) {
+        if (!spend(scan.budget, 1)) return;
+        scan.out.push(occurrenceOf(variant, startN, startN + d));
     }
-    function addStart(variant, startN) {
-        var key = Times.keyOfDayNum(startN);
-        if (item.exdates.indexOf(key) >= 0) return;
-        var change = changeFor(item, key);
-        if (change && (change.cancelled || change.date !== null)) return;
-        if (change && change.title !== null) {
-            variant = shallowCopy(variant);
-            variant.title = change.title;
-        }
-        addShownDays(variant, startN);
+}
+
+/** Adds one series start unless it is excluded, cancelled or moved. A changed title shows. */
+function addStart(scan, variant, startN) {
+    var item = scan.item;
+    var key = Times.keyOfDayNum(startN);
+    if (item.exdates.indexOf(key) >= 0) return;
+    var change = changeFor(item, key);
+    if (change && (change.cancelled || change.date !== null)) return;
+    if (change && change.title !== null) {
+        variant = shallowCopy(variant);
+        variant.title = change.title;
     }
-    if (item.zoned && item.repeat !== "none") {
-        var back = item.zoned.length ? Math.ceil(item.zoned.length / 1440) : 0;
-        var walls = startDays(zonedRule(item), fromN - back - 2, toN + 2, budget);
-        for (var w = 0; w < walls.length && !budget.limited; w++) {
-            if (!spend(budget, 1)) break;
-            var shown = zonedVariant(item, walls[w]);
-            var shownN = Times.dayNum(shown.date);
-            if (shownN + spanDays(shown) >= fromN && shownN <= toN && !(item.until && shown.date > item.until)) addStart(shown, shownN);
-        }
-    } else {
-        var starts = startDays(item, fromN - spanDays(item), toN, budget);
-        for (var i = 0; i < starts.length && !budget.limited; i++) addStart(item, starts[i]);
+    addShownDays(scan, variant, startN);
+}
+
+/** A series with a named zone takes each start from the source zone clock. */
+function addZonedStarts(scan) {
+    var item = scan.item;
+    var back = item.zoned.length ? Math.ceil(item.zoned.length / 1440) : 0;
+    var walls = startDays(zonedRule(item), scan.fromN - back - 2, scan.toN + 2, scan.budget);
+    for (var w = 0; w < walls.length && !scan.budget.limited; w++) {
+        if (!spend(scan.budget, 1)) break;
+        var shown = zonedVariant(item, walls[w]);
+        var shownN = Times.dayNum(shown.date);
+        if (shownN + spanDays(shown) >= scan.fromN && shownN <= scan.toN && !(item.until && shown.date > item.until))
+            addStart(scan, shown, shownN);
     }
-    var changes = item.changedOccurrences || [];
-    for (var c = 0; c < changes.length && !budget.limited; c++) {
+}
+
+function addPlainStarts(scan) {
+    var starts = startDays(scan.item, scan.fromN - spanDays(scan.item), scan.toN, scan.budget);
+    for (var i = 0; i < starts.length && !scan.budget.limited; i++) addStart(scan, scan.item, starts[i]);
+}
+
+/** An occurrence the feed moved shows at its new day, but still belongs to the old occurrence date. */
+function addMovedOccurrence(scan, change) {
+    var item = scan.item;
+    var moved = shallowCopy(item);
+    moved.date = change.date;
+    moved.time = change.time;
+    moved.end = change.end;
+    moved.endDate = change.endDate;
+    if (change.title !== null) moved.title = change.title;
+    var first = scan.out.length;
+    addShownDays(scan, moved, Times.dayNum(change.date));
+    for (var m = first; m < scan.out.length; m++) {
+        scan.out[m].occurrenceDate = change.from;
+        scan.out[m].repeat = item.repeat;
+        scan.out[m].recurring = true;
+        scan.out[m].done = item.doneDates.indexOf(change.from) >= 0;
+    }
+}
+
+function addChangedOccurrences(scan) {
+    var changes = scan.item.changedOccurrences || [];
+    for (var c = 0; c < changes.length && !scan.budget.limited; c++) {
         var change = changes[c];
-        if (!spend(budget, 1)) break;
-        if (change.cancelled || change.date === null || item.exdates.indexOf(change.from) >= 0) continue;
-        var moved = shallowCopy(item);
-        moved.date = change.date;
-        moved.time = change.time;
-        moved.end = change.end;
-        moved.endDate = change.endDate;
-        if (change.title !== null) moved.title = change.title;
-        var first = out.length;
-        addShownDays(moved, Times.dayNum(change.date));
-        for (var m = first; m < out.length; m++) {
-            out[m].occurrenceDate = change.from;
-            out[m].repeat = item.repeat;
-            out[m].recurring = true;
-            out[m].done = item.doneDates.indexOf(change.from) >= 0;
-        }
+        if (!spend(scan.budget, 1)) break;
+        if (change.cancelled || change.date === null || scan.item.exdates.indexOf(change.from) >= 0) continue;
+        addMovedOccurrence(scan, change);
     }
-    return out;
+}
+
+function expandWithin(item, fromKey, toKey, budget) {
+    var scan = { item: item, fromN: Times.dayNum(fromKey), toN: Times.dayNum(toKey), budget: budget, out: [] };
+    if (item.zoned && item.repeat !== "none") addZonedStarts(scan);
+    else addPlainStarts(scan);
+    addChangedOccurrences(scan);
+    return scan.out;
 }
 
 function shallowCopy(object) {
