@@ -1,6 +1,5 @@
 import QtQuick
 import qs.common
-import qs.services
 
 /**
  * Crossfades between two copies of `content` when `day` changes. The hidden

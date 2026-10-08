@@ -1,10 +1,8 @@
 import QtQuick
-import Quickshell
 import Quickshell.Networking
 import Quickshell.Bluetooth
 import qs.common
 import qs.notifications
-import qs.pill
 import qs.services
 
 /**

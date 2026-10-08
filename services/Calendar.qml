@@ -10,7 +10,6 @@ import "../logic/SavedCalendars.js" as SavedCalendars
 import "../logic/CalendarZone.js" as Zone
 import "../logic/Times.js" as Times
 import qs.common
-import qs.notifications
 
 /**
  * berri's calendars. Three kinds: "local" (berri.ics, always there), "file"

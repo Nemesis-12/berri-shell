@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Dialogs
 import Quickshell
 import "../../logic/Times.js" as Times
 import qs.common

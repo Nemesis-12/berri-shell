@@ -2,7 +2,6 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Services.UPower
-import qs.services
 
 /**
  * Decides the power profile for "auto" mode from sustained CPU load.

@@ -4,7 +4,6 @@ import Quickshell
 import Quickshell.Io
 import "../logic/MemoryUse.js" as MemoryUse
 import "../logic/SystemReadings.js" as Readings
-import qs.services
 
 /** Shared disk, memory and uptime snapshots for Home and System, sampled while visible. */
 Singleton {

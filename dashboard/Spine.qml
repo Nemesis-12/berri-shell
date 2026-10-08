@@ -1,6 +1,5 @@
 import QtQuick
 import qs.common
-import qs.pill
 import qs.services
 
 /**
