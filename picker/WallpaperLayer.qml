@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import "../logic/ThemeColors.js" as Colors
 import qs.common
 import qs.services
 
@@ -235,13 +236,8 @@ Variants {
                 effect.seed = Math.random() * 1000;
                 effect.resolutionPx = Qt.vector2d(layer.width * modelData.devicePixelRatio, layer.height * modelData.devicePixelRatio);
                 var toRaw = Theme.toRaw || {};
-                var order6 = ["darker_background", "dark_background", "background", "lighter_background", "selection", "accent"];
-                effect.paletteColor0 = toRaw[order6[0]] || Theme.shell;
-                effect.paletteColor1 = toRaw[order6[1]] || Theme.shell;
-                effect.paletteColor2 = toRaw[order6[2]] || Theme.shell;
-                effect.paletteColor3 = toRaw[order6[3]] || Theme.shell;
-                effect.paletteColor4 = toRaw[order6[4]] || Theme.shell;
-                effect.paletteColor5 = toRaw[order6[5]] || Theme.shell;
+                for (var i = 0; i < Colors.transitionKeys.length; i++)
+                    effect["paletteColor" + i] = toRaw[Colors.transitionKeys[i]] || Theme.shell;
                 effect.progress = 0;
                 effect.visible = true;
                 progressAnim.duration = durationMs;

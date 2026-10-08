@@ -81,3 +81,8 @@ test("each swatch token holds the same color as its palette color", () => {
     assert.deepEqual(tokens[swatch.token], raw[swatch.raw], swatch.token);
   }
 });
+
+test("the transition shader palette keeps its order, derived from the swatches", () => {
+  assert.deepEqual([...lib.transitionKeys],
+    ["darker_background", "dark_background", "background", "lighter_background", "selection", "accent"]);
+});

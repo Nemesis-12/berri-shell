@@ -34,6 +34,6 @@ TestCase {
     }
 
     function test_both_carousels_share_one_viewport_width() {
-        compare(carouselType.createObject(this).viewportWidth, 864);
+        compare(createTemporaryObject(carouselType, this).viewportWidth, 864);
     }
 }

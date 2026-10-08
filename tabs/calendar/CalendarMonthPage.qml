@@ -12,7 +12,7 @@ CalendarMonthGrid {
     id: root
 
     /** The CalendarTab that owns this page. */
-    required property var tab
+    required property CalendarTab tab
 
     /** True while this page is the one in front. */
     required property bool front

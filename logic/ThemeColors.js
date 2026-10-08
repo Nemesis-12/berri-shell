@@ -32,6 +32,13 @@ var swatches = [
     { raw: "foreground", token: "fg2" }
 ];
 
+/**
+ * The six palette colors of the wallpaper transition shader, in shader order:
+ * the darkest color, then the first five swatches.
+ */
+var transitionKeys = ["darker_background"].concat(
+    swatches.slice(0, 5).map(function (swatch) { return swatch.raw; }));
+
 /** "#rrggbb" -> color. */
 function hexToRgb(hex) {
     hex = String(hex).replace("#", "");

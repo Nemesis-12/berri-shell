@@ -30,16 +30,25 @@ TestCase {
 
     Component { id: segmentType; SegmentRow { width: 300 } }
 
-    function test_toggle_switch_moves_the_knob_and_reports_clicks() {
+    function test_toggle_switch_slides_the_knob_and_reports_clicks() {
         const toggle = createTemporaryObject(toggleType, tests);
         const knob = toggle.children[0];
         compare(knob.x, 2);
         toggle.checked = true;
+        // The knob is on its way, not yet at the end, and arrives there.
+        verify(knob.x < 18, "The knob must not jump");
         tryCompare(knob, "x", 18);
         let clicks = 0;
         toggle.toggled.connect(() => clicks++);
         mouseClick(toggle);
         compare(clicks, 1);
+    }
+
+    function test_toggle_switch_created_on_has_the_knob_in_place() {
+        const toggle = createTemporaryObject(toggleType, tests, { checked: true });
+        compare(toggle.children[0].x, 18);
+        wait(50);
+        compare(toggle.children[0].x, 18);
     }
 
     Component { id: toggleType; ToggleSwitch {} }
