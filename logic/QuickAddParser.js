@@ -5,7 +5,7 @@
  * Quick-add line parser. Ported rule for rule from the mock's parse() in
  * "Berri Calendar v2.dc.html" (5C). Pure: the caller passes the dates.
  *
- * parse(text, referenceDate, selectedDate, weekStart, clock24) returns
+ * parse(text, referenceDate, selectedDate, clock24) returns
  *   { kind, allDay, title, date, time, end, repeat, byDay, color, tokens, matches, named }
  * kind is "event" | "task" | "reminder" (the store kinds). An event with no
  * time is all-day. date is "YYYY-MM-DD"; time and end are "HH:MM" or null.
@@ -25,8 +25,7 @@
  * it). color is "#rrggbb" (lowercase) when the text has a #rgb or #rrggbb
  * word, else null (the caller keeps its current color). The hex word is cut
  * from the title. A word of three digits with no leading zero, like #123, is an
- * issue number: it stays in the title and gives no color. Preset names are not read from the text. selectedDate is the day used when the text names none. weekStart is
- * accepted for the caller's symmetry; the mock's rules do not use it.
+ * issue number: it stays in the title and gives no color. Preset names are not read from the text. selectedDate is the day used when the text names none.
  */
 
 var WEEKDAY_NUMBER = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
@@ -182,7 +181,7 @@ var STEPS = [
       accept: function (m, o, today) { o.date = nextWeekday(m[1], today); } }
 ];
 
-function parse(text, referenceDate, selectedDate, weekStart, clock24) {
+function parse(text, referenceDate, selectedDate, clock24) {
     var today = Times.dayKey(referenceDate);
     var s = " " + text + " ";
     var o = { type: null, date: null, time: null, end: null, color: null, repeat: "none", byDay: [] };
@@ -262,7 +261,3 @@ function hintTokens(p, type, clock24) {
     return t;
 }
 
-// Hint row for an empty line: where Enter adds, with an example.
-function emptyHint(selectedDate) {
-    return [{ text: "\u21B2 adds to " + formatDay(Times.dayKey(selectedDate)) + " \u00B7 fri 3pm #e93", kind: "hint" }];
-}

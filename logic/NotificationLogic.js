@@ -165,16 +165,6 @@ function remove(all, id) {
     return all.filter(function (n) { return n.id !== id; });
 }
 
-/** Removes the visible items of one app; snoozed ones stay (same as the mock). */
-function removeApp(all, appName, now) {
-    return all.filter(function (n) { return n.appName !== appName || n.snoozedUntil > now; });
-}
-
-/** Removes every visible item; snoozed ones stay. */
-function removeVisible(all, now) {
-    return all.filter(function (n) { return n.snoozedUntil > now; });
-}
-
 /** True when a new notification should raise the pop-up. Critical ones ignore do not disturb. */
 function shouldAlert(urgency, dnd) {
     return !dnd || urgency === "critical";

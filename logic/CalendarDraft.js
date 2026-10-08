@@ -5,7 +5,7 @@
 // Reads the named parts once. Defaults do not count as named parts.
 function parseLine(text, base, reference, clock24) {
     var selected = new Date(+base.date.slice(0, 4), +base.date.slice(5, 7) - 1, +base.date.slice(8, 10));
-    var parsed = QuickAdd.parse(text, reference, selected, 1, clock24);
+    var parsed = QuickAdd.parse(text, reference, selected, clock24);
     return {
         parsed: parsed,
         type: parsed.allDay ? "allday" : parsed.kind,
