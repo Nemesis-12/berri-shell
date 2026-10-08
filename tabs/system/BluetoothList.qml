@@ -219,7 +219,7 @@ Item {
 
             ListScrollBar {
                 view: listView
-                available: root.adapter && root.adapter.enabled
+                available: !!root.adapter && root.adapter.enabled
                 anchors.right: parent.right
             }
         }
