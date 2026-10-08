@@ -15,7 +15,8 @@ TestCase {
     Component { id: settings; SavedState { waitMs: 5 } }
 
     function folderCommands() {
-        return Disk.commands().filter(command => String(command[1]).endsWith("private-folder.sh"));
+        return Disk.commands().filter(command => command[0] === "mkdir" || command[0] === "chmod"
+            || String(command[1]).endsWith("private-folder.sh"));
     }
 
     function test_required_roots_are_created_once_for_all_saved_files() {
@@ -24,8 +25,14 @@ TestCase {
         for (const state of states) tryCompare(state, "folderExists", true);
         tryCompare(calendar, "folderReady", true);
         const commands = folderCommands();
+        // The runner checks these real commands on temporary files with known permissions.
+        console.log("STARTUP_FOLDER_COMMANDS " + JSON.stringify(commands));
+        for (const command of commands) {
+            verify(command[0] !== "chmod", JSON.stringify(command));
+            verify(!String(command[1]).endsWith("private-folder.sh"), JSON.stringify(command));
+        }
         verify(commands.length <= 3, JSON.stringify(commands));
-        const folders = [].concat.apply([], commands.map(command => command.slice(2)));
+        const folders = [].concat.apply([], commands.map(command => command.slice(command.indexOf("--") + 1)));
         compare(folders.slice().sort(), [
             "/home/tester/.local/state/berri-shell",
             "/home/tester/.local/share/berri-shell/calendar",
