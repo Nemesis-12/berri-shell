@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { calendarModule } from "./fixtures/calendar-code.mjs";
 import { calendarOffscreen } from "./fixtures/calendar-offscreen.mjs";
 
 function load(name) {
@@ -24,7 +25,7 @@ test("only a file directly inside the wallpaper folder may be deleted", () => {
   assert.equal(walls.isLibraryFile("", "/a.png"), false);
 });
 
-const saved = load("SavedCalendars.js");
+const saved = calendarModule("SavedCalendars.js");
 
 test("saved calendar entries keep only names that stay inside the calendar folder", () => {
   const ok = (e) => saved.isSafeEntry(e);

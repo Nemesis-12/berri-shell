@@ -89,11 +89,11 @@ test("a replacement fixes an old feed that others could read", () => {
   assert.equal(mode(path.join(s.sub, "l-x.json")), "600");
 });
 
-test("state and calendar folders are created through private-folder.sh", () => {
-  for (const file of ["services/SavedState.qml", "services/CalendarFiles.qml"]) {
+test("startup creates missing private folders without changing existing files", () => {
+  for (const file of ["services/FolderRoots.qml", "services/CalendarFiles.qml"]) {
     const source = fs.readFileSync(path.join(repo, file), "utf8");
-    assert.match(source, /private-folder\.sh/, file);
-    assert.doesNotMatch(source, /"mkdir", "-p"/, file);
+    assert.match(source, /"mkdir", "-p", "-m", "700", "--"/, file);
+    assert.doesNotMatch(source, /private-folder\.sh|"chmod"/, file);
   }
 });
 

@@ -3,7 +3,7 @@ import qs.common
 import qs.services
 
 /**
- * One toggle-grid tile (ticket 15-18): an icon top-left, a mono label and a
+ * One toggle-grid tile: an icon top-left, a mono label and a
  * condensed sub-line bottom-left, and an on/off style that animates. An
  * optional small chevron button top-right (Wi-Fi/Bluetooth) opens a picker;
  * clicking the tile body itself calls onToggled.

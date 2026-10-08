@@ -9,8 +9,8 @@ import qs.services
 
 /**
  * The bottom-center theme notch: the current theme's palette as 6 small bars.
- * A click grows the notch into the theme and wallpaper picker (ticket 25,
- * mock's openPick/closeAll): first narrow (276 x 304) while the palette bars
+ * A click grows the notch into the theme and wallpaper picker
+ * (mock's openPick/closeAll): first narrow (276 x 304) while the palette bars
  * morph into one strip that sits on the focused theme card, then wide (900)
  * with the header and body fading in. The strip fades out last, once the
  * header is fully opaque, so the card's own strip is never seen through it.
@@ -71,7 +71,7 @@ Item {
     /** Body (ThemesCarousel) viewport height once the header/tabs row is subtracted. */
     readonly property real bodyViewportHeight: pickerHeight - headerTopMargin - headerBottomMargin - headerRowHeight - bodyTopMargin
 
-    // Wallpapers tab layout (ticket 28): the body sits wallsHeaderGap below the
+    // Wallpapers tab layout: the body sits wallsHeaderGap below the
     // header row and keeps an 18px bottom padding (headerBottomMargin 4 +
     // wallsBottomExtra 14). At pickerHeight 304 this divides exactly: 14 (top)
     // + 28 (header row) + 14 (wallsHeaderGap) + 191 (card) + 15 (wallsRowGap)
@@ -339,7 +339,7 @@ Item {
                     visible: root.pickerTab === "themes"
                 }
 
-                // Wallpapers tab (ticket 28): the carousel above the SHOW ON
+                // Wallpapers tab: the carousel above the SHOW ON
                 // row, with its own extra bottom margin.
                 PickerWallpapers {
                     id: wallsBody

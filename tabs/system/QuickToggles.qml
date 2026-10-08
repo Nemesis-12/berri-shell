@@ -6,7 +6,7 @@ import qs.notifications
 import qs.services
 
 /**
- * Toggle grid cell (tickets 15-18): 3x2 tiles - Wi-Fi, Bluetooth, DND on the
+ * Toggle grid cell: 3x2 tiles - Wi-Fi, Bluetooth, DND on the
  * top row, Caffeine, Night, Airplane on the bottom. This item only shows
  * state and sends clicks: Caffeine is Caffeine.qml, Night is Nightlight.qml,
  * DND is Notifications, Airplane is AirplaneMode.qml (remember/restore/clear

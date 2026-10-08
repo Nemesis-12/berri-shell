@@ -5,6 +5,7 @@ Item {
     id: root
     property var command: []
     property bool running: false
+    property var environment: ({})
     property var stdout: null
     signal exited(int exitCode, int exitStatus)
     onRunningChanged: if (running) {

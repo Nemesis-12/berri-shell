@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import "../logic/CalendarCatalog.js" as Catalog
 import "../logic/CalendarFormat.js" as Format
+import "../logic/CalendarIdentity.js" as Identity
 import "../logic/CalendarItems.js" as Items
 import "../logic/CalendarMonths.js" as Months
 import "../logic/CalendarQueries.js" as Queries
@@ -38,8 +39,8 @@ Singleton {
     /** How many calendar views are visible now (see WhileVisible.qml). The folder is scanned when the first one opens. */
     property alias viewers: files.viewers
 
-    readonly property string dir: (Quickshell.env("HOME") || "") + "/.local/share/berri-shell/calendar"
-    readonly property string defaultPath: dir + "/berri.ics"
+    readonly property string dir: FolderRoots.calendar
+    readonly property string defaultPath: dir + "/" + Identity.LOCAL_FILE
 
     /** Goes up by one on every change (own edit or outside change). */
     property int revision: 0
@@ -134,7 +135,7 @@ Singleton {
         var target = fields.calendarId ? _calendars[fields.calendarId] : null;
         if (fields.calendarId && (!target || target.kind === "link")) return false;
         if (target) path = dir + "/" + target.file;
-        var calendar = target || _calendars.berri;
+        var calendar = target || _calendars[Identity.LOCAL_ID];
         if (!disk.canWrite(calendar)) return false;
         var doc = calendar.document || Format.emptyCalendar();
         var item = Items.makeItem(Catalog.cleanDates(fields));
@@ -235,7 +236,7 @@ Singleton {
         _order = _order.filter(function (o) { return o !== id; });
         files.cancelDownloads(id);
         files.removeFile(path);
-        _finishAdd();
+        _applyCalendarListChange();
         return true;
     }
 
@@ -332,8 +333,8 @@ Singleton {
         return meta;
     }
 
-    // Saves state, adjusts the FileViews to the calendar list and rebuilds.
-    function _finishAdd(): void {
+    // After any change to the calendar list (add, remove, load): adjusts the FileViews, saves state and rebuilds.
+    function _applyCalendarListChange(): void {
         _syncPaths();
         _saveState();
         _rebuild();

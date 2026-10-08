@@ -74,7 +74,7 @@ Item {
             sourcesView.releaseFocus();
             root.closedDay = Times.dayKey(root.today);
         } else if (root.closedDay !== "" && Times.dayKey(root.today) !== root.closedDay) {
-            root.today_();
+            root.selectToday();
         }
     }
 
@@ -105,8 +105,8 @@ Item {
         id: picker
         dialogTitle: "Import Calendar"
         nameFilters: ["Calendar files (*.ics)"]
-        startDir: (Quickshell.env("HOME") || "") + "/Downloads"
-        fallbackDir: Quickshell.env("HOME") || ""
+        startDir: FolderRoots.home + "/Downloads"
+        fallbackDir: FolderRoots.home
         onChosen: path => sourcesView.importPicked(path)
         // The panel reopens on the calendars view.
         onFinished: {
@@ -227,7 +227,7 @@ Item {
         detailsForm.openEdit(uid, occurrenceDate);
     }
 
-    function today_() {
+    function selectToday() {
         root.selectedDate = root.today;
         root.showMonth(root.today.getFullYear(), root.today.getMonth());
     }
@@ -268,7 +268,7 @@ Item {
             viewYear: root.viewYear
             viewMonth: root.viewMonth
             onPreviousRequested: root.showMonth(root.viewYear, root.viewMonth - 1)
-            onTodayRequested: root.today_()
+            onTodayRequested: root.selectToday()
             onNextRequested: root.showMonth(root.viewYear, root.viewMonth + 1)
         }
 

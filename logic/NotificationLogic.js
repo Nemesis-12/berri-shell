@@ -1,7 +1,7 @@
 .pragma library
 
 /**
- * Pure notification list logic (ticket 50). No Quickshell types, so it runs
+ * Pure notification list logic. No Quickshell types, so it runs
  * under node for tests. An item is
  *   { id, serverId, appName, appIcon, summary, body, time, urgency, read, snoozedUntil, actions }
  * with time and snoozedUntil in ms (snoozedUntil 0 means not snoozed).

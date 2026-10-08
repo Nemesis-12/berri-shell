@@ -22,20 +22,20 @@ Item {
     WhileVisible { service: CodeData }
 
     /** Picked agent: "claude" or "codex". */
-    property string agent: "claude"
+    property string agent: Fmt.CLAUDE_SOURCE
 
-    readonly property color agentTone: root.agent === "claude" ? Theme.accentLight : Theme.accentSecondary
+    readonly property color agentTone: root.agent === Fmt.CLAUDE_SOURCE ? Theme.accentLight : Theme.accentSecondary
 
-    readonly property real sessionPercent: root.agent === "claude" ? AgentUsage.claudeSessionPercent : AgentUsage.codexSessionPercent
-    readonly property real weeklyPercent: root.agent === "claude" ? AgentUsage.claudeWeeklyPercent : AgentUsage.codexWeeklyPercent
-    readonly property string sessionResetAt: root.agent === "claude" ? AgentUsage.claudeSessionResetAt : AgentUsage.codexSessionResetAt
-    readonly property string weeklyResetAt: root.agent === "claude" ? AgentUsage.claudeWeeklyResetAt : AgentUsage.codexWeeklyResetAt
+    readonly property real sessionPercent: root.agent === Fmt.CLAUDE_SOURCE ? AgentUsage.claudeSessionPercent : AgentUsage.codexSessionPercent
+    readonly property real weeklyPercent: root.agent === Fmt.CLAUDE_SOURCE ? AgentUsage.claudeWeeklyPercent : AgentUsage.codexWeeklyPercent
+    readonly property string sessionResetAt: root.agent === Fmt.CLAUDE_SOURCE ? AgentUsage.claudeSessionResetAt : AgentUsage.codexSessionResetAt
+    readonly property string weeklyResetAt: root.agent === Fmt.CLAUDE_SOURCE ? AgentUsage.claudeWeeklyResetAt : AgentUsage.codexWeeklyResetAt
 
     // Token figures of the picked agent.
     readonly property var agentDays: CodeData.days.map(d => d[root.agent])
     readonly property real todayTokens: agentDays.length > 0 ? agentDays[agentDays.length - 1] : 0
     // Tokens and estimated cost per period of the picked agent.
-    readonly property var agentUsage: CodeData.usage[root.agent] || {}
+    readonly property var agentUsage: Fmt.usageFor(CodeData.usage, root.agent)
     function periodTokens(period) { return agentUsage[period] ? agentUsage[period].tokens : 0; }
     function periodCost(period) { return agentUsage[period] ? agentUsage[period].cost : 0; }
 
@@ -57,7 +57,7 @@ Item {
             spacing: 1
 
             Repeater {
-                model: [{ id: "claude", label: "Claude" }, { id: "codex", label: "Codex" }]
+                model: Fmt.USAGE_CHOICES
 
                 CodeAgentButton {
                     required property var modelData

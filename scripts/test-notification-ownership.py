@@ -63,7 +63,7 @@ def server(folder, name, source):
     config = folder / name
     config.mkdir()
     (config / "shell.qml").write_text(source, encoding="utf-8")
-    for path in ("notifications/Notifications.qml", "services/SavedState.qml"):
+    for path in ("notifications/Notifications.qml", "services/SavedState.qml", "services/FolderRoots.qml"):
         destination = config / path
         destination.parent.mkdir(exist_ok=True)
         shutil.copyfile(ROOT / path, destination)

@@ -7,7 +7,7 @@ import qs.common
 import qs.services
 
 /**
- * Media column (ticket 20): the current player's album art, title/artist,
+ * Media column: the current player's album art, title/artist,
  * a live progress bar and prev/play-pause/next transport buttons, driven
  * by Quickshell's Mpris service. Shows a placeholder art icon and a
  * "Nothing playing" empty state when no player is available.

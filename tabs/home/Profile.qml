@@ -9,7 +9,7 @@ import "../../logic/PixelGrid.js" as PixelGrid
 import "../../logic/Times.js" as Times
 
 /**
- * Profile cell (ticket 13): account picture on the left, username and
+ * Profile cell: account picture on the left, username and
  * uptime on the right. Mirrors the mock's 5C profile row (Berri Dashboard
  * v2.dc.html, ~line 342). Picture source, in order: ~/.face (the picture the
  * user chose, or put there), then AccountsService's icon for this user, then
@@ -19,7 +19,7 @@ import "../../logic/Times.js" as Times
  * restart. SystemUsage supplies the same uptime snapshot as the System tab.
  * Picture checks run only while visible, and once when it shows again.
  *
- * Clicking the picture (ticket 13a) opens ImagePicker's portable chooser to
+ * Clicking the picture opens ImagePicker's portable chooser to
  * ~/.face, then reloads it at once. Pill closes the panel first via
  * pictureClicked(), since the panel's own Overlay layer would otherwise sit
  * above a normal dialog window.
@@ -28,7 +28,7 @@ Item {
     id: root
 
     readonly property string userName: Quickshell.env("USER") || ""
-    readonly property string homePath: Quickshell.env("HOME") || ""
+    readonly property string homePath: FolderRoots.home
     readonly property string accountsIconPath: "/var/lib/AccountsService/icons/" + userName
     readonly property string facePath: homePath + "/.face"
     readonly property string picturesDirPath: homePath + "/Pictures"
@@ -120,7 +120,7 @@ Item {
 
         // Picture: 80x80 square, flush to the cell edges, cropped to fill.
         // Solid Theme.accent fallback when no picture file exists. Clickable
-        // either way, opening the picture chooser (ticket 13a).
+        // either way, opening the picture chooser.
         Rectangle {
             id: pictureCell
             width: 80

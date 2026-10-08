@@ -1,4 +1,5 @@
 import QtQuick
+import "../../logic/CalendarIdentity.js" as Identity
 import "../../logic/CalendarItems.js" as Items
 import "../../logic/CalendarQueries.js" as Queries
 import "../../logic/ShownRows.js" as ShownRows
@@ -281,10 +282,10 @@ Item {
     // updates kept ones, inserts new ones in sorted order.
     function refreshRows() {
         var wanted = (Calendar.calendars || []).map(root.rowOf);
-        // Sort: "berri" first, then all others A to Z by name (case-insensitive, accent-aware).
+        // Sort the local calendar first, then all others A to Z by name.
         wanted.sort(function (a, b) {
-            if (a.calId === "berri") return -1;
-            if (b.calId === "berri") return 1;
+            if (a.calId === Identity.LOCAL_ID) return -1;
+            if (b.calId === Identity.LOCAL_ID) return 1;
             return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
         });
         ShownRows.matchRows(rows, wanted, "calId");

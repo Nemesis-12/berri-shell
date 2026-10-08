@@ -1,4 +1,5 @@
 .pragma library
+.import "CalendarIdentity.js" as Identity
 .import "CalendarFormat.js" as Format
 .import "CalendarItems.js" as Items
 .import "CalendarQueries.js" as Queries
@@ -46,18 +47,18 @@ function restoreCalendars(dir, values) {
     var saved = Array.isArray(values.calendars) ? values.calendars : [];
     var meta = {};
     var order = [];
-    var local = newMeta(dir, "berri", "local", "berri", "berri.ics", "", []);
+    var local = newMeta(dir, Identity.LOCAL_ID, "local", Identity.LOCAL_ID, Identity.LOCAL_FILE, "", []);
     for (var i = 0; i < saved.length; i++) {
         var s = saved[i];
         if (!s || typeof s.id !== "string" || typeof s.file !== "string" || meta[s.id]) continue;
-        if (s.id === "berri") { local.color = Items.cleanColor(s.color) || "accent"; local.hidden = !!s.hidden; continue; }
+        if (s.id === Identity.LOCAL_ID) { local.color = Items.cleanColor(s.color) || "accent"; local.hidden = !!s.hidden; continue; }
         // Saved names become file paths: skip any entry that could reach outside the calendar folder.
         if (!SavedCalendars.isSafeEntry(s)) continue;
         meta[s.id] = savedMeta(dir, s);
         order.push(s.id);
     }
-    meta.berri = local;
-    return { calendars: meta, order: ["berri"].concat(order) };
+    meta[Identity.LOCAL_ID] = local;
+    return { calendars: meta, order: [Identity.LOCAL_ID].concat(order) };
 }
 
 /** The entries written to calendars.json. */
@@ -110,7 +111,7 @@ function importFileName(sourcePath, taken) {
 
 /** True when the file name belongs to berri.ics or to a calendar in the list (names compare without case). */
 function fileTaken(order, calendars, file) {
-    if (file.toLowerCase() === "berri.ics") return true;
+    if (file.toLowerCase() === Identity.LOCAL_FILE) return true;
     return order.some(function (id) { return calendars[id].file.toLowerCase() === file.toLowerCase(); });
 }
 
@@ -135,7 +136,7 @@ function newFileNames(dir, paths, isKnownPath) {
     var names = [];
     for (var i = 0; i < paths.length; i++) {
         var file = paths[i].slice(dir.length + 1);
-        if (file.toLowerCase() === "berri.ics" || isKnownPath(paths[i])) continue;
+        if (file.toLowerCase() === Identity.LOCAL_FILE || isKnownPath(paths[i])) continue;
         names.push(file);
     }
     return names;

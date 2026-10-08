@@ -1,20 +1,32 @@
 .pragma library
 
+// Positions in Linux snapshots and the tab-separated hardware probe output.
+var CPU_FIELDS = { name: 0, user: 1, idle: 4, ioWait: 5, steal: 8 };
+var ROUTE_FIELDS = { name: 0, destination: 1 };
+var NETWORK_FIELDS = { receivedBytes: 0, sentBytes: 8 };
+var SENSOR_FIELDS = { kind: 0, name: 1, path: 2, label: 3 };
+var DISCRETE_GPU_FIELDS = { path: 1 };
+var SENSOR_KINDS = { input: "S", discreteGpu: "D" };
+var PROBE_PREFIX = { distribution: "O ", kernel: "K ", hostname: "N " };
+// /proc/PID/stat after the parenthesized command name. State is Linux field 3.
+var PROCESS_FIELDS = { state: 0, userTicks: 11, systemTicks: 12, startedTicks: 19 };
+var DISK_FIELDS = { device: 0, totalKb: 1, usedKb: 2, mount: 5 };
+
 /** Parse one /proc/stat snapshot. Guest time is already included in user time. */
 function cpuCounters(text) {
     var lines = text.split("\n");
     var counters = [];
     for (var i = 0; i < lines.length; i++) {
         var fields = lines[i].trim().split(/\s+/);
-        if (!/^cpu\d*$/.test(fields[0])) continue;
-        if (fields.length < 5) return null;
+        if (!/^cpu\d*$/.test(fields[CPU_FIELDS.name])) continue;
+        if (fields.length <= CPU_FIELDS.idle) return null;
         var total = 0;
-        for (var j = 1; j <= Math.min(8, fields.length - 1); j++) {
+        for (var j = CPU_FIELDS.user; j <= Math.min(CPU_FIELDS.steal, fields.length - 1); j++) {
             var value = Number(fields[j]);
             if (!isFinite(value) || value < 0) return null;
             total += value;
         }
-        counters.push({ id: fields[0], total: total, idle: Number(fields[4]) + (Number(fields[5]) || 0) });
+        counters.push({ id: fields[CPU_FIELDS.name], total: total, idle: Number(fields[CPU_FIELDS.idle]) + (Number(fields[CPU_FIELDS.ioWait]) || 0) });
     }
     return counters.length > 0 && lines[0].trim().indexOf("cpu ") === 0 ? counters : null;
 }
@@ -83,7 +95,7 @@ function readNetwork(routeText, deviceText) {
     var name = "";
     for (var i = 1; i < route.length; i++) {
         var fields = route[i].trim().split(/\s+/);
-        if (fields[1] === "00000000") { name = fields[0]; break; }
+        if (fields[ROUTE_FIELDS.destination] === "00000000") { name = fields[ROUTE_FIELDS.name]; break; }
     }
     var devices = deviceText.split("\n");
     var fallback = null;
@@ -93,7 +105,7 @@ function readNetwork(routeText, deviceText) {
         var deviceName = devices[j].slice(0, colon).trim();
         if (deviceName === "lo") continue;
         var bytes = devices[j].slice(colon + 1).trim().split(/\s+/);
-        var rx = Number(bytes[0]), tx = Number(bytes[8]);
+        var rx = Number(bytes[NETWORK_FIELDS.receivedBytes]), tx = Number(bytes[NETWORK_FIELDS.sentBytes]);
         if (!isFinite(rx) || !isFinite(tx) || rx < 0 || tx < 0) continue;
         var device = { name: deviceName, rx: rx, tx: tx };
         if (deviceName === name) return device;
@@ -109,9 +121,9 @@ function readSensors(text) {
     var lines = text.split("\n");
     for (var i = 0; i < lines.length; i++) {
         var fields = lines[i].split("\t");
-        if (fields[0] === "D") { result.dgpuPath = fields[1]; continue; }
-        if (fields[0] !== "S" || fields.length < 4) continue;
-        var name = fields[1], path = fields[2], label = fields[3];
+        if (fields[SENSOR_FIELDS.kind] === SENSOR_KINDS.discreteGpu) { result.dgpuPath = fields[DISCRETE_GPU_FIELDS.path]; continue; }
+        if (fields[SENSOR_FIELDS.kind] !== SENSOR_KINDS.input || fields.length <= SENSOR_FIELDS.label) continue;
+        var name = fields[SENSOR_FIELDS.name], path = fields[SENSOR_FIELDS.path], label = fields[SENSOR_FIELDS.label];
         if (/\/temp\d+_input$/.test(path)) {
             var rank = /^(CPU|Package|Tctl|Tdie)/i.test(label) ? 2
                 : /^(k10temp|coretemp|zenpower)$/.test(name) ? 1 : 0;
@@ -160,8 +172,9 @@ function processCounters(text, pid) {
     var close = text.lastIndexOf(")");
     if (open < 0 || close <= open || text.slice(0, open) !== pid) return null;
     var fields = text.slice(close + 1).trim().split(/\s+/);
-    if (fields.length < 20) return null;
-    var user = Number(fields[11]), system = Number(fields[12]), started = Number(fields[19]);
+    if (fields.length <= PROCESS_FIELDS.startedTicks || !/^[RSDZTtXxKWPI]$/.test(fields[PROCESS_FIELDS.state])) return null;
+    var user = Number(fields[PROCESS_FIELDS.userTicks]), system = Number(fields[PROCESS_FIELDS.systemTicks]);
+    var started = Number(fields[PROCESS_FIELDS.startedTicks]);
     if (!isFinite(user) || !isFinite(system) || !isFinite(started)
             || user < 0 || system < 0 || started < 0) return null;
     return { ticks: user + system, started: started };
@@ -201,16 +214,16 @@ function readDisks(text) {
     var found = [];
     for (var i = 1; i < lines.length; i++) {
         var fields = lines[i].trim().split(/\s+/);
-        if (fields.length < 6) continue;
-        var total = Number(fields[1]) / 1048576;
-        var used = Number(fields[2]) / 1048576;
+        if (fields.length <= DISK_FIELDS.mount) continue;
+        var total = Number(fields[DISK_FIELDS.totalKb]) / 1048576;
+        var used = Number(fields[DISK_FIELDS.usedKb]) / 1048576;
         if (!isFinite(total) || !isFinite(used) || total <= 0 || used < 0 || used > total) continue;
-        if (seen[fields[0]] !== undefined) {
-            if (fields[5] === "/") found[seen[fields[0]]].mount = "/";
+        if (seen[fields[DISK_FIELDS.device]] !== undefined) {
+            if (fields[DISK_FIELDS.mount] === "/") found[seen[fields[DISK_FIELDS.device]]].mount = "/";
             continue;
         }
-        seen[fields[0]] = found.length;
-        found.push({ mount: fields[5], device: fields[0].split("/").pop(),
+        seen[fields[DISK_FIELDS.device]] = found.length;
+        found.push({ mount: fields[DISK_FIELDS.mount], device: fields[DISK_FIELDS.device].split("/").pop(),
             usedGb: used, totalGb: total, percent: 100 * used / total });
     }
     return found.sort(function (a, b) { return (a.mount === "/" ? -1 : 0) - (b.mount === "/" ? -1 : 0); });

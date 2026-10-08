@@ -5,7 +5,7 @@ import qs.common
 import qs.services
 
 /**
- * The Wallpapers tab body (ticket 28): a horizontal carousel of the shared
+ * The Wallpapers tab body: a horizontal carousel of the shared
  * wallpaper library as cards, sliding so the focused card stays centered,
  * plus a trailing "Add wallpaper" card. Mirrors the mock's Wallpapers tab
  * body (Berri Desktop v2.dc.html: wcards markup ~103-116, wOff ~419).
@@ -114,8 +114,8 @@ CardCarousel {
         id: picker
         dialogTitle: "Choose Wallpaper"
         nameFilters: ["Images (*.png *.jpg *.jpeg)"]
-        startDir: (Quickshell.env("HOME") || "") + "/Pictures"
-        fallbackDir: Quickshell.env("HOME") || ""
+        startDir: FolderRoots.home + "/Pictures"
+        fallbackDir: FolderRoots.home
         onChosen: (path) => {
             root.addWaiting = true;
             Wallpapers.add(path);

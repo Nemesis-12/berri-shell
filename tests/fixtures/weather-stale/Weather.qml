@@ -12,7 +12,7 @@ QtObject {
     property string iconName: "cloud"
     property string conditionLabel: "Cloudy"
     readonly property var days: []
-    function dayDetail(i) { return { tempC: 24, feelsLikeC: 25, maxC: 26, minC: 17, code: 3, isDay: true }; }
+    function dayDetail(i) { void updatedAt; return { tempC: 24, feelsLikeC: 25, maxC: 26, minC: 17, code: 3, isDay: true }; }
     function weatherGroup(code) { return "cloud"; }
     function iconForGroup(group, isDay) { return "cloud"; }
     function labelForGroup(group) { return "Cloudy"; }

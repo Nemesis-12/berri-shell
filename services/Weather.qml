@@ -22,7 +22,7 @@ import "../logic/SourceFailures.js" as SourceFailures
 Singleton {
     id: root
 
-    readonly property string locationPath: (Quickshell.env("HOME") || "") + "/.local/state/omarchy/settings/weather.json"
+    readonly property string locationPath: FolderRoots.weatherSettings
 
     property real latitude: NaN
     property real longitude: NaN
@@ -81,11 +81,15 @@ Singleton {
 
     /** Readouts for day `index` (0 = now). Same field names as the current properties, plus tempC, minC, maxC, code. */
     function dayDetail(index) {
+        // Bind the caller to successful forecast changes, including changes inside the model.
+        void root.updatedAt;
         return model ? WeatherParse.dayDetail(model, index) : null;
     }
 
     /** Hours for the strip of day `index`; for 0, the next 24 hours (they cross midnight). */
     function stripHours(index) {
+        // Use the same forecast dependency as dayDetail().
+        void root.updatedAt;
         return model ? WeatherParse.stripHours(model, index) : [];
     }
 

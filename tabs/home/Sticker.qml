@@ -10,7 +10,7 @@ import qs.picker
 import qs.services
 
 /**
- * Sticker cell (ticket 23): shows a user-picked image, or nothing at rest
+ * Sticker cell: shows a user-picked image, or nothing at rest
  * if no sticker file exists yet. Clicking opens ImagePicker's chooser, the
  * same picker Profile uses; Pill closes the panel first via
  * stickerClicked(), since the panel's own Overlay layer would otherwise sit
@@ -25,7 +25,7 @@ import qs.services
 Item {
     id: root
 
-    readonly property string homePath: Quickshell.env("HOME") || ""
+    readonly property string homePath: FolderRoots.home
     readonly property string configDirPath: homePath + "/.config/berri-shell"
     readonly property string picturesDirPath: homePath + "/Pictures"
 

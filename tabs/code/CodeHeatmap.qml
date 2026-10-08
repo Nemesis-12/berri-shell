@@ -60,21 +60,21 @@ Rectangle {
     readonly property var streaks: {
         var cur = 0, best = 0, run = 0;
         for (var i = 0; i < calendar.length; i++) {
-            run = calendar[i][1] > 0 ? run + 1 : 0;
+            run = calendar[i][Fmt.CONTRIBUTION_COUNT] > 0 ? run + 1 : 0;
             best = Math.max(best, run);
         }
         var k = calendar.length - 1;
-        if (k >= 0 && calendar[k][1] <= 0) k--;
-        while (k >= 0 && calendar[k][1] > 0) { cur++; k--; }
+        if (k >= 0 && calendar[k][Fmt.CONTRIBUTION_COUNT] <= 0) k--;
+        while (k >= 0 && calendar[k][Fmt.CONTRIBUTION_COUNT] > 0) { cur++; k--; }
         return { current: cur, best: best };
     }
 
     readonly property string readout: {
         if (hoveredIndex < 0 || hoveredIndex >= calendar.length) return "Hover a day".toUpperCase();
-        var d = Fmt.localDate(calendar[hoveredIndex][0]);
-        var c = calendar[hoveredIndex][1];
-        return (Fmt.WEEKDAYS[d.getDay()] + ", " + Fmt.MONTHS[d.getMonth()] + " " + d.getDate() + " · "
-            + (c > 0 ? c + (c === 1 ? " contribution" : " contributions") : "No contributions")).toUpperCase();
+        var contributionDate = Fmt.localDate(calendar[hoveredIndex][Fmt.CONTRIBUTION_DATE]);
+        var contributionCount = calendar[hoveredIndex][Fmt.CONTRIBUTION_COUNT];
+        return (Fmt.WEEKDAYS[contributionDate.getDay()] + ", " + Fmt.MONTHS[contributionDate.getMonth()] + " " + contributionDate.getDate() + " · "
+            + (contributionCount > 0 ? contributionCount + (contributionCount === 1 ? " contribution" : " contributions") : "No contributions")).toUpperCase();
     }
 
     color: Theme.card
@@ -198,7 +198,7 @@ Rectangle {
                 model: root.columns
                 MonoText {
                     required property int index
-                    readonly property var first: root.calendar.length > index * 7 ? Fmt.localDate(root.calendar[index * 7][0]) : null
+                    readonly property var first: root.calendar.length > index * 7 ? Fmt.localDate(root.calendar[index * 7][Fmt.CONTRIBUTION_DATE]) : null
                     x: index * (root.cell + root.gap)
                     height: 9
                     verticalAlignment: Text.AlignVCenter
@@ -215,8 +215,8 @@ Rectangle {
                     y: 12 + (index % 7) * (root.cell + root.gap)
                     width: root.cell
                     height: root.cell
-                    visible: root.calendar[index][1] >= 0
-                    color: root.levelColors[Fmt.heatLevel(root.calendar[index][1])]
+                    visible: root.calendar[index][Fmt.CONTRIBUTION_COUNT] >= 0
+                    color: root.levelColors[Fmt.heatLevel(root.calendar[index][Fmt.CONTRIBUTION_COUNT])]
                 }
             }
 
@@ -242,7 +242,7 @@ Rectangle {
                     var inX = point.position.x - col * (root.cell + root.gap) < root.cell;
                     var inY = point.position.y - 12 - row * (root.cell + root.gap) < root.cell;
                     var idx = col * 7 + row;
-                    if (row >= 0 && row < 7 && inX && inY && idx < root.calendar.length && root.calendar[idx][1] >= 0) root.hoveredIndex = idx;
+                    if (row >= 0 && row < 7 && inX && inY && idx < root.calendar.length && root.calendar[idx][Fmt.CONTRIBUTION_COUNT] >= 0) root.hoveredIndex = idx;
                 }
                 onHoveredChanged: if (!hovered) root.hoveredIndex = -1
             }

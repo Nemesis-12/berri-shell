@@ -117,7 +117,7 @@ QtObject {
         meta.text = text;
         meta.signature = text.length + ":" + Items.shortHash(text);
         meta.loaded = true;
-        store._finishAdd();
+        store._applyCalendarListChange();
         store.lastImportDuplicates = duplicates;
         return meta.id;
     }

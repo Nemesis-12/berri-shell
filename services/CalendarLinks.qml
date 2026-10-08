@@ -93,7 +93,7 @@ QtObject {
         calendar.records = doc.records;
         calendar.signature = Catalog.recordsSignature(json);
         calendar.loaded = true;
-        store._finishAdd();
+        store._applyCalendarListChange();
         store.subscribed(request.shownUrl, id, "", request.requestId);
     }
 

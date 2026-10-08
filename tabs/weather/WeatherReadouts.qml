@@ -17,7 +17,7 @@ Item {
     /** Shows pressure in place of the UV index. */
     property bool showPressure: false
 
-    readonly property var detail: { Weather.updatedAt; return Weather.dayDetail(root.day) || ({}); }
+    readonly property var detail: Weather.dayDetail(root.day) || ({})
 
     function num(v) {
         return v === undefined || v === null ? "--" : Math.round(v).toString();

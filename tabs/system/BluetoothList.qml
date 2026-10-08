@@ -4,7 +4,7 @@ import qs.services
 import "../../logic/ListSync.js" as ListSync
 
 /**
- * Bluetooth device list (ticket 17): swaps into the toggle grid's cell when
+ * Bluetooth device list: swaps into the toggle grid's cell when
  * the Bluetooth tile's chevron is clicked. Same layout as WifiList: a
  * PanelListHeader with a back button, title and on/off switch, then a
  * scrolling list of devices - paired devices first (connected first), then

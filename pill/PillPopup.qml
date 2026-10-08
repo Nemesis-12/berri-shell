@@ -8,7 +8,7 @@ import qs.notifications
 import qs.services
 
 /**
- * Notification pop-up of one monitor (ticket 52, Spine style). The pill's own
+ * Notification pop-up of one monitor (Spine style). The pill's own
  * rectangle grows into a 380 px card and shrinks back as the exact reverse.
  * One progress value (0 pill, 1 card) drives width, height, border, content
  * fade and shadow; the curve is the pill-hover curve.

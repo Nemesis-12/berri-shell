@@ -6,7 +6,7 @@ import Quickshell.Bluetooth
 import "../logic/AirplaneLogic.js" as AirplaneLogic
 
 /**
- * Airplane mode (ticket 18): turns Wi-Fi and Bluetooth off and remembers
+ * Airplane mode: turns Wi-Fi and Bluetooth off and remembers
  * their prior on/off state; turning it off restores them. Turning either
  * radio on again - from its tile, its list's switch, or outside the shell -
  * clears airplane mode, same as the mock. The decision logic itself lives in
