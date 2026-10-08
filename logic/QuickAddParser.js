@@ -181,40 +181,37 @@ var STEPS = [
       accept: function (m, o, today) { o.date = nextWeekday(m[1], today); } }
 ];
 
-function parse(text, referenceDate, selectedDate, clock24) {
-    var today = Times.dayKey(referenceDate);
-    var s = " " + text + " ";
-    var o = { type: null, date: null, time: null, end: null, color: null, repeat: "none", byDay: [] };
-
-    var matches = { kind: null, date: null, time: null, end: null, color: null, repeat: null };
-    var positions = [];
-    for (var i = 0; i < s.length; i++) positions.push(i - 1);
-
-    // Cuts accepted text and keeps its original range. A rule can return its fields.
-    function take(re, fields, fn) {
-        var m = s.match(re);
-        if (!m) return;
-        var accepted = fn(m);
-        if (accepted === false) return;
-        var first = m.index + m[0].search(/\S/);
-        var last = m.index + m[0].replace(/\s+$/, "").length;
-        var start = positions[first];
-        var end = positions[last - 1] + 1;
-        var match = { text: text.slice(start, end), start: start, end: end };
-        var names = accepted || fields;
-        for (var j = 0; j < names.length; j++) {
-            if (names[j] !== "end" || o.end !== null) matches[names[j]] = match;
-        }
-        s = s.slice(0, m.index) + " " + s.slice(m.index + m[0].length);
-        positions = positions.slice(0, m.index).concat([-1], positions.slice(m.index + m[0].length));
+// Cuts the first accepted match of a rule out of the line and keeps its original range.
+// A rule can return its fields. `line` holds the working text, the position map, the fields and the matches.
+function takeMatch(line, re, fields, fn) {
+    var m = line.s.match(re);
+    if (!m) return;
+    var accepted = fn(m);
+    if (accepted === false) return;
+    var first = m.index + m[0].search(/\S/);
+    var last = m.index + m[0].replace(/\s+$/, "").length;
+    var start = line.positions[first];
+    var end = line.positions[last - 1] + 1;
+    var match = { text: line.text.slice(start, end), start: start, end: end };
+    var names = accepted || fields;
+    for (var j = 0; j < names.length; j++) {
+        if (names[j] !== "end" || line.o.end !== null) line.matches[names[j]] = match;
     }
+    line.s = line.s.slice(0, m.index) + " " + line.s.slice(m.index + m[0].length);
+    line.positions = line.positions.slice(0, m.index).concat([-1], line.positions.slice(m.index + m[0].length));
+}
+
+// Runs every rule whose condition holds, in order.
+function runSteps(line, today) {
     for (var r = 0; r < STEPS.length; r++) {
         var step = STEPS[r];
-        if (step.when && !step.when(o)) continue;
-        take(step.pattern, step.fields, function (m) { return step.accept(m, o, today); });
+        if (step.when && !step.when(line.o)) continue;
+        takeMatch(line, step.pattern, step.fields, function (m) { return step.accept(m, line.o, today); });
     }
+}
 
-    var title = s.replace(/\s+/g, " ").trim().replace(/\s+(on|at|from|by)$/i, "").replace(/^(on|at)\s+/i, "");
+// Fills the type and the clock fields that the words did not name.
+function applyDefaults(o) {
     if (!o.type) o.type = o.time ? "event" : "allday";
     if (o.type === "allday") { o.time = null; o.end = null; }
     if (o.type === "reminder" && !o.time) o.time = "09:00";
@@ -222,6 +219,27 @@ function parse(text, referenceDate, selectedDate, clock24) {
         o.end = Times.pad((+o.time.slice(0, 2) + 1) % 24) + ":" + o.time.slice(3);
     }
     if (o.type !== "event") o.end = null;
+}
+
+function cleanTitle(s) {
+    return s.replace(/\s+/g, " ").trim().replace(/\s+(on|at|from|by)$/i, "").replace(/^(on|at)\s+/i, "");
+}
+
+function parse(text, referenceDate, selectedDate, clock24) {
+    var line = {
+        text: text,
+        s: " " + text + " ",
+        positions: [],
+        o: { type: null, date: null, time: null, end: null, color: null, repeat: "none", byDay: [] },
+        matches: { kind: null, date: null, time: null, end: null, color: null, repeat: null }
+    };
+    for (var i = 0; i < line.s.length; i++) line.positions.push(i - 1);
+    runSteps(line, Times.dayKey(referenceDate));
+
+    var o = line.o;
+    var matches = line.matches;
+    var title = cleanTitle(line.s);
+    applyDefaults(o);
 
     var date = o.date || Times.dayKey(selectedDate);
     var result = {

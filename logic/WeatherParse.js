@@ -20,16 +20,8 @@ function round1(value) {
     return Math.round(value * 10) / 10;
 }
 
-// Builds the whole model from one Open-Meteo response.
-// Returns { current, hoursAll, days, todayIndex } where `current` is a detail object (see below).
-// Detail objects share these fields: code, tempC, minC, maxC, feelsLikeC, humidity, dewPointC,
-// windKmh, windDirection, gustKmh, precipMm, precipProbability, uvIndex, uvLabel, pressureHpa,
-// sunrise ("HH:MM"), sunset ("HH:MM"), daylight ("12h 13m"), isDay.
-function parse(data) {
-    var cur = data.current;
-    var h = data.hourly;
-    var d = data.daily;
-
+// One entry for each hour of the response.
+function readHours(h) {
     var hoursAll = [];
     for (var i = 0; i < h.time.length; i++) {
         hoursAll.push({
@@ -41,12 +33,15 @@ function parse(data) {
             uvIndex: h.uv_index[i] || 0
         });
     }
+    return hoursAll;
+}
 
+// One summary for each day of the response.
+function readDays(d) {
     var days = [];
     for (var j = 0; j < d.time.length; j++) {
-        var dayDate = WeatherFormat.toDate(d.time[j] + "T00:00");
         days.push({
-            date: dayDate,
+            date: WeatherFormat.toDate(d.time[j] + "T00:00"),
             code: d.weather_code[j],
             minC: Math.round(d.temperature_2m_min[j]),
             maxC: Math.round(d.temperature_2m_max[j]),
@@ -65,17 +60,21 @@ function parse(data) {
             daylight: Times.duration(d.daylight_duration[j], daylightWording)
         });
     }
+    return days;
+}
 
-    // Index of the current hour in hoursAll (times compare as strings up to the hour).
-    var nowKey = cur.time.substring(0, 13);
-    var nowIndex = 0;
-    for (var k = 0; k < h.time.length; k++) {
-        if (h.time[k].substring(0, 13) === nowKey) { nowIndex = k; break; }
+// Index of the current hour in the hourly list (times compare as strings up to the hour).
+function currentHourIndex(currentTime, hourTimes) {
+    var nowKey = currentTime.substring(0, 13);
+    for (var k = 0; k < hourTimes.length; k++) {
+        if (hourTimes[k].substring(0, 13) === nowKey) return k;
     }
+    return 0;
+}
 
-    var today = days[0];
-    var uv = h.uv_index[nowIndex] || 0;
-    var current = {
+// Current readings from the response, with today's range, rain, sun and daylight from the day summary.
+function readCurrent(cur, today, uv) {
+    return {
         code: cur.weather_code,
         isDay: cur.is_day === 1,
         tempC: Math.round(cur.temperature_2m),
@@ -96,8 +95,23 @@ function parse(data) {
         sunset: today.sunset,
         daylight: today.daylight
     };
+}
 
-    return { current: current, hoursAll: hoursAll, days: days, nowIndex: nowIndex };
+// Builds the whole model from one Open-Meteo response.
+// Returns { current, hoursAll, days, nowIndex } where `current` is a detail object (see below).
+// Detail objects share these fields: code, tempC, minC, maxC, feelsLikeC, humidity, dewPointC,
+// windKmh, windDirection, gustKmh, precipMm, precipProbability, uvIndex, uvLabel, pressureHpa,
+// sunrise ("HH:MM"), sunset ("HH:MM"), daylight ("12h 13m"), isDay.
+function parse(data) {
+    var days = readDays(data.daily);
+    var nowIndex = currentHourIndex(data.current.time, data.hourly.time);
+    var uv = data.hourly.uv_index[nowIndex] || 0;
+    return {
+        current: readCurrent(data.current, days[0], uv),
+        hoursAll: readHours(data.hourly),
+        days: days,
+        nowIndex: nowIndex
+    };
 }
 
 // Next 24 hours starting at the current hour.
