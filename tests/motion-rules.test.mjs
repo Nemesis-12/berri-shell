@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = fileURLToPath(new URL("../", import.meta.url));
-const motionFiles = ["common/StandardMotion.qml", "common/SpringMotion.qml", "common/EmphasizedMotion.qml", "common/StandardColorMotion.qml"];
+const motionFiles = ["common/StandardMotion.qml", "common/SpringMotion.qml", "common/EmphasizedMotion.qml", "services/StandardColorMotion.qml"];
 
 function sources(extension) {
   const found = [];

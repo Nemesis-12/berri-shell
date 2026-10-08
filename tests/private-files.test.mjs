@@ -90,7 +90,7 @@ test("a replacement fixes an old feed that others could read", () => {
 });
 
 test("state and calendar folders are created through private-folder.sh", () => {
-  for (const file of ["common/SavedState.qml", "services/CalendarFiles.qml"]) {
+  for (const file of ["services/SavedState.qml", "services/CalendarFiles.qml"]) {
     const source = fs.readFileSync(path.join(repo, file), "utf8");
     assert.match(source, /private-folder\.sh/, file);
     assert.doesNotMatch(source, /"mkdir", "-p"/, file);

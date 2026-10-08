@@ -1,5 +1,4 @@
 import QtQuick
-import qs.services
 
 /**
  * Color animation on the mock's standard curve, cubic-bezier(.4, 0, .2, 1).

@@ -22,7 +22,7 @@ test("notifications stay bounded and current in the QML engine", (t) => {
   }
   fs.copyFileSync(path.join(repo, "common/Icons.js"), path.join(dir, "qs/common/Icons.js"));
   fs.writeFileSync(path.join(dir, "qs/common/qmldir"), "module qs.common\n" +
-    [...common, "SavedState", "AlertsAppIcon"].map((name) => `${name} 1.0 ${name}.qml`).join("\n"));
+    [...common, "AlertsAppIcon"].map((name) => `${name} 1.0 ${name}.qml`).join("\n"));
   fs.writeFileSync(path.join(dir, "qs/notifications/qmldir"),
     "module qs.notifications\nsingleton Notifications 1.0 Notifications.qml\n");
   const env = { ...process.env, QT_QPA_PLATFORM: "offscreen", QSG_RHI_BACKEND: "software", XDG_CACHE_HOME: path.join(dir, "cache") };

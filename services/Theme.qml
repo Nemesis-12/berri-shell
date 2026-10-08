@@ -4,8 +4,6 @@ import Quickshell
 import Quickshell.Io
 import "../logic/Ease.js" as Ease
 import "../logic/ThemeColors.js" as Colors
-import qs.common
-import qs.picker
 
 /**
  * Holds the 9 berri palettes and the currently applied one. apply(key)

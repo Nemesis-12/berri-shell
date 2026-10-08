@@ -14,10 +14,10 @@ export function calendarOffscreen(change = () => {}, input = "qml") {
     for (const folder of ["logic", "common", "picker", "pill", "tabs/calendar"])
       fs.cpSync(path.join(repo, folder), path.join(copy, folder), { recursive: true });
     fs.mkdirSync(path.join(copy, "services"));
-    for (const name of ["Calendar", "CalendarFiles", "Theme", "Clock"])
+    for (const name of ["Calendar", "CalendarFiles", "Theme", "Clock", "StandardColorMotion"])
       fs.copyFileSync(path.join(repo, `services/${name}.qml`), path.join(copy, `services/${name}.qml`));
     fs.cpSync(path.join(repo, "tests/fixtures/calendar-qml/Quickshell"), path.join(copy, "Quickshell"), { recursive: true });
-    fs.copyFileSync(path.join(repo, "tests/fixtures/calendar-qml/SavedState.qml"), path.join(copy, "common/SavedState.qml"));
+    fs.copyFileSync(path.join(repo, "tests/fixtures/calendar-qml/SavedState.qml"), path.join(copy, "services/SavedState.qml"));
     fs.cpSync(path.join(repo, "tests/qml"), path.join(copy, "qml"), { recursive: true });
     fs.mkdirSync(path.join(copy, "qs"));
     fs.symlinkSync(path.join(copy, "logic"), path.join(copy, "qs/logic"));

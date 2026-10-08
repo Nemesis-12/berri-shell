@@ -2,7 +2,6 @@ import QtQuick
 import "../../logic/CalendarDraft.js" as CalendarDraft
 import "../../logic/Times.js" as Times
 import qs.common
-import qs.pill
 import qs.services
 
 // Edits one calendar item. Owns the draft, save actions and reversible motion.

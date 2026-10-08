@@ -5,3 +5,4 @@ singleton Clock 1.0 Clock.qml
 singleton AutoPowerProfile 1.0 AutoPowerProfile.qml
 singleton Nightlight 1.0 Nightlight.qml
 singleton PowerModes 1.0 PowerModes.qml
+SavedState 1.0 SavedState.qml

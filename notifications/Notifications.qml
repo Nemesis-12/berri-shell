@@ -3,7 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Services.Notifications
 import "../logic/NotificationLogic.js" as Logic
-import qs.common
+import qs.services
 
 /**
  * Notification store (ticket 50): history grouped by app, read/unread,

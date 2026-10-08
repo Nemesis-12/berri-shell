@@ -7,7 +7,6 @@ import "../../logic/PixelGrid.js" as PixelGrid
 import "../../logic/Times.js" as Times
 import qs.common
 import qs.services
-import qs.tabs.home
 
 /**
  * Media tab body (mock 5C SPINE, Berri Media v2.dc.html): album art with the

@@ -4,7 +4,6 @@ import Quickshell
 import Quickshell.Io
 import "../logic/CalendarItems.js" as Items
 import "../logic/ReminderDelivery.js" as Delivery
-import qs.common
 import qs.services
 
 /**
