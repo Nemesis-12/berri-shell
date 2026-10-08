@@ -14,13 +14,27 @@ function parseLine(text, base, reference, clock24) {
     };
 }
 
+// Field priority: a field the user touched wins, then a part typed in the line, then the opening value.
+function chooseField(isTouched, isTyped, draftValue, typedValue, openingValue) {
+    if (isTouched) return draftValue;
+    if (isTyped) return typedValue;
+    return openingValue;
+}
+
+// The start clock: a new task has no time, any other type starts at 09:00 unless the form opened with one.
+function timeField(type, touched, draft, named, parsed, base) {
+    if (type === "allday") return "";
+    var openingTime = base.time || (type === "task" ? "" : "09:00");
+    return chooseField(touched.time, named.time, draft.time, parsed.time, openingTime);
+}
+
 // The end clock: events follow a typed time range, a task keeps its due time until a time is typed.
 function endField(type, touched, draft, named, parsed, base) {
     if (type !== "event" && type !== "task") return "";
-    var typedTime = named.time && !touched.time;
     if (touched.end) return draft.end;
-    if (type === "task") return typedTime ? "" : base.end;
-    return typedTime ? (parsed.end || base.end) : base.end;
+    var typedTime = named.time && !touched.time;
+    if (!typedTime) return base.end;
+    return type === "task" ? "" : (parsed.end || base.end);
 }
 
 // Typed parts fill untouched fields. Deleted parts restore the opening values.
@@ -28,19 +42,19 @@ function fromText(base, touched, draft, text, reference, clock24) {
     var line = parseLine(text, base, reference, clock24);
     var parsed = line.parsed;
     var named = line.named;
-    var type = touched.type ? draft.type : (named.kind || named.time) ? line.type : base.type;
+    var type = chooseField(touched.type, named.kind || named.time, draft.type, line.type, base.type);
     return {
         line: line,
         fields: {
             raw: text,
             title: parsed.title,
             type: type,
-            time: type === "allday" ? "" : touched.time ? draft.time : named.time ? parsed.time : (base.time || (type === "task" ? "" : "09:00")),
+            time: timeField(type, touched, draft, named, parsed, base),
             end: endField(type, touched, draft, named, parsed, base),
-            date: touched.date ? draft.date : named.date ? parsed.date : base.date,
-            repeat: touched.repeat ? draft.repeat : named.repeat ? parsed.repeat : base.repeat,
-            byDay: touched.repeat ? draft.byDay : named.repeat ? parsed.byDay : base.byDay,
-            color: touched.color ? draft.color : named.color ? parsed.color : base.color
+            date: chooseField(touched.date, named.date, draft.date, parsed.date, base.date),
+            repeat: chooseField(touched.repeat, named.repeat, draft.repeat, parsed.repeat, base.repeat),
+            byDay: chooseField(touched.repeat, named.repeat, draft.byDay, parsed.byDay, base.byDay),
+            color: chooseField(touched.color, named.color, draft.color, parsed.color, base.color)
         }
     };
 }
@@ -62,13 +76,20 @@ function buildHint(line, touched, draft, clock24, readOnly) {
     return { text: parts.join(" · "), swatch: named.color && !touched.color ? draft.color : "" };
 }
 
+// The saved start clock: all-day items have none, a reminder without a time falls back to 09:00.
+function storedTime(draft) {
+    if (draft.type === "allday") return null;
+    if (draft.time !== "") return draft.time;
+    return draft.type === "reminder" ? "09:00" : null;
+}
+
 // Maps form fields to saved fields. Moving an item keeps its day span.
 // opening is the draft the form opened with. A field that still has its opening value keeps the
 // stored value: an inherited color stays inherited. A stored end is always after the start.
 function toStoredFields(draft, original, opening) {
     var isEvent = draft.type === "event" || draft.type === "allday";
     var hasSpan = isEvent || draft.type === "task";
-    var time = draft.type === "allday" ? null : (draft.time !== "" ? draft.time : (draft.type === "reminder" ? "09:00" : null));
+    var time = storedTime(draft);
     var endDate = null;
     if (hasSpan && original && original.endDate) {
         endDate = Times.keyOfDayNum(Times.dayNum(original.endDate) + Times.dayNum(draft.date) - Times.dayNum(original.date));

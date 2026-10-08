@@ -87,19 +87,8 @@ class UsageRedirectHandler(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def claude_usage(cache: dict) -> dict:
-    """Session (5-hour) and weekly (7-day) usage, falling back to cache on any failure."""
-    entry = cache.get("claude") or {}
-    now = now_utc()
-
-    fetched_at = parse_iso(entry.get("fetchedAt"))
-    if fetched_at and now - fetched_at < dt.timedelta(seconds=CACHE_FRESH_S):
-        return cached_buckets(entry)
-
-    retry_after = parse_iso(entry.get("retryAfter"))
-    if retry_after and now < retry_after:
-        return cached_buckets(entry)
-
+def read_claude_token() -> str | None:
+    """The OAuth access token, or None when it is missing, expired or unreadable."""
     try:
         creds_path = claude_config_dir() / ".credentials.json"
         data = json.loads(creds_path.read_text(encoding="utf-8"))
@@ -107,10 +96,24 @@ def claude_usage(cache: dict) -> dict:
         token = str(login.get("accessToken") or "")
         expires_at = float(login.get("expiresAt") or 0)
         if not token or (expires_at and expires_at < time.time() * 1000):
-            return cached_buckets(entry)
+            return None
+        return token
     except Exception:
-        return cached_buckets(entry)
+        return None
 
+
+def note_rate_limit(entry: dict, err: urllib.error.HTTPError, now: dt.datetime) -> None:
+    """After a 429, remember when to ask again: the Retry-After header, else the default backoff."""
+    try:
+        retry_seconds = float(err.headers.get("Retry-After"))
+    except Exception:
+        retry_seconds = None
+    backoff = retry_seconds if retry_seconds and retry_seconds > 0 else RATE_LIMIT_BACKOFF_S
+    entry["retryAfter"] = (now + dt.timedelta(seconds=backoff)).isoformat()
+
+
+def request_claude_usage(token: str, cache: dict, entry: dict, now: dt.datetime) -> dict | None:
+    """The usage payload, or None when the request fails. A 429 sets the retry time in the cache."""
     request = urllib.request.Request(
         USAGE_ENDPOINT,
         headers={
@@ -122,28 +125,49 @@ def claude_usage(cache: dict) -> dict:
     try:
         opener = urllib.request.build_opener(UsageRedirectHandler())
         with opener.open(request, timeout=REQUEST_TIMEOUT_S) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
+            return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as err:
         if err.code == 429:
-            retry_seconds = None
-            try:
-                retry_seconds = float(err.headers.get("Retry-After"))
-            except Exception:
-                retry_seconds = None
-            backoff = retry_seconds if retry_seconds and retry_seconds > 0 else RATE_LIMIT_BACKOFF_S
-            entry["retryAfter"] = (now + dt.timedelta(seconds=backoff)).isoformat()
+            note_rate_limit(entry, err, now)
             cache["claude"] = entry
         err.close()
-        return cached_buckets(entry)
+        return None
     except Exception:
-        return cached_buckets(entry)
+        return None
 
-    new_session = claude_bucket(payload.get("five_hour"))
-    new_weekly = claude_bucket(payload.get("seven_day_oauth_apps") or payload.get("seven_day"))
-    session = new_session or (entry.get("session") if bucket_still_fresh(entry.get("session")) else None)
-    weekly = new_weekly or (entry.get("weekly") if bucket_still_fresh(entry.get("weekly")) else None)
-    cache["claude"] = {"session": session, "weekly": weekly, "fetchedAt": now.isoformat()}
-    return {"session": session, "weekly": weekly}
+
+def merge_buckets(entry: dict, new_session, new_weekly) -> dict:
+    """A new reading wins; otherwise the cached one stays while its reset is ahead."""
+    return {
+        "session": new_session or (entry.get("session") if bucket_still_fresh(entry.get("session")) else None),
+        "weekly": new_weekly or (entry.get("weekly") if bucket_still_fresh(entry.get("weekly")) else None),
+    }
+
+
+def cache_is_fresh(entry: dict, now: dt.datetime) -> bool:
+    fetched_at = parse_iso(entry.get("fetchedAt"))
+    return bool(fetched_at and now - fetched_at < dt.timedelta(seconds=CACHE_FRESH_S))
+
+
+def claude_usage(cache: dict) -> dict:
+    """Session (5-hour) and weekly (7-day) usage, falling back to cache on any failure."""
+    entry = cache.get("claude") or {}
+    now = now_utc()
+    if cache_is_fresh(entry, now):
+        return cached_buckets(entry)
+    retry_after = parse_iso(entry.get("retryAfter"))
+    if retry_after and now < retry_after:
+        return cached_buckets(entry)
+    token = read_claude_token()
+    if token is None:
+        return cached_buckets(entry)
+    payload = request_claude_usage(token, cache, entry, now)
+    if payload is None:
+        return cached_buckets(entry)
+    buckets = merge_buckets(entry, claude_bucket(payload.get("five_hour")),
+                            claude_bucket(payload.get("seven_day_oauth_apps") or payload.get("seven_day")))
+    cache["claude"] = {**buckets, "fetchedAt": now.isoformat()}
+    return buckets
 
 
 def claude_bucket(bucket) -> dict | None:
@@ -201,24 +225,26 @@ def codex_window(window) -> dict | None:
     return {"percent": max(0.0, min(100.0, float(used))), "resetsAt": resets_at}
 
 
-def codex_usage(cache: dict) -> dict:
-    """Primary (5-hour) and secondary (weekly) usage from `codex app-server`, falling back to cache on any failure."""
-    entry = cache.get("codex") or {}
-    now = now_utc()
+def stop_codex(proc) -> None:
+    """Ends the app-server child and closes its pipes."""
+    try:
+        proc.terminate()
+        proc.wait(timeout=0.2)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+    finally:
+        with contextlib.suppress(BrokenPipeError):
+            proc.stdin.close()
+        proc.stdout.close()
 
-    fetched_at = parse_iso(entry.get("fetchedAt"))
-    if fetched_at and now - fetched_at < dt.timedelta(seconds=CACHE_FRESH_S):
-        return cached_buckets(entry)
 
-    codex = shutil.which("codex")
-    if not codex:
-        return cached_buckets(entry)
-
-    codex_home = os.environ.get("CODEX_HOME")
+def read_codex_limits(codex: str) -> dict:
+    """Asks `codex app-server` for the rate limits. Raises on any failure; the child always stops."""
     env = os.environ.copy()
+    codex_home = os.environ.get("CODEX_HOME")
     if codex_home:
         env["CODEX_HOME"] = codex_home
-
     proc = None
     try:
         proc = subprocess.Popen(
@@ -233,28 +259,28 @@ def codex_usage(cache: dict) -> dict:
         proc.stdin.write(json.dumps({"method": "initialized", "params": {}}) + "\n")
         proc.stdin.flush()
         limits_msg = rpc_request(proc, 2, "account/rateLimits/read", timeout=4)
-        limits = (limits_msg.get("result") or {}).get("rateLimits") or {}
-    except Exception:
-        return cached_buckets(entry)
+        return (limits_msg.get("result") or {}).get("rateLimits") or {}
     finally:
         if proc is not None:
-            try:
-                proc.terminate()
-                proc.wait(timeout=0.2)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait()
-            finally:
-                with contextlib.suppress(BrokenPipeError):
-                    proc.stdin.close()
-                proc.stdout.close()
+            stop_codex(proc)
 
-    new_session = codex_window(limits.get("primary"))
-    new_weekly = codex_window(limits.get("secondary"))
-    session = new_session or (entry.get("session") if bucket_still_fresh(entry.get("session")) else None)
-    weekly = new_weekly or (entry.get("weekly") if bucket_still_fresh(entry.get("weekly")) else None)
-    cache["codex"] = {"session": session, "weekly": weekly, "fetchedAt": now.isoformat()}
-    return {"session": session, "weekly": weekly}
+
+def codex_usage(cache: dict) -> dict:
+    """Primary (5-hour) and secondary (weekly) usage from `codex app-server`, falling back to cache on any failure."""
+    entry = cache.get("codex") or {}
+    now = now_utc()
+    if cache_is_fresh(entry, now):
+        return cached_buckets(entry)
+    codex = shutil.which("codex")
+    if not codex:
+        return cached_buckets(entry)
+    try:
+        limits = read_codex_limits(codex)
+    except Exception:
+        return cached_buckets(entry)
+    buckets = merge_buckets(entry, codex_window(limits.get("primary")), codex_window(limits.get("secondary")))
+    cache["codex"] = {**buckets, "fetchedAt": now.isoformat()}
+    return buckets
 
 
 def main() -> None:

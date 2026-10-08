@@ -9,12 +9,15 @@ process.env.TZ = "America/Chicago";
 
 const Format = calendarModule("CalendarFormat.js");
 const Items = calendarModule("CalendarItems.js");
+const Repeat = calendarModule("CalendarRepeat.js");
+const Text = calendarModule("IcsText.js");
+const Write = calendarModule("IcsWrite.js");
 const Queries = calendarModule("CalendarQueries.js");
 const Times = calendarModule("Times.js");
 
 // The vm context has its own Array/Object, so results are copied before deepEqual.
 const plain = (value) => JSON.parse(JSON.stringify(value));
-const days = (item, from, to) => plain(Items.expand(item, from, to).map((o) => o.date));
+const days = (item, from, to) => plain(Repeat.expand(item, from, to).map((o) => o.date));
 const item = (fields) => Items.makeItem({ title: "x", ...fields });
 
 test("round trip keeps every field", () => {
@@ -465,7 +468,7 @@ test("calendar item keys select each copy and reject edits to read-only copies",
     assert.deepEqual(plain(Items.itemIdentity(key)), { calendarId, uid: "same" });
     assert.equal(Items.itemIndex([copies[index]], key, calendarId), 0);
     assert.equal(Items.itemIndex([copies[index]], key, "other"), -1);
-    const shown = Items.shownItem(Items.expand(copies[index], "2026-10-05", "2026-10-05")[0]);
+    const shown = Items.shownItem(Repeat.expand(copies[index], "2026-10-05", "2026-10-05")[0]);
     assert.equal(shown.uid, key);
     assert.equal(shown.sourceUid, "same");
     assert.equal(shown.calendarId, calendarId);
@@ -558,10 +561,10 @@ test("an overnight moved occurrence shows on both of its days", () => {
 
 test("folding keeps 75-octet ASCII lines whole and folds longer or non-ASCII lines", () => {
   const edge = "X:" + "a".repeat(73);
-  assert.equal(Format.foldLine(edge), edge);
-  assert.equal(Format.foldLine(edge + "a"), edge + "\r\n a");
+  assert.equal(Text.foldLine(edge), edge);
+  assert.equal(Text.foldLine(edge + "a"), edge + "\r\n a");
   const wide = "X:" + "é".repeat(40);
-  assert.equal(Format.foldLine(wide), "X:" + "é".repeat(36) + "\r\n " + "é".repeat(4));
+  assert.equal(Text.foldLine(wide), "X:" + "é".repeat(36) + "\r\n " + "é".repeat(4));
 });
 
 test("a large calendar is written as the same lines as its parts in order", () => {
@@ -569,9 +572,9 @@ test("a large calendar is written as the same lines as its parts in order", () =
   cal.raw = ["X-WR-CALNAME:Big"];
   cal.rawComponents = [["BEGIN:VTIMEZONE", "TZID:Zone", "END:VTIMEZONE"]];
   for (let i = 0; i < 3000; i++) cal.items.push(item({ uid: "u" + i, title: "Event " + i, date: "2026-10-05", time: "09:00", stamp: "20261001T000000Z" }));
-  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:" + Format.calendarProduct, "X-WR-CALNAME:Big",
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:" + Write.calendarProduct, "X-WR-CALNAME:Big",
     "BEGIN:VTIMEZONE", "TZID:Zone", "END:VTIMEZONE"];
-  for (const each of cal.items) lines.push(...Format.itemLines(each));
+  for (const each of cal.items) lines.push(...Write.itemLines(each));
   lines.push("END:VCALENDAR");
-  assert.equal(Format.writeCalendar(cal), lines.map(Format.foldLine).join("\r\n") + "\r\n");
+  assert.equal(Format.writeCalendar(cal), lines.map(Text.foldLine).join("\r\n") + "\r\n");
 });

@@ -2,6 +2,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Services.UPower
+import "../logic/PowerProfileLogic.js" as Rules
 
 /**
  * Decides the power profile for "auto" mode from sustained CPU load.
@@ -69,32 +70,31 @@ Singleton {
     }
 
     function pushSample(load) {
-        var now = Date.now();
-        var recentLoads = root.loadSamples.concat([{ time: now, load: load }])
-            .filter(function (sample) { return now - sample.time <= root.averageWindowMs; });
+        var recentLoads = Rules.recentSamples(root.loadSamples, { time: Date.now(), load: load }, root.averageWindowMs);
         root.loadSamples = recentLoads;
-
-        var totalLoad = recentLoads.reduce(function (a, sample) { return a + sample.load; }, 0);
-        root.movingAverage = totalLoad / recentLoads.length;
+        root.movingAverage = Rules.averageLoad(recentLoads);
         root.evaluate();
+    }
+
+    function profileFor(name) {
+        if (name === "performance") return PowerProfile.Performance;
+        if (name === "power-saver") return PowerProfile.PowerSaver;
+        return PowerProfile.Balanced;
     }
 
     function evaluate() {
         var now = Date.now();
 
-        var rawHigh = root.movingAverage > root.highLoadThreshold;
-        if (rawHigh !== root.highSide) { root.highSide = rawHigh; root.highSideSince = now; }
-        if (now - root.highSideSince >= root.highSustainMs) root.highDebounced = rawHigh;
+        var high = Rules.sustainedSide({ side: root.highSide, since: root.highSideSince, debounced: root.highDebounced },
+            root.movingAverage > root.highLoadThreshold, now, root.highSustainMs);
+        root.highSide = high.side; root.highSideSince = high.since; root.highDebounced = high.debounced;
 
-        var rawLow = root.movingAverage < root.lowLoadThreshold;
-        if (rawLow !== root.lowSide) { root.lowSide = rawLow; root.lowSideSince = now; }
-        if (now - root.lowSideSince >= root.lowSustainMs) root.lowDebounced = rawLow;
+        var low = Rules.sustainedSide({ side: root.lowSide, since: root.lowSideSince, debounced: root.lowDebounced },
+            root.movingAverage < root.lowLoadThreshold, now, root.lowSustainMs);
+        root.lowSide = low.side; root.lowSideSince = low.since; root.lowDebounced = low.debounced;
 
-        var recommended = PowerProfile.Balanced;
-        if (root.highDebounced) recommended = PowerProfile.Performance;
-        else if (UPower.onBattery && root.lowDebounced) recommended = PowerProfile.PowerSaver;
-
-        if (recommended !== root.appliedProfile && now - root.lastSwitchTime >= root.switchCooldownMs) {
+        var recommended = root.profileFor(Rules.recommendedProfile(root.highDebounced, root.lowDebounced, UPower.onBattery));
+        if (Rules.mayAdopt(recommended, root.appliedProfile, now, root.lastSwitchTime, root.switchCooldownMs)) {
             root.appliedProfile = recommended;
             root.lastSwitchTime = now;
         }

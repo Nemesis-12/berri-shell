@@ -196,3 +196,25 @@ test("a changed online thread count starts a fresh total load interval", () => {
   assert.equal(after.threadCount, 2);
   assert.deepEqual(Array.from(after.coreLoads), [50, 0]);
 });
+
+test("disk parsing skips rows with too few fields or impossible sizes", () => {
+  const header = "Filesystem 1024-blocks Used Available Capacity Mounted on\n";
+  const rows = [
+    "/dev/short 1048576 524288 1",
+    "/dev/zero 0 0 0 0% /zero",
+    "/dev/over 1048576 2097152 0 100% /over",
+    "/dev/text bad 1 0 0% /text",
+    "/dev/good 2097152 1048576 1048576 50% /good",
+  ];
+  const disks = readings.readDisks(header + rows.join("\n") + "\n");
+  assert.deepEqual(Array.from(disks, disk => [disk.mount, disk.device, disk.percent]), [["/good", "good", 50]]);
+});
+
+test("disk parsing lists the root disk first and returns nothing for empty output", () => {
+  const header = "Filesystem 1024-blocks Used Available Capacity Mounted on\n";
+  const disks = readings.readDisks(header
+    + "/dev/data 2097152 1048576 1048576 50% /data\n"
+    + "/dev/root 1048576 262144 786432 25% /\n");
+  assert.deepEqual(Array.from(disks, disk => disk.mount), ["/", "/data"]);
+  assert.deepEqual(Array.from(readings.readDisks("")), []);
+});

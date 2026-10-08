@@ -6,6 +6,7 @@ import { calendarModule } from "./fixtures/calendar-code.mjs";
 process.env.TZ = "UTC";
 const Queries = calendarModule("CalendarQueries.js");
 const Items = calendarModule("CalendarItems.js");
+const Repeat = calendarModule("CalendarRepeat.js");
 
 // A compact feed record. Every record needs only the fields that differ from this one.
 function record(i, fields) {
@@ -79,9 +80,9 @@ test("a counted weekly series ends after its count", () => {
 
 test("expand with no budget rejects one item that is too heavy and returns the others", () => {
   const heavy = Items.storedItem({ uid: "h", kind: "event", title: "H", date: "1000-01-01", endDate: "9999-12-31", repeat: "daily" });
-  assert.deepEqual(Array.from(Items.expand(heavy, "2026-10-01", "2026-10-31")), []);
+  assert.deepEqual(Array.from(Repeat.expand(heavy, "2026-10-01", "2026-10-31")), []);
   const light = Items.storedItem({ uid: "l", kind: "event", title: "L", date: "2026-10-05" });
-  assert.equal(Items.expand(light, "2026-10-01", "2026-10-31").length, 1);
+  assert.equal(Repeat.expand(light, "2026-10-01", "2026-10-31").length, 1);
 });
 
 test("a series with 50,000 changed occurrences is rejected quickly", () => {

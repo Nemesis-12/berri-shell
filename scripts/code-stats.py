@@ -176,12 +176,41 @@ def empty_kinds() -> dict:
     return {n: 0 for n in KINDS}
 
 
+def add_event(totals: dict, agent: str, day: dt.date, model: str, kinds: dict, periods: dict) -> None:
+    """Adds one usage event to the per-day, per-model and per-period totals."""
+    tokens = counted(kinds)
+    if day >= periods["first_day"]:
+        totals["per_day"][day.isoformat()][agent] += tokens
+    if day >= periods["week"] and model:
+        name = pretty_model(model)
+        by_name = totals["per_model"][agent]
+        by_name[name] = by_name.get(name, 0) + tokens
+    for bucket in ("today", "week", "month"):
+        if day >= periods[bucket]:
+            acc = totals["buckets"][agent][bucket].setdefault(model or "unknown", empty_kinds())
+            for n in KINDS:
+                acc[n] += kinds[n]
+
+
+def priced_usage(by_model: dict, prices, aliases, unknown: set) -> dict:
+    """Token and cost totals for one bucket. Models without a price go into `unknown`."""
+    total_tokens, total_cost = 0, 0.0
+    for model, kinds in by_model.items():
+        total_tokens += counted(kinds)
+        price = price_for(prices, aliases, model)
+        if price is not None:
+            total_cost += cost_of(kinds, price)
+        elif counted(kinds) or kinds["cache_read"]:
+            unknown.add(model)
+    return {"tokens": total_tokens, "cost": round(total_cost, 4)}
+
+
 def collect() -> dict:
     today = dt.date.today()
     first_day = today - dt.timedelta(days=DAY_COUNT - 1)
-    week_start = today - dt.timedelta(days=today.weekday())
-    month_start = today.replace(day=1)
-    oldest = min(first_day, month_start)
+    periods = {"first_day": first_day, "today": today,
+               "week": today - dt.timedelta(days=today.weekday()), "month": today.replace(day=1)}
+    oldest = min(first_day, periods["month"])
     cutoff = time.mktime(oldest.timetuple())
     home = Path.home()
     prices, aliases = load_prices()
@@ -189,46 +218,29 @@ def collect() -> dict:
         "claude": (home / ".claude" / "projects", claude_events),
         "codex": (home / ".codex" / "sessions", codex_events),
     }
-    per_day = {(first_day + dt.timedelta(days=i)).isoformat(): {"claude": 0, "codex": 0} for i in range(DAY_COUNT)}
-    per_model = {"claude": {}, "codex": {}}
-    # buckets[agent][bucket][raw model] = kinds
-    buckets = {a: {"today": {}, "week": {}, "month": {}} for a in sources}
+    totals = {
+        "per_day": {(first_day + dt.timedelta(days=i)).isoformat(): {"claude": 0, "codex": 0} for i in range(DAY_COUNT)},
+        "per_model": {"claude": {}, "codex": {}},
+        # buckets[agent][bucket][raw model] = kinds
+        "buckets": {a: {"today": {}, "week": {}, "month": {}} for a in sources},
+    }
     for agent, (root, events) in sources.items():
         if not root.is_dir():
             continue
         for day, model, kinds in events(recent_logs(root, cutoff), oldest):
             if day > today:  # A wrong clock or copied log can hold a future date.
                 continue
-            tokens = counted(kinds)
-            if day >= first_day:
-                per_day[day.isoformat()][agent] += tokens
-            if day >= week_start and model:
-                name = pretty_model(model)
-                per_model[agent][name] = per_model[agent].get(name, 0) + tokens
-            for bucket, start in (("today", today), ("week", week_start), ("month", month_start)):
-                if day >= start:
-                    acc = buckets[agent][bucket].setdefault(model or "unknown", empty_kinds())
-                    for n in KINDS:
-                        acc[n] += kinds[n]
+            add_event(totals, agent, day, model, kinds, periods)
     usage = {a: {} for a in sources}
     unknown = {a: set() for a in sources}
-    for agent, by_bucket in buckets.items():
+    for agent, by_bucket in totals["buckets"].items():
         for bucket, by_model in by_bucket.items():
-            total_tokens, total_cost = 0, 0.0
-            for model, kinds in by_model.items():
-                total_tokens += counted(kinds)
-                price = price_for(prices, aliases, model)
-                if price is None:
-                    if counted(kinds) or kinds["cache_read"]:
-                        unknown[agent].add(model)
-                else:
-                    total_cost += cost_of(kinds, price)
-            usage[agent][bucket] = {"tokens": total_tokens, "cost": round(total_cost, 4)}
+            usage[agent][bucket] = priced_usage(by_model, prices, aliases, unknown[agent])
     return {
         "generatedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "days": [{"date": d, **v} for d, v in per_day.items()],
+        "days": [{"date": d, **v} for d, v in totals["per_day"].items()],
         "models": {a: [{"name": n, "tokens": t} for n, t in sorted(m.items(), key=lambda kv: -kv[1])]
-                   for a, m in per_model.items()},
+                   for a, m in totals["per_model"].items()},
         "usage": usage,
         "unpricedModels": {a: sorted(u) for a, u in unknown.items()},
     }
