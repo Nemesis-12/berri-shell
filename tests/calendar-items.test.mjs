@@ -175,3 +175,21 @@ test("a repeating timed event across midnight shows its tail on the next day", (
   const items = Format.readCalendar(text).items;
   assert.deepEqual(plain(Queries.itemsOn(items, "2026-10-09").map((o) => o.occurrenceDate)), ["2026-10-08"]);
 });
+
+test("duplicate removal sets membership fields on kept input entries in place", () => {
+  const first = { uid: "first", calendarId: "a", date: "2026-10-05", repeat: "none", time: "09:00", title: "Meeting" };
+  const colored = { ...first, uid: "colored", calendarId: "b", hasOwnColor: true };
+  const alone = { ...first, uid: "alone", title: "Lunch", time: "12:00" };
+  const beforeFirst = { ...first };
+  const input = [first, colored, alone];
+  const keptInputs = Queries.dropDuplicateItems(input);
+  assert.equal(keptInputs[0], colored);
+  assert.equal(keptInputs[1], alone);
+  assert.deepEqual(plain(colored.alsoInIds), ["a"]);
+  assert.deepEqual(plain(colored.alsoIn), ["a"]);
+  assert.deepEqual(plain(alone.alsoInIds), []);
+  assert.deepEqual(plain(alone.alsoIn), []);
+  assert.deepEqual(first, beforeFirst);
+  assert.equal(input.length, 3);
+  assert.equal(input[0], first);
+});

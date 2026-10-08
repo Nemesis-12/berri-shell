@@ -55,7 +55,7 @@ function duplicateGroups(entries, keysOf) {
 }
 
 /** The copy to show: the first one with its own color, else the first one. */
-function keptCopy(group) {
+function entryToKeep(group) {
     for (var i = 0; i < group.length; i++) if (group[i].hasOwnColor) return group[i];
     return group[0];
 }
@@ -63,17 +63,17 @@ function keptCopy(group) {
 /**
  * Each duplicate group of entries once, in the order of the kept copies' groups.
  * `names` (optional, { calendarId: name }) gives the names for `alsoIn`; the id is used when missing.
- * Kept entries are copied only when they are a duplicate (alsoIn is set on the copy).
+ * Kept input entries receive alsoIn and alsoInIds in place, including empty lists for entries without duplicates.
  */
 function dropDuplicates(entries, keysOf, names) {
     var out = [];
     var groups = duplicateGroups(entries, keysOf);
     for (var g = 0; g < groups.length; g++) {
-        var kept = keptCopy(groups[g]);
-        var others = groups[g].filter(function (m) { return m !== kept; });
-        kept.alsoInIds = others.map(function (m) { return m.calendarId; });
-        kept.alsoIn = others.map(function (m) { return names && names[m.calendarId] ? names[m.calendarId] : m.calendarId; });
-        out.push(kept);
+        var keptInput = entryToKeep(groups[g]);
+        var others = groups[g].filter(function (m) { return m !== keptInput; });
+        keptInput.alsoInIds = others.map(function (m) { return m.calendarId; });
+        keptInput.alsoIn = others.map(function (m) { return names && names[m.calendarId] ? names[m.calendarId] : m.calendarId; });
+        out.push(keptInput);
     }
     return out;
 }
