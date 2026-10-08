@@ -27,8 +27,6 @@ Rectangle {
     property real maxTextWidth: -1
 
     readonly property bool hovered: area.containsMouse
-    /** Width of the label alone, for a button sized to its text. */
-    readonly property real implicitTextWidth: labelText.implicitWidth
 
     signal clicked
 

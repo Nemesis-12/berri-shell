@@ -13,7 +13,6 @@ Item {
     property font font
     property color color: Theme.fg
     property real lineHeight: 0
-    property int elideMode: Text.ElideNone
 
     /** Distance in pixels the text travels. */
     property real travel: 6

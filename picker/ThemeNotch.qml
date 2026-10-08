@@ -280,7 +280,6 @@ Item {
             id: paletteStrip
             z: 1
             anchors.fill: parent
-            style: Theme.dashboardStyle
             colors: Colors.swatches.map(swatch => Theme[swatch.token])
             progress: root.motionTab !== "themes" ? 0
                 : (root.closing ? Timeline.closeSlice(root.elapsedMs, 0, paletteStrip.spanMs, root.stripCloseAtMs)

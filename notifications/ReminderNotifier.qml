@@ -25,7 +25,6 @@ import qs.services
 Singleton {
     id: root
 
-    readonly property string statePath: (Quickshell.env("HOME") || "") + "/.local/state/berri-shell/reminders.json"
     readonly property int maxWaitMs: 30000
     readonly property real missedWindowMs: 7 * 86400000
     readonly property real horizonDays: 400
