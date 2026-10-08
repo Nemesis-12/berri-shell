@@ -3,7 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Services.Notifications
 import "../logic/NotificationLogic.js" as Logic
-import qs.common
+import qs.services
 
 /**
  * Notification store (ticket 50): history grouped by app, read/unread,
@@ -15,8 +15,8 @@ import qs.common
  *   groups    [{ appName, appIcon, count, unread, items }], newest group first
  *   apps      [{ appName, appIcon, count }] by app name (filter column)
  *   unreadCount, totalCount, snoozedCount
- *   markRead(id), markAllRead(), snooze(id, minutes = 60), unsnoozeAll(),
- *   dismiss(id), clearGroup(appName), clearAll(), invokeAction(id, actionId)
+ *   markRead(id), snooze(id, minutes = 60), unsnoozeAll(),
+ *   dismiss(id), invokeAction(id, actionId)
  *   markReadMany(ids), dismissMany(ids): one history change per bulk action
  *   dnd, setDnd(on)
  *   removed(id): the item left the store or the sender closed it
@@ -88,10 +88,6 @@ Singleton {
         }));
     }
 
-    function markAllRead(): void {
-        root.commit(root.all.map(function (n) { return Object.assign({}, n, { read: true }); }));
-    }
-
     function snooze(id: string, minutes: real): void {
         var m = minutes > 0 ? minutes : root.defaultSnoozeMinutes;
         root.commit(Logic.patch(root.all, id, { snoozedUntil: Date.now() + m * 60000 }));
@@ -112,22 +108,6 @@ Singleton {
         var selected = new Set(ids);
         ids.forEach(function (id) { root.closeLive(id); });
         root.commit(root.all.filter(function (n) { return !selected.has(n.id); }));
-    }
-
-    function clearGroup(appName: string): void {
-        var now = Date.now();
-        root.all.forEach(function (n) {
-            if (n.appName === appName && !(n.snoozedUntil > now)) root.closeLive(n.id);
-        });
-        root.commit(Logic.removeApp(root.all, appName, now));
-    }
-
-    function clearAll(): void {
-        var now = Date.now();
-        root.all.forEach(function (n) {
-            if (!(n.snoozedUntil > now)) root.closeLive(n.id);
-        });
-        root.commit(Logic.removeVisible(root.all, now));
     }
 
     /** Runs a sender action, marks the item read and closes it at the sender. */

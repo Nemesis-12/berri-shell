@@ -2,7 +2,6 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Services.UPower
-import qs.common
 
 /**
  * Saves and restores the chosen power mode ("saver"/"balanced"/"performance"

@@ -1,7 +1,6 @@
 pragma Singleton
 import QtQuick
 import Quickshell
-import qs.common
 
 /**
  * The one minute clock. `minute` is a Date that changes once per minute, right

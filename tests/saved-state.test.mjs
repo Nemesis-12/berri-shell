@@ -15,14 +15,12 @@ test("saved settings report failed writes, keep a backup and refuse unsafe delet
     fs.cpSync(path.join(repo, "tests/fixtures/saved-state-qml"), copy, { recursive: true });
     fs.cpSync(path.join(repo, "tests/qml-saved-state"), path.join(copy, "tests"), { recursive: true });
     fs.cpSync(path.join(repo, "logic"), path.join(copy, "logic"), { recursive: true });
-    fs.mkdirSync(path.join(copy, "common"));
-    fs.copyFileSync(path.join(repo, "common/SavedState.qml"), path.join(copy, "common/SavedState.qml"));
-    fs.writeFileSync(path.join(copy, "common/qmldir"), "module qs.common\nSavedState 1.0 SavedState.qml\n");
+    fs.copyFileSync(path.join(repo, "services/SavedState.qml"), path.join(copy, "services/SavedState.qml"));
     fs.copyFileSync(path.join(repo, "services/Wallpapers.qml"), path.join(copy, "services/Wallpapers.qml"));
     fs.writeFileSync(path.join(copy, "services/qmldir"),
-      "module qs.services\nsingleton Theme 1.0 Theme.qml\nsingleton Wallpapers 1.0 Wallpapers.qml\n");
+      "module qs.services\nsingleton Theme 1.0 Theme.qml\nsingleton Wallpapers 1.0 Wallpapers.qml\nSavedState 1.0 SavedState.qml\n");
     fs.mkdirSync(path.join(copy, "qs"));
-    for (const name of ["common", "services", "logic"]) fs.symlinkSync(path.join(copy, name), path.join(copy, "qs", name));
+    for (const name of ["services", "logic"]) fs.symlinkSync(path.join(copy, name), path.join(copy, "qs", name));
 
     const env = { ...process.env, QT_QPA_PLATFORM: "offscreen", QT_QUICK_BACKEND: "software", QML_DISABLE_DISK_CACHE: "1" };
     delete env.LD_LIBRARY_PATH;

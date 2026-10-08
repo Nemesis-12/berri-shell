@@ -4,7 +4,6 @@ import Quickshell
 import Quickshell.Io
 import "../logic/CalendarItems.js" as Items
 import "../logic/ReminderDelivery.js" as Delivery
-import qs.common
 import qs.services
 
 /**
@@ -26,7 +25,6 @@ import qs.services
 Singleton {
     id: root
 
-    readonly property string statePath: (Quickshell.env("HOME") || "") + "/.local/state/berri-shell/reminders.json"
     readonly property int maxWaitMs: 30000
     readonly property real missedWindowMs: 7 * 86400000
     readonly property real horizonDays: 400

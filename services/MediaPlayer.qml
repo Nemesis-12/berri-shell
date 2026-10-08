@@ -2,7 +2,6 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Services.Mpris
-import qs.common
 
 /**
  * The media player the shell shows: the one that is playing, else the last

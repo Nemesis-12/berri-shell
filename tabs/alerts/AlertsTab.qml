@@ -25,16 +25,10 @@ Item {
     readonly property int gap: 1
     readonly property int filterWidth: 210
 
-    readonly property bool onlyUnread: filter === "unread"
     readonly property bool anyFilterApp: filter !== "all" && filter !== "unread"
 
     // Items the current filter shows.
     property var shown: []
-    readonly property int shownUnread: {
-        var n = 0;
-        for (var i = 0; i < shown.length; i++) if (!shown[i].read) n++;
-        return n;
-    }
 
     readonly property string viewName: filter === "all" ? "All notifications" : filter === "unread" ? "Unread" : filter.slice(4)
     readonly property string countText: shown.length + (shown.length === 1 ? " ITEM" : " ITEMS")

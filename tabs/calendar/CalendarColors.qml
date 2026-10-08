@@ -39,12 +39,6 @@ QtObject {
         return root.presets.some(function (p) { return p.key === color; });
     }
 
-    /** Preset name ("Blue") or the hex text, for labels. */
-    function colorName(color: string): string {
-        var found = root.presets.filter(function (p) { return p.key === color; })[0];
-        return found ? found.name : color;
-    }
-
     /** Hex digits for the picker's text field: empty for a preset. */
     function hexDigits(color: string): string {
         return root.isPreset(color) ? "" : String(color).replace("#", "");

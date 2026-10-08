@@ -5,7 +5,6 @@ import "../../logic/Times.js" as Times
 import "../../logic/PixelGrid.js" as PixelGrid
 import qs.common
 import qs.services
-import qs.tabs.media
 
 /**
  * Media column (ticket 20): the current player's album art, title/artist,

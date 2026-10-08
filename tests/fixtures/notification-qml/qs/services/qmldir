@@ -1,2 +1,3 @@
 module qs.services
 singleton Theme 1.0 Theme.qml
+SavedState 1.0 SavedState.qml

@@ -1,7 +1,8 @@
 import QtQuick
 import Quickshell.Services.UPower
 import qs.common
-import "../logic/Times.js" as Times
+import qs.services
+import "../../logic/Times.js" as Times
 
 /**
  * Battery cell: level, charging state and time left from UPower, a 3px

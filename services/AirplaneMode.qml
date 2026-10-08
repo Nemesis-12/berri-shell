@@ -4,7 +4,6 @@ import Quickshell
 import Quickshell.Networking
 import Quickshell.Bluetooth
 import "../logic/AirplaneLogic.js" as AirplaneLogic
-import qs.common
 
 /**
  * Airplane mode (ticket 18): turns Wi-Fi and Bluetooth off and remembers

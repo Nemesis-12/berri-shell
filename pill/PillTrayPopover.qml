@@ -12,7 +12,6 @@ Item {
     id: root
 
     property bool open: false
-    property alias contentItem: card
 
     /** Content goes into the card, inside its border. */
     default property alias content: card.data

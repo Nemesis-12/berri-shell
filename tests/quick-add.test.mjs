@@ -18,7 +18,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value));
 // Tue 2026-09-29 is "today"; the selected day is Wed 2026-09-30 unless a test says otherwise.
 const today = new Date(2026, 8, 29);
 const selected = new Date(2026, 8, 30);
-const parse = (text, sel = selected) => plain(lib.parse(text, today, sel, 1, false));
+const parse = (text, sel = selected) => plain(lib.parse(text, today, sel, false));
 const labels = (p) => p.tokens.map((t) => t.text);
 
 test("Dentist fri 3pm #e93", () => {
@@ -116,12 +116,8 @@ test("tonight sets 20:00; empty title asks for one", () => {
   assert.deepEqual(labels(p).slice(-1), ["needs a title"]);
 });
 
-test("hint for an empty line names the selected day", () => {
-  assert.equal(plain(lib.emptyHint(today))[0].text, "\u21B2 adds to Tue Sep 29 \u00B7 fri 3pm #e93");
-});
-
 test("24-hour hint", () => {
-  const p = plain(lib.parse("x fri 3pm", today, selected, 1, true));
+  const p = plain(lib.parse("x fri 3pm", today, selected, true));
   assert.equal(p.tokens[2].text, "15:00\u201316:00");
 });
 
@@ -130,7 +126,7 @@ test("tomorrow crosses year and leap-day boundaries with padded clock text", () 
     [new Date(2025, 11, 31), "2026-01-01", "Thu Jan 1"],
     [new Date(2024, 1, 28), "2024-02-29", "Thu Feb 29"],
   ]) {
-    const visit = plain(lib.parse("Visit tomorrow 9:05am", reference, reference, 1, true));
+    const visit = plain(lib.parse("Visit tomorrow 9:05am", reference, reference, true));
     assert.deepEqual(
       { date: visit.date, time: visit.time, end: visit.end, tokens: labels(visit) },
       { date, time: "09:05", end: "10:05", tokens: ["Event", day, "09:05\u201310:05", "\u21B2"] },
@@ -256,7 +252,7 @@ test("recorded phrases parse to the same fields", () => {
   const recorded = JSON.parse(fs.readFileSync(new URL("./fixtures/quick-add-phrases.json", import.meta.url), "utf8"));
   assert.ok(recorded.length >= 50);
   for (const { text, result } of recorded) {
-    assert.deepEqual(plain(lib.parse(text, today, selected, 1, false)), result, JSON.stringify(text));
+    assert.deepEqual(plain(lib.parse(text, today, selected, false)), result, JSON.stringify(text));
   }
 });
 

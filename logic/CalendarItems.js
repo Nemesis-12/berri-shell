@@ -362,24 +362,6 @@ function moveOccurrence(item, fromDate, toDate, changes) {
 }
 
 /**
- * Where a snooze puts a reminder. amount is minutes or "1d". Past-due reminders
- * on today count from now, not from their old time.
- */
-function snoozeTarget(time, dateKey, amount, nowKey, nowTime) {
-    var t = time || "09:00";
-    if (amount === "1d") return { date: addDays(dateKey, 1), time: t };
-    var h = +t.slice(0, 2), m = +t.slice(3, 5);
-    if (dateKey === nowKey && h * 60 + m < +nowTime.slice(0, 2) * 60 + +nowTime.slice(3, 5)) {
-        h = +nowTime.slice(0, 2);
-        m = +nowTime.slice(3, 5);
-    }
-    var mins = h * 60 + m + amount;
-    var date = dateKey;
-    while (mins >= 1440) { date = addDays(date, 1); mins -= 1440; }
-    return { date: date, time: Times.pad(Math.floor(mins / 60)) + ":" + Times.pad(mins % 60) };
-}
-
-/**
  * Where a reminder snooze puts it, counted from its alert time (start minus
  * alarmMinutes), or from now when the alert time is past. amount is minutes
  * or "1d". Returns { date, time, alarmMinutes }: a minute snooze clears the

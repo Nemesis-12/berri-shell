@@ -4,7 +4,6 @@ QtObject {
  property string currentKey: "test"
  property var current: null
  property var palettes: []
- property string dashboardStyle: "spine"
  property bool transitioning: false
  property var fromRaw: ({})
  property var toRaw: ({})

@@ -30,8 +30,9 @@ test("hidden views stop work and shared requests wait for the last owner", t => 
   for (const name of services) {
     cpSync(path.join(root, `services/${name}.qml`), path.join(imports, `qs/services/${name}.qml`));
   }
+  cpSync(path.join(root, "services/CachedSource.qml"), path.join(imports, "qs/services/CachedSource.qml"));
   writeFileSync(path.join(imports, "qs/services/qmldir"),
-    "module qs.services\nsingleton Theme 1.0 Theme.qml\n" +
+    "module qs.services\nsingleton Theme 1.0 Theme.qml\nCachedSource 1.0 CachedSource.qml\n" +
     services.map(name => `singleton ${name} 1.0 ${name}.qml\n`).join(""));
   // The services import "../logic/...", so the logic folder sits next to them.
   cpSync(path.join(root, "logic"), path.join(imports, "qs/logic"), { recursive: true });

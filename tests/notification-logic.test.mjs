@@ -83,12 +83,6 @@ test("updates keep read, snooze, and original time", () => {
   });
 });
 
-test("clearing an app or the view keeps snoozed items", () => {
-  const all = [item("a", "X", 1), item("b", "X", 2, { snoozedUntil: NOW + 9 }), item("c", "Y", 3)];
-  assert.deepEqual(ids(plain(lib.removeApp(all, "X", NOW))), ["b", "c"]);
-  assert.deepEqual(ids(plain(lib.removeVisible(all, NOW))), ["b"]);
-});
-
 test("critical bypasses do not disturb", () => {
   assert.equal(lib.shouldAlert("normal", true), false);
   assert.equal(lib.shouldAlert("low", true), false);

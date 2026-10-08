@@ -58,20 +58,6 @@ function escapeText(text) {
     return String(text).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
 }
 
-/** Splits on a separator that is not escaped with a backslash. */
-function splitUnescaped(text, sep) {
-    var parts = [];
-    var current = "";
-    for (var i = 0; i < text.length; i++) {
-        var ch = text.charAt(i);
-        if (ch === "\\" && i + 1 < text.length) { current += ch + text.charAt(++i); }
-        else if (ch === sep) { parts.push(current); current = ""; }
-        else current += ch;
-    }
-    parts.push(current);
-    return parts;
-}
-
 function unescapeText(text) {
     return text.replace(/\\([\\;,nN])/g, function (all, c) {
         return (c === "n" || c === "N") ? "\n" : c;
@@ -478,7 +464,7 @@ function dateProp(name, key, time, source, localZone) {
     return name + ":" + utcClock(local.getTime()) + "Z";
 }
 
-function ruleText(item, localZone) {
+function ruleText(item) {
     var parts = ["FREQ=" + item.repeat.toUpperCase()];
     if (item.interval > 1) parts.push("INTERVAL=" + item.interval);
     if (item.repeat === "weekly" && item.byDay.length) parts.push("BYDAY=" + item.byDay.map(function (d) { return weekdays[d]; }).join(","));
@@ -521,7 +507,7 @@ function itemLines(item, localZone) {
             lines.push(sources.end.raw);
         }
     }
-    if (recurring) lines.push("RRULE:" + ruleText(item, localZone));
+    if (recurring) lines.push("RRULE:" + ruleText(item));
     else if (item.ruleRest) lines.push("RRULE:" + item.ruleRest);
     if (item.exdates.length) {
         var pending = item.exdates.slice();

@@ -4,8 +4,6 @@ import Quickshell
 import Quickshell.Io
 import "../logic/Ease.js" as Ease
 import "../logic/ThemeColors.js" as Colors
-import qs.common
-import qs.picker
 
 /**
  * Holds the 9 berri palettes and the currently applied one. apply(key)
@@ -23,9 +21,6 @@ Singleton {
     id: root
 
     property var palettes: []
-
-    /** Which dashboard look swatch strips (PaletteStrip.qml) should draw; "spine" is the only one built. */
-    readonly property string dashboardStyle: "spine"
 
     /** Key of the applied (or in-flight target) theme. Set by apply(). */
     property string currentKey: ""
@@ -85,7 +80,6 @@ Singleton {
 
     // --- Font families ---
     readonly property string mono: "IBM Plex Mono"
-    readonly property string sans: "IBM Plex Sans"
     readonly property string condensed: "IBM Plex Sans Condensed"
 
     // --- Shared fills ---

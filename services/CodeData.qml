@@ -1,7 +1,6 @@
 pragma Singleton
 import QtQuick
 import Quickshell
-import qs.common
 
 /**
  * Data of the Code tab. Token totals and estimated costs (tokens times list prices in data/model-prices.json) come from scripts/code-stats.py (local

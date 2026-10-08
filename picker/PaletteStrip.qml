@@ -32,7 +32,6 @@ Item {
     id: root
 
     required property var colors
-    property string style: "spine"
 
     /** 0 rest, 1 hover; only meaningful while openProgress is 0. */
     property real hoverProgress: 0

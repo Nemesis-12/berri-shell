@@ -125,7 +125,6 @@ test("done state and day queries", () => {
   assert.deepEqual(plain(Queries.itemsOn([ticked], "2026-10-01").map((o) => o.done)), [false]);
   const mixed = [item({ title: "b", date: "2026-10-01", time: "09:00" }), item({ title: "a", date: "2026-10-01" }), item({ title: "c", date: "2026-10-01", time: "08:00" })];
   assert.deepEqual(plain(Queries.itemsOn(mixed, "2026-10-01").map((o) => o.title)), ["a", "c", "b"]);
-  assert.deepEqual(plain(Items.snoozeTarget("23:50", "2026-10-01", 15, "2026-09-01", "10:00")), { date: "2026-10-02", time: "00:05" });
 });
 
 test("unknown properties and components from other apps survive", () => {

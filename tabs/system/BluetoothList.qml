@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell.Bluetooth
 import qs.common
 import qs.services
 import "../../logic/ListSync.js" as ListSync

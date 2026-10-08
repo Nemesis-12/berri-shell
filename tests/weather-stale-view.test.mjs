@@ -19,6 +19,7 @@ function runViews(change = () => {}) {
     const stand = path.join(repo, "tests/fixtures/weather-stale");
     for (const name of ["Theme", "Weather", "Clock"])
       fs.copyFileSync(path.join(stand, `${name}.qml`), path.join(folder, `services/${name}.qml`));
+    fs.copyFileSync(path.join(repo, "services/StandardColorMotion.qml"), path.join(folder, "services/StandardColorMotion.qml"));
     fs.copyFileSync(path.join(stand, "test.qml"), path.join(folder, "test.qml"));
     fs.mkdirSync(path.join(folder, "qs"));
     fs.symlinkSync(path.join(folder, "logic"), path.join(folder, "qs/logic"));

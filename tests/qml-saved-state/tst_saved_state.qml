@@ -1,7 +1,7 @@
 import QtQuick
 import QtTest
 import Quickshell.Io
-import qs.common
+import qs.services
 
 // SavedState with a fake disk: load results, failed writes and the backup before a write.
 TestCase {

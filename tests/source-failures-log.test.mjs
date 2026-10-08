@@ -39,7 +39,7 @@ function run(service, file, rounds) {
       .replace(/"\.\.\/logic\/([A-Za-z]+\.js)"/g, (_, name) => JSON.stringify(path.join(repo, "logic", name)));
     fs.writeFileSync(path.join(folder, "ServiceUnderTest.qml"), prepare(`services/${file}`));
     // Shared parts the service uses sit next to it, like the real common folder.
-    fs.writeFileSync(path.join(folder, "CachedSource.qml"), prepare("common/CachedSource.qml"));
+    fs.writeFileSync(path.join(folder, "CachedSource.qml"), prepare("services/CachedSource.qml"));
     const runner = fs.readFileSync(path.join(repo, "tests/fixtures/source-failures.qml"), "utf8")
       .replace("TEST_CONFIG", JSON.stringify({ service, rounds }));
     const entry = path.join(folder, "test.qml");
