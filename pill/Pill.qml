@@ -219,144 +219,19 @@ Item {
         }
 
         // Clock/date/weather; hidden while opening/open/closing, shown at rest.
-        // The clock sits at a fixed, rounded center so it never moves while
-        // the pill's width animates; date and weather anchor off its edges
-        // (not a layout row) so nothing snaps to a fractional pixel each frame.
-        Item {
+        PillClockGroup {
             id: clockGroup
             anchors.fill: parent
-            // The shared minute clock ticks only while this group shows.
-            visible: opacity > 0.001 && root.opacity > 0.001
-            WhileVisible { service: Clock }
-
-            // A notification card covers the pill: the clock fades out under it.
-            // States/Transitions, not a Behavior: the fade in has a delay.
-            property real uncovered: 1
-            state: root.popupActive ? "covered" : "clear"
-            states: [
-                State { name: "clear"; PropertyChanges { target: clockGroup; uncovered: 1 } },
-                State { name: "covered"; PropertyChanges { target: clockGroup; uncovered: 0 } }
-            ]
-            transitions: [
-                Transition {
-                    from: "covered"; to: "clear"
-                    SequentialAnimation {
-                        PauseAnimation { duration: 160 }
-                        NumberAnimation { target: clockGroup; property: "uncovered"; duration: 240 }
-                    }
-                },
-                Transition {
-                    from: "clear"; to: "covered"
-                    NumberAnimation { target: clockGroup; property: "uncovered"; duration: 140 }
-                }
-            ]
-
-            opacity: uncovered * (1 - Timeline.fadeSlice(root.elapsedMs, 0, root.clockFadeMs, root.closing, root.clockCloseAtMs))
-
-            // Clock: auto width, fixed at the pill's rounded center.
-            Text {
-                textFormat: Text.PlainText
-                id: clockText
-                x: PixelGrid.snap((parent.width - width) / 2, root.dpr)
-                anchors.verticalCenter: parent.verticalCenter
-                text: Qt.formatDateTime(Clock.minute, "h:mm AP")
-                font.family: Theme.condensed
-                font.weight: Font.Medium
-                font.pixelSize: 15
-                font.letterSpacing: -0.15
-                color: Theme.fg
-            }
-
-            // Date: right-aligned against the clock's left edge.
-            Text {
-                textFormat: Text.PlainText
-                id: dateText
-                anchors.right: clockText.left
-                anchors.rightMargin: 10
-                anchors.verticalCenter: clockText.verticalCenter
-                text: Qt.formatDateTime(Clock.minute, "ddd d")
-                font.family: Theme.mono
-                font.weight: Font.Medium
-                font.pixelSize: 10
-                color: Theme.dim
-                opacity: root.hovered ? 1 : 0
-                Fade on opacity { duration: Theme.stateMs }
-
-                transform: Translate {
-                    x: root.hovered ? 0 : 8
-                    Behavior on x {
-                        SpringMotion {
-                            duration: 500
-                        }
-                    }
-                }
-            }
-
-            // Weather icon + temperature: left-aligned against the clock's right edge.
-            Row {
-                id: weatherRow
-                anchors.left: clockText.right
-                anchors.leftMargin: 10
-                anchors.verticalCenter: clockText.verticalCenter
-                spacing: 5
-                opacity: root.hovered ? 1 : 0
-                Fade on opacity { duration: Theme.stateMs }
-
-                transform: Translate {
-                    x: root.hovered ? 0 : -8
-                    Behavior on x {
-                        SpringMotion {
-                            duration: 500
-                        }
-                    }
-                }
-
-                Icon {
-                    anchors.verticalCenter: parent.verticalCenter
-                    name: Weather.iconName
-                    size: 14
-                    strokeWidth: 1.5
-                    color: Theme.dim
-                }
-
-                Text {
-                    textFormat: Text.PlainText
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: Weather.ready ? Weather.temperatureC + "°" : "--°"
-                    font.family: Theme.mono
-                    font.weight: Font.Medium
-                    font.pixelSize: 10
-                    color: Theme.dim
-                }
-            }
-
-            // Tray: after the weather, same reveal motion (fade + slide in from the left).
-            PillTray {
-                id: trayRow
-                anchors.left: weatherRow.right
-                anchors.leftMargin: 8
-                anchors.verticalCenter: clockText.verticalCenter
-                items: root.trayItems
-                menuItem: trayLayers.menuItem
-                gridOpen: trayLayers.gridOpen
-                flashItem: trayLayers.flashItem
-                enabled: root.hovered
-                opacity: root.hovered ? 1 : 0
-                Fade on opacity { duration: Theme.stateMs }
-
-                transform: Translate {
-                    x: root.hovered ? 0 : -8
-                    Behavior on x {
-                        SpringMotion {
-                            duration: 500
-                        }
-                    }
-                }
-
-                onActivated: (item, button) => trayLayers.activate(item, button)
-                onMenuRequested: (item, button) => trayLayers.openMenu(item, button)
-                onMoreClicked: (chip) => trayLayers.toggleGrid(chip)
-            }
+            hovered: root.hovered
+            popupActive: root.popupActive
+            pillShown: root.opacity > 0.001
+            dpr: root.dpr
+            elapsedMs: root.elapsedMs
+            closing: root.closing
+            clockFadeMs: root.clockFadeMs
+            clockCloseAtMs: root.clockCloseAtMs
+            trayItems: root.trayItems
+            trayLayers: trayLayers
         }
 
         // Dashboard frame: content area (left) + spine column (right). Fades in
