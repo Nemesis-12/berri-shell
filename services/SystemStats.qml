@@ -95,7 +95,9 @@ Singleton {
     Process {
         id: probeProc
         command: ["sh", "-c", "sh \"$1\" sensors;"
-            + " echo \"O $(. /etc/os-release; echo $NAME)\"; echo \"K $(cat /proc/sys/kernel/osrelease)\"; echo \"N $(cat /proc/sys/kernel/hostname)\"",
+            + " echo \"" + Readings.PROBE_PREFIX.distribution + "$(. /etc/os-release; echo $NAME)\";"
+            + " echo \"" + Readings.PROBE_PREFIX.kernel + "$(cat /proc/sys/kernel/osrelease)\";"
+            + " echo \"" + Readings.PROBE_PREFIX.hostname + "$(cat /proc/sys/kernel/hostname)\"",
             "system-probe", Quickshell.shellPath("scripts/system-hardware.sh")]
         stdout: StdioCollector {
             waitForEnd: true
@@ -113,9 +115,9 @@ Singleton {
         sensors.missing.forEach(function (name) { root.sensorUnavailable(name); });
         var lines = text.split("\n");
         for (var i = 0; i < lines.length; i++) {
-            if (lines[i].indexOf("O ") === 0) distroName = lines[i].slice(2);
-            else if (lines[i].indexOf("K ") === 0) kernelName = lines[i].slice(2);
-            else if (lines[i].indexOf("N ") === 0) hostName = lines[i].slice(2);
+            if (lines[i].indexOf(Readings.PROBE_PREFIX.distribution) === 0) distroName = lines[i].slice(Readings.PROBE_PREFIX.distribution.length);
+            else if (lines[i].indexOf(Readings.PROBE_PREFIX.kernel) === 0) kernelName = lines[i].slice(Readings.PROBE_PREFIX.kernel.length);
+            else if (lines[i].indexOf(Readings.PROBE_PREFIX.hostname) === 0) hostName = lines[i].slice(Readings.PROBE_PREFIX.hostname.length);
         }
         probed = true;
     }

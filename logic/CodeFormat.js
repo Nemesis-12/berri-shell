@@ -4,6 +4,10 @@
 var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+// Fields of each contribution day supplied by github-stats.py.
+var CONTRIBUTION_DATE = 0;
+var CONTRIBUTION_COUNT = 1;
+
 var CLAUDE_SOURCE = "claude";
 var CODEX_SOURCE = "codex";
 var USAGE_CHOICES = [{ id: CLAUDE_SOURCE, label: "Claude" }, { id: CODEX_SOURCE, label: "Codex" }];
