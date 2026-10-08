@@ -32,7 +32,7 @@ Scope {
     /** Name of the version field in the answer. */
     property string versionKey: ""
 
-    /** True while at least one view shows this data. */
+    /** True while at least one view shows this data. Use open() and close(), not a binding: they run in the order the service calls them. */
     property bool active: false
 
     /** True when the last data stays after the last view hides. */
@@ -66,6 +66,18 @@ Scope {
         process.command = ["python3", Quickshell.shellPath("scripts/" + root.script)]
             .concat(root.args).concat(force ? ["--force"] : []);
         process.running = true;
+    }
+
+    /** The first view shows: start an old source, or wait for the cache time to end. */
+    function open() {
+        root.active = true;
+        root.check();
+    }
+
+    /** The last view hides: stop the timer. */
+    function close() {
+        root.active = false;
+        root.release();
     }
 
     /** Start an old source, or set the timer to the time left in the cache time. */

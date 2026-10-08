@@ -51,11 +51,14 @@ Singleton {
     onViewersChanged: {
         if (root.viewers === 1) {
             root.now = new Date();
-            root.checkFreshData();
+            // GitHub starts before commits, so commits wait for it.
+            stats.open();
+            github.open();
+            commitsSource.open();
         } else if (root.viewers === 0) {
-            stats.release();
-            github.release();
-            commitsSource.release();
+            stats.close();
+            github.close();
+            commitsSource.close();
             // The tab is closed. Keep small summaries, but release the year grid and history.
             root.calendar = [];
             root.calendarYears = [];
@@ -71,20 +74,12 @@ Singleton {
         commitsSource.start(true);
     }
 
-    /** Start old sources, or set their next timer from the saved answer age. */
-    function checkFreshData() {
-        stats.check();
-        github.check();
-        commitsSource.check();
-    }
-
     CachedSource {
         id: stats
         name: "code stats"
         script: "code-stats.py"
         versionKey: "generatedAt"
         age: root.localAge
-        active: root.viewers > 0
         keepWhenIdle: true
         onAnswered: data => {
             root.days = data.days;
@@ -99,7 +94,6 @@ Singleton {
         script: "github-stats.py"
         versionKey: "fetchedAt"
         age: root.githubAge
-        active: root.viewers > 0
         onAnswered: data => {
             root.calendar = data.days;
             root.calendarTotal = data.total;
@@ -116,7 +110,6 @@ Singleton {
         args: ["--with-version"]
         versionKey: "version"
         age: root.localAge
-        active: root.viewers > 0
         blocked: github.running
         onAnswered: data => root.commits = data.commits
     }

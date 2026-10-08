@@ -1,5 +1,6 @@
 import QtQuick
 import QtTest
+import Quickshell.Io
 import qs.common
 import qs.services
 import qs.tabs.code
@@ -177,6 +178,24 @@ Item {
                 compare(runningTimers(CodeData), 0);
                 compare(runningTimers(AgentUsage), 0);
             }
+        }
+
+        function test_first_code_viewer_starts_each_source_once() {
+            compare(CodeData.viewers, 0);
+            wait(100); // Let fake scripts from earlier tests end.
+            ProcessLog.commands = [];
+            CodeData.viewers = 1;
+            const started = name => ProcessLog.commands.filter(c => c.some(part => String(part).endsWith(name))).length;
+            // Stats keep their cache time after a hide, so an earlier test may have made them fresh.
+            verify(started("code-stats.py") <= 1);
+            compare(started("github-stats.py"), 1);
+            // Commits wait for GitHub. The fake process never reports its end, so they do not start here.
+            compare(started("local-commits.py"), 0);
+            wait(200);
+            verify(started("code-stats.py") <= 1);
+            compare(started("github-stats.py"), 1);
+            compare(started("local-commits.py"), 0);
+            CodeData.viewers = 0;
         }
 
         function test_shared_requests_stay_until_the_last_owner_releases() {
