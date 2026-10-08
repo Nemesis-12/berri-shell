@@ -138,136 +138,15 @@ Item {
         width: root.filterWidth
         height: parent.height
 
-        // Unread count.
-        Rectangle {
+        AlertsUnreadCard {
             id: unreadCard
             width: parent.width
-            height: 96
-            color: Theme.card
-            clip: true
-
-            Text {
-                textFormat: Text.PlainText
-                x: 10
-                y: 84
-                rotation: -90
-                transformOrigin: Item.TopLeft
-                text: "INBOX"
-                font.family: Theme.mono
-                font.pixelSize: 9
-                font.weight: Font.Medium
-                font.letterSpacing: 1.62
-                color: Theme.dim
-            }
-
-            AlertsSwap {
-                id: bigCount
-                x: 29
-                y: 84 - 48 - 12.5
-                height: 48
-                text: String(Notifications.unreadCount)
-                color: Theme.fg
-                font.family: Theme.condensed
-                font.pixelSize: 60
-                font.weight: Font.Medium
-                font.letterSpacing: -1.8
-                lineHeight: 48
-                travel: 16
-            }
-
-            Text {
-                textFormat: Text.PlainText
-                x: bigCount.x + bigCount.width + 8
-                y: 84 - 2 - 9 - 2
-                text: "UNREAD"
-                font.family: Theme.mono
-                font.pixelSize: 9
-                font.weight: Font.Medium
-                font.letterSpacing: 1.26
-                color: Theme.dim
-            }
         }
 
-        // Do not disturb.
-        Item {
+        AlertsDndRow {
             id: dndRow
             y: unreadCard.height + root.gap
             width: parent.width
-            height: 56
-
-            readonly property bool on: Notifications.dnd
-
-            Rectangle {
-                anchors.fill: parent
-                color: Theme.card
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                color: Theme.hover
-                opacity: dndArea.containsMouse && !dndRow.on ? 1 : 0
-                Fade on opacity {}
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                color: Theme.selectionSoft
-                opacity: dndRow.on ? 1 : 0
-                Fade on opacity  { duration: Theme.stateMs }
-            }
-
-            Rectangle {
-                width: parent.width
-                height: 2
-                color: Theme.accentLight
-                opacity: dndRow.on ? 1 : 0
-                Fade on opacity  { duration: Theme.stateMs }
-            }
-
-            Icon {
-                x: 14
-                anchors.verticalCenter: parent.verticalCenter
-                name: "moon"
-                size: 17
-                strokeWidth: 1.6
-                color: dndRow.on ? Theme.accentLight : Theme.dim
-                ColorFade on color  { duration: Theme.stateMs }
-            }
-
-            Text {
-                textFormat: Text.PlainText
-                x: 14 + 17 + 10
-                anchors.verticalCenter: parent.verticalCenter
-                text: "DO NOT DISTURB"
-                font.family: Theme.mono
-                font.pixelSize: 10
-                font.weight: Font.Medium
-                font.letterSpacing: 1.2
-                color: Theme.fg
-            }
-
-            ToggleSwitch {
-                x: parent.width - 14 - width
-                anchors.verticalCenter: parent.verticalCenter
-                width: 30
-                height: 16
-                radius: 0
-                knobSize: 10
-                knobRadius: 0
-                checked: dndRow.on
-                interactive: false
-                onColor: Theme.accentLight
-                emphasized: true
-                slideMs: 200
-            }
-
-            MouseArea {
-                id: dndArea
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: Notifications.setDnd(!Notifications.dnd)
-            }
         }
 
         // All, Unread and the apps. Scrolls when there are more apps than fit.
@@ -392,64 +271,11 @@ Item {
 
         // Do not disturb banner. One progress value drives height and fade;
         // the list below follows the height, so closing plays opening backwards.
-        Item {
+        AlertsDndBanner {
             id: dndBanner
             y: viewHeader.height + root.gap
             width: parent.width
-            height: (bannerBody.height + root.gap) * shownAmount
-            clip: true
-            visible: shownAmount > 0.001
-
-            property real shownAmount: Notifications.dnd ? 1 : 0
-            Behavior on shownAmount {
-                StandardMotion {
-                    duration: 260
-                }
-            }
-
-            Rectangle {
-                id: bannerBody
-                width: parent.width
-                height: 46
-                color: Theme.selectionSoft
-                opacity: dndBanner.shownAmount
-
-                Rectangle {
-                    width: parent.width
-                    height: 2
-                    color: Theme.accentLight
-                }
-
-                Text {
-                    textFormat: Text.PlainText
-                    x: 14
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - 14 - 6 - turnOff.width - 10
-                    elide: Text.ElideRight
-                    text: "DO NOT DISTURB IS ON · NEW NOTIFICATIONS ARRIVE SILENTLY"
-                    font.family: Theme.mono
-                    font.pixelSize: 9
-                    font.weight: Font.Medium
-                    font.letterSpacing: 0.54
-                    color: Theme.fg2
-                }
-
-                HoverButton {
-                    id: turnOff
-                    x: parent.width - 6 - width
-                    anchors.verticalCenter: parent.verticalCenter
-                    sidePadding: 10
-                    height: 26
-                    fill: Theme.accentLight
-                    hoverFill: Qt.rgba(1, 1, 1, 0.18)
-                    textColor: Theme.onAccent
-                    hoverTextColor: Theme.onAccent
-                    letterSpacing: 1.08
-                    label: "TURN OFF"
-                    enabled: Notifications.dnd
-                    onClicked: Notifications.setDnd(false)
-                }
-            }
+            gap: root.gap
         }
 
         Rectangle {

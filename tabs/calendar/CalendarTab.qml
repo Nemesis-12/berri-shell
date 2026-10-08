@@ -146,25 +146,20 @@ Item {
     property string overKey: ""
 
     function beginDrag(info) {
-        settle.stop();
         root.dragging = true;
         root.dragUid = info.uid;
         root.dragOccurrenceDate = info.occurrenceDate;
         root.dragFromKey = info.fromKey;
         root.dragGrab = info.grab;
         root.dragOrigin = root.mapFromItem(null, info.origin.x, info.origin.y);
-        ghost.info = info;
-        ghost.opacity = 0.8;
-        ghost.width = info.width;
-        ghost.height = info.height;
+        ghost.pickUp(info);
         root.moveDrag(root.mapToItem(null, root.dragOrigin.x + info.grab.x, root.dragOrigin.y + info.grab.y));
     }
 
     // The ghost follows the pointer: set here and nowhere else, whole pixels.
     function moveDrag(scenePoint) {
         var p = root.mapFromItem(null, scenePoint.x, scenePoint.y);
-        ghost.x = Math.round(p.x - root.dragGrab.x);
-        ghost.y = Math.round(p.y - root.dragGrab.y);
+        ghost.moveTo(Math.round(p.x - root.dragGrab.x), Math.round(p.y - root.dragGrab.y));
         var day = root.frontGrid.dayAtScene(scenePoint);
         root.overKey = day ? Times.dayKey(day) : "";
     }
@@ -182,23 +177,18 @@ Item {
             if (Calendar.move(root.dragUid, root.dragOccurrenceDate, Times.dayKey(day))) root.pick(day);
             else target = null;
             // Into the chip slot of the cell (6px left, 5px number row and gap above).
-            settleX.to = target ? target.x + 6 : root.dragOrigin.x;
-            settleY.to = target ? target.y + 24 : root.dragOrigin.y;
+            ghost.flyTo(target ? target.x + 6 : root.dragOrigin.x, target ? target.y + 24 : root.dragOrigin.y);
         } else {
-            settleX.to = root.dragOrigin.x;
-            settleY.to = root.dragOrigin.y;
+            ghost.flyTo(root.dragOrigin.x, root.dragOrigin.y);
         }
         root.overKey = "";
         root.dragging = false;
-        settle.restart();
     }
 
     function abortDrag() {
         root.overKey = "";
         root.dragging = false;
-        settleX.to = root.dragOrigin.x;
-        settleY.to = root.dragOrigin.y;
-        settle.restart();
+        ghost.flyTo(root.dragOrigin.x, root.dragOrigin.y);
     }
 
     // The shared minute clock updates today at midnight and when the view opens.
@@ -270,110 +260,16 @@ Item {
         anchors.left: parent.left
         width: 434
 
-        // Title row: month, year, previous, today, next.
-        Item {
+        CalendarTitleRow {
             id: titleRow
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
-            height: 56
-
-            Rectangle {
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                anchors.left: parent.left
-                anchors.right: prevButton.left
-                anchors.rightMargin: 1
-                color: Theme.card
-                topLeftRadius: 7
-
-                // Both texts sit in boxes as tall as their CSS line (34px and 10px) and are centered in the row.
-                Item {
-                    id: monthBox
-                    x: 14
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: monthText.implicitWidth
-                    height: 34
-
-                    Text {
-                        textFormat: Text.PlainText
-                        id: monthText
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: Times.monthsLong[root.viewMonth].toUpperCase()
-                        font.family: Theme.condensed
-                        font.pixelSize: 34
-                        font.weight: Font.Medium
-                        font.letterSpacing: -0.68
-                        color: Theme.fg
-                    }
-                }
-
-                Item {
-                    x: monthBox.x + monthBox.width + 10
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: yearText.implicitWidth
-                    height: 10
-
-                    MonoText {
-                        id: yearText
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: root.viewYear
-                        font.pixelSize: 10
-                        font.weight: Font.Medium
-                        font.letterSpacing: 1.2
-                        color: Theme.dim
-                    }
-                }
-            }
-
-            // Month navigation with the same label and icon measurements.
-            component HeaderButton: HoverButton {
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                fill: Theme.card
-                hoverFill: Theme.raised
-                textColor: Theme.fg2
-                hoverTextColor: Theme.fg2
-                fontSize: 10
-                letterSpacing: 1.4
-                iconSize: 17
-                iconStrokeWidth: 1.6
-            }
-
-            HeaderButton {
-                id: prevButton
-                anchors.right: todayButton.left
-                anchors.rightMargin: 1
-                width: 48
-                icon: "chevron-left"
-                onClicked: root.showMonth(root.viewYear, root.viewMonth - 1)
-            }
-
-            HeaderButton {
-                id: todayButton
-                anchors.right: nextButton.left
-                anchors.rightMargin: 1
-                width: todayMetrics.implicitWidth + 28
-                label: "TODAY"
-                onClicked: root.today_()
-
-                MonoText {
-                    id: todayMetrics
-                    visible: false
-                    text: "TODAY"
-                    font.pixelSize: 10
-                    font.weight: Font.Medium
-                    font.letterSpacing: 1.4
-                }
-            }
-
-            HeaderButton {
-                id: nextButton
-                anchors.right: parent.right
-                width: 48
-                icon: "chevron-right"
-                onClicked: root.showMonth(root.viewYear, root.viewMonth + 1)
-            }
+            viewYear: root.viewYear
+            viewMonth: root.viewMonth
+            onPreviousRequested: root.showMonth(root.viewYear, root.viewMonth - 1)
+            onTodayRequested: root.today_()
+            onNextRequested: root.showMonth(root.viewYear, root.viewMonth + 1)
         }
 
         // Month grid (weekday header and two pages). Fades out and moves up while the calendars view flips in.
@@ -497,128 +393,10 @@ Item {
         onSaved: dateKey => root.pick(root.dayOf(dateKey))
     }
 
-    // Drag ghost: a translucent copy of the chip or row, above everything.
-    Item {
-        id: ghost
+    CalendarDragGhost { id: ghost }
 
-        property var info: ({ shape: "chip", title: "", meta: "", done: false, tint: "white" })
-        readonly property bool isRow: info.shape === "row"
-        readonly property color tint: info.tint
-
-        z: 100
-        opacity: 0
-        visible: opacity > 0
-        enabled: false
-
-        Rectangle {
-            anchors.fill: parent
-            color: ghost.isRow ? Theme.raised : Theme.card
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            color: Qt.rgba(ghost.tint.r, ghost.tint.g, ghost.tint.b, 0.15)
-            visible: !ghost.isRow
-        }
-
-        Rectangle {
-            width: 2
-            height: parent.height
-            color: ghost.tint
-        }
-
-        Text {
-            textFormat: Text.PlainText
-            x: ghost.isRow ? 14 : 6
-            y: ghost.isRow ? 8 : Math.round((ghost.height - height) / 2)
-            width: ghost.width - x - 6
-            text: ghost.info.title
-            elide: Text.ElideRight
-            font.family: Theme.condensed
-            font.pixelSize: ghost.isRow ? 14 : 10
-            font.weight: Font.Medium
-            font.strikeout: ghost.info.done
-            color: ghost.info.done ? Theme.mute : (ghost.isRow ? Theme.fg : Theme.fg2)
-        }
-
-        MonoText {
-            visible: ghost.isRow
-            x: 14
-            y: 8 + 14 + 4
-            width: ghost.width - 20
-            text: ghost.info.meta || ""
-            elide: Text.ElideRight
-            font.pixelSize: 9
-            font.weight: Font.Medium
-            font.letterSpacing: 0.36
-            color: Theme.dim
-        }
-    }
-
-    Rectangle {
-        z: 200
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: 36
-        color: Theme.raised
-        opacity: root.saveError !== "" ? 1 : 0
-        visible: opacity > 0
-        enabled: root.saveError !== ""
-        Fade on opacity { duration: Theme.stateMs }
-
-        Rectangle {
-            width: 2
-            height: parent.height
-            color: CalendarColors.paletteColor("red", Theme.accent)
-        }
-
-        MonoText {
-            anchors.left: parent.left
-            anchors.leftMargin: 12
-            anchors.right: dismissError.left
-            anchors.rightMargin: 8
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.saveError
-            elide: Text.ElideRight
-            font.pixelSize: 10
-            color: Theme.fg
-        }
-
-        HoverButton {
-            id: dismissError
-            anchors.right: parent.right
-            anchors.rightMargin: 6
-            anchors.verticalCenter: parent.verticalCenter
-            width: 24
-            height: 24
-            icon: "x"
-            iconSize: 13
-            onClicked: root.saveError = ""
-        }
-    }
-
-    // Settle: move to the new cell or back to where it started, and fade. The ghost is a copy, so it fades while it arrives.
-    ParallelAnimation {
-        id: settle
-
-        StandardMotion {
-            id: settleX
-            target: ghost
-            property: "x"
-            duration: 220
-        }
-        StandardMotion {
-            id: settleY
-            target: ghost
-            property: "y"
-            duration: 220
-        }
-        StandardMotion {
-            target: ghost
-            property: "opacity"
-            to: 0
-            duration: 220
-        }
+    CalendarSaveError {
+        message: root.saveError
+        onDismissed: root.saveError = ""
     }
 }
