@@ -18,7 +18,7 @@ Item {
     property int day: 0
     property bool clock24: false
 
-    readonly property var detail: { Weather.updatedAt; return Weather.dayDetail(root.day) || ({}); }
+    readonly property var detail: Weather.dayDetail(root.day) || ({})
     readonly property bool isNow: root.day === 0
     /** True while the last refresh failed: the readout turns dim and a chip shows the age. */
     readonly property bool stale: Weather.error !== ""

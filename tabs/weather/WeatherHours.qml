@@ -18,7 +18,7 @@ Item {
     /** Number of hour columns. */
     readonly property int columns: 6
 
-    readonly property var hours: { Weather.updatedAt; return (Weather.stripHours(root.day) || []).slice(0, root.columns); }
+    readonly property var hours: (Weather.stripHours(root.day) || []).slice(0, root.columns)
     readonly property bool isNow: root.day === 0
 
     Rectangle {
