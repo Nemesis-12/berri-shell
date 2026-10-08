@@ -14,16 +14,16 @@ Singleton {
     readonly property string weatherSettings: home + "/.local/state/omarchy/settings/weather.json"
     property bool stateReady: false
 
-    // Makes the state root private once for all SavedState objects.
+    // Creates the missing state root once for all SavedState objects.
     Process {
         running: true
-        command: ["sh", Quickshell.shellPath("scripts/private-folder.sh"), root.state]
+        command: ["mkdir", "-p", "-m", "700", "--", root.state]
         onExited: root.stateReady = true
     }
 
-    // The library root is ready before the first wallpaper copy.
+    // Creates the missing library root without changing existing files.
     Process {
         running: true
-        command: ["sh", Quickshell.shellPath("scripts/private-folder.sh"), root.wallpapers]
+        command: ["mkdir", "-p", "-m", "700", "--", root.wallpapers]
     }
 }

@@ -187,10 +187,10 @@ Scope {
         }
     }
 
-    // Create the owner-only calendar folder before a feed or edit can write to it.
+    // Create missing calendar folders without changing existing file permissions.
     Process {
         running: root.active && !root.folderReady
-        command: ["sh", Quickshell.shellPath("scripts/private-folder.sh"), root.folder, root.folder + "/subscriptions"]
+        command: ["mkdir", "-p", "-m", "700", "--", root.folder, root.folder + "/subscriptions"]
         onExited: (code, status) => {
             if (code !== 0) return;
             root.folderReady = true;
