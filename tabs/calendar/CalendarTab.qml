@@ -74,7 +74,7 @@ Item {
             sourcesView.releaseFocus();
             root.closedDay = Times.dayKey(root.today);
         } else if (root.closedDay !== "" && Times.dayKey(root.today) !== root.closedDay) {
-            root.today_();
+            root.selectToday();
         }
     }
 
@@ -227,7 +227,7 @@ Item {
         detailsForm.openEdit(uid, occurrenceDate);
     }
 
-    function today_() {
+    function selectToday() {
         root.selectedDate = root.today;
         root.showMonth(root.today.getFullYear(), root.today.getMonth());
     }
@@ -268,7 +268,7 @@ Item {
             viewYear: root.viewYear
             viewMonth: root.viewMonth
             onPreviousRequested: root.showMonth(root.viewYear, root.viewMonth - 1)
-            onTodayRequested: root.today_()
+            onTodayRequested: root.selectToday()
             onNextRequested: root.showMonth(root.viewYear, root.viewMonth + 1)
         }
 

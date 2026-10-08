@@ -235,7 +235,7 @@ Singleton {
         _order = _order.filter(function (o) { return o !== id; });
         files.cancelDownloads(id);
         files.removeFile(path);
-        _finishAdd();
+        _applyCalendarListChange();
         return true;
     }
 
@@ -332,8 +332,8 @@ Singleton {
         return meta;
     }
 
-    // Saves state, adjusts the FileViews to the calendar list and rebuilds.
-    function _finishAdd(): void {
+    // After any change to the calendar list (add, remove, load): adjusts the FileViews, saves state and rebuilds.
+    function _applyCalendarListChange(): void {
         _syncPaths();
         _saveState();
         _rebuild();
