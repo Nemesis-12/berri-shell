@@ -1,4 +1,5 @@
 import QtQuick
+import "../../logic/Times.js" as Times
 import qs.common
 import qs.services
 
