@@ -1,6 +1,4 @@
 import QtQuick
-import qs.common
-import qs.services
 
 /**
  * Wallpapers tab body of the open picker: the wallpaper carousel above the

@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell.Services.Pipewire
 import qs.common
 import qs.services
-import qs.tabs.home
 
 /**
  * Row of up to three output devices (Pipewire sinks) under the album art.

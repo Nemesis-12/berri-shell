@@ -1,5 +1,4 @@
 import QtQuick
-import qs.common
 import qs.notifications
 import qs.services
 
