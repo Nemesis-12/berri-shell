@@ -364,8 +364,6 @@ Singleton {
 
     onReadyChanged: if (ready) links.refreshAll(true)
 
-    function _refreshLinks(onlyStale: bool): void { links.refreshAll(onlyStale); }
-
     function readErrorText(name: string): string { return "Could not read " + name; }
 
     // ---- state file

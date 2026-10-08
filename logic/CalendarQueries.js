@@ -2,6 +2,7 @@
 .import "Times.js" as Times
 .import "CalendarFormat.js" as Format
 .import "CalendarItems.js" as Items
+.import "CalendarRepeat.js" as Repeat
 
 /** Joins calendar copies and answers day, month, color and duplicate queries. */
 
@@ -124,14 +125,14 @@ function countStoredDuplicates(feedRecords, calendars) {
 
 /**
  * { "YYYY-MM-DD": [Occurrence] } for days from..to. Shared events show once.
- * The work is limited (Items.workLimits). When an item or the whole query is over
+ * The work is limited (Repeat.workLimits). When an item or the whole query is over
  * the limit, those items are left out and the hidden property `limited` is true.
  */
 function occurrencesByDay(items, fromKey, toKey, names) {
     var all = [];
-    var budget = Items.newWorkBudget();
+    var budget = Repeat.newWorkBudget();
     for (var i = 0; i < items.length; i++) {
-        var list = Items.expand(items[i], fromKey, toKey, budget);
+        var list = Repeat.expand(items[i], fromKey, toKey, budget);
         for (var j = 0; j < list.length; j++) all.push(list[j]);
     }
     var days = {};
@@ -150,7 +151,7 @@ function itemsOn(items, dateKey) {
 
 /** Same as occurrencesByDay for the whole calendar month (month 1 to 12). */
 function itemsInMonth(items, year, month, names) {
-    var last = Items.daysInMonth(year, month);
+    var last = Repeat.daysInMonth(year, month);
     var prefix = Times.pad(year, 4) + "-" + Times.pad(month) + "-";
     return occurrencesByDay(items, prefix + "01", prefix + Times.pad(last), names);
 }
@@ -332,7 +333,7 @@ function updateStoredCalendar(projection, calendar) {
 
 function storedItemsInMonth(projection, year, month) {
     var first = Times.pad(year, 4) + "-" + Times.pad(month) + "-01";
-    var last = Times.pad(year, 4) + "-" + Times.pad(month) + "-" + Times.pad(Items.daysInMonth(year, month));
+    var last = Times.pad(year, 4) + "-" + Times.pad(month) + "-" + Times.pad(Repeat.daysInMonth(year, month));
     var shown = [];
     var tooMany = false;
     for (var f = 0; f < projection.sources.length; f++) {
@@ -345,10 +346,10 @@ function storedItemsInMonth(projection, year, month) {
         for (var i = 0; i < records.length; i++) {
             var r = records[i];
             if (r.date > last) break;
-            if (shown.length >= Items.workLimits.items) { tooMany = true; break; }
-            if (r.repeat === "none" && Items.addDays(r.date, Items.spanDays(r)) < first) continue;
+            if (shown.length >= Repeat.workLimits.items) { tooMany = true; break; }
+            if (r.repeat === "none" && Items.addDays(r.date, Repeat.spanDays(r)) < first) continue;
             if (r.repeat !== "none" && r.until) {
-                var span = Items.spanDays(r);
+                var span = Repeat.spanDays(r);
                 if (r.until < Items.addDays(first, -span)) continue;
             }
             var item = Items.projectedItem(Format.expandCompactItem(r), feed.id, true);

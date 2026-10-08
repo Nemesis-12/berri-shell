@@ -1,5 +1,6 @@
 import QtTest
 import "../../logic/CalendarFormat.js" as Format
+import "../../logic/IcsZones.js" as Zones
 import "../../logic/CalendarZone.js" as Zone
 
 // Checks production zone conversion and calendar text without loading the shell.
@@ -29,7 +30,7 @@ TestCase {
         compare(calendar.items[0].time, "02:30");
         const output = Format.writeCalendar(calendar, Zone.instant);
         verify(output.indexOf("DTSTART;TZID=Europe/Berlin:20261005T093027") >= 0);
-        compare(Format.zoneClock(expected, "Europe/Berlin", Zone.instant), "20261005T093027");
+        compare(Zones.zoneClock(expected, "Europe/Berlin", Zone.instant), "20261005T093027");
         compare(Format.readCalendar(output, Zone.instant).items[0].sourceDates.start.instantMs, expected);
     }
 }

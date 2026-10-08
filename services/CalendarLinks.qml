@@ -60,7 +60,7 @@ QtObject {
     readonly property Timer refreshTimer: Timer {
         interval: 30 * 60000
         repeat: true
-        running: store.ready
+        running: links.store.ready
         onTriggered: links.refreshAll(false)
     }
 

@@ -71,13 +71,6 @@ function toKey(value) {
 
 var addDays = Times.addDays;
 
-// Repeat expansion lives in CalendarRepeat.js; callers keep using these names here.
-var expand = Repeat.expand;
-var spanDays = Repeat.spanDays;
-var newWorkBudget = Repeat.newWorkBudget;
-var workLimits = Repeat.workLimits;
-var daysInMonth = Repeat.daysInMonth;
-
 /** A preset key or "#rrggbb" (lowercase, #rgb expanded), else null. */
 function cleanColor(value) {
     if (typeof value !== "string") return null;

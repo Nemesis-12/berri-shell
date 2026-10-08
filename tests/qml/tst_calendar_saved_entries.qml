@@ -48,7 +48,7 @@ TestCase {
             entry({ id: "l-d", kind: "link", file: "subscriptions/l-d.ics", url: "https://ok.example.test/a.ics" })
         ];
         Calendar._loadState({ calendars: links });
-        Calendar._refreshLinks(false);
+        ["l-a", "l-b", "l-c", "l-d"].forEach(id => Calendar.refresh(id));
         // Only the valid link starts a download, into its own file name.
         compare(TestIo.downloads.length, 1);
         compare(TestIo.downloads[0].request.url, "https://ok.example.test/a.ics");
