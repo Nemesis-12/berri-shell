@@ -105,8 +105,8 @@ Item {
         id: picker
         dialogTitle: "Import Calendar"
         nameFilters: ["Calendar files (*.ics)"]
-        startDir: (Quickshell.env("HOME") || "") + "/Downloads"
-        fallbackDir: Quickshell.env("HOME") || ""
+        startDir: FolderRoots.home + "/Downloads"
+        fallbackDir: FolderRoots.home
         onChosen: path => sourcesView.importPicked(path)
         // The panel reopens on the calendars view.
         onFinished: {

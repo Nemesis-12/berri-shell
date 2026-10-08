@@ -17,7 +17,9 @@ test("saved settings and picture choice survive refreshes and running processes 
   const copy = (from, to) => cpSync(path.join(root, from), path.join(imports, to), { recursive: true });
   copy("common/WhileVisible.qml", "qs/common/WhileVisible.qml");
   copy("logic", "qs/logic");
-  for (const name of ["Nightlight", "PowerModes"]) copy(`services/${name}.qml`, `qs/services/${name}.qml`);
+  for (const name of ["Nightlight", "PowerModes", "FolderRoots"]) copy(`services/${name}.qml`, `qs/services/${name}.qml`);
+  const serviceList = path.join(imports, "qs/services/qmldir");
+  writeFileSync(serviceList, readFileSync(serviceList, "utf8") + "singleton FolderRoots 1.0 FolderRoots.qml\n");
   mkdirSync(path.join(imports, "qs/tabs/home"), { recursive: true });
   copy("tabs/home/Profile.qml", "qs/tabs/home/Profile.qml");
   writeFileSync(path.join(imports, "qs/tabs/home/qmldir"), "module qs.tabs.home\nProfile 1.0 Profile.qml\n");

@@ -32,13 +32,13 @@ Scope {
     /** A write failed. `reason` is short text. The change stays pending. */
     signal saveFailed(string reason)
 
-    readonly property string folder: (Quickshell.env("HOME") || "") + "/.local/state/berri-shell"
+    readonly property string folder: FolderRoots.state
 
     /** "", then "ok", "missing", "unreadable" or "invalid" once the file is read. */
     property string loadResult: ""
     /** Reason of the last failed write; "" after a write succeeds. */
     property string saveError: ""
-    property bool folderExists: false
+    readonly property bool folderExists: FolderRoots.stateReady
     property string waitingText: ""
     /** True while a requested change is not on disk yet (also after a failed write). */
     property bool hasWaitingWrite: false
@@ -103,15 +103,8 @@ Scope {
         onTriggered: root.writeWaiting()
     }
 
-    // Makes the folder owner-only (mode 700, files 600) once; a save that comes first waits for it.
-    Process {
-        running: true
-        command: ["sh", Quickshell.shellPath("scripts/private-folder.sh"), root.folder]
-        onExited: {
-            root.folderExists = true;
-            root.writeWaiting();
-        }
-    }
+    // A pending save starts when the shared folder process finishes.
+    onFolderExistsChanged: if (root.folderExists) root.writeWaiting()
 
     // Copies the old file to <name>.json.bak. A failed copy stops the write.
     Process {

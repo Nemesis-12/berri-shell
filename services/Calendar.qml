@@ -38,7 +38,7 @@ Singleton {
     /** How many calendar views are visible now (see WhileVisible.qml). The folder is scanned when the first one opens. */
     property alias viewers: files.viewers
 
-    readonly property string dir: (Quickshell.env("HOME") || "") + "/.local/share/berri-shell/calendar"
+    readonly property string dir: FolderRoots.calendar
     readonly property string defaultPath: dir + "/berri.ics"
 
     /** Goes up by one on every change (own edit or outside change). */

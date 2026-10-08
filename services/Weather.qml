@@ -22,7 +22,7 @@ import "../logic/SourceFailures.js" as SourceFailures
 Singleton {
     id: root
 
-    readonly property string locationPath: (Quickshell.env("HOME") || "") + "/.local/state/omarchy/settings/weather.json"
+    readonly property string locationPath: FolderRoots.weatherSettings
 
     property real latitude: NaN
     property real longitude: NaN

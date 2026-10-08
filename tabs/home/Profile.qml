@@ -28,7 +28,7 @@ Item {
     id: root
 
     readonly property string userName: Quickshell.env("USER") || ""
-    readonly property string homePath: Quickshell.env("HOME") || ""
+    readonly property string homePath: FolderRoots.home
     readonly property string accountsIconPath: "/var/lib/AccountsService/icons/" + userName
     readonly property string facePath: homePath + "/.face"
     readonly property string picturesDirPath: homePath + "/Pictures"

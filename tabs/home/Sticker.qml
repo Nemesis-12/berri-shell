@@ -25,7 +25,7 @@ import qs.services
 Item {
     id: root
 
-    readonly property string homePath: Quickshell.env("HOME") || ""
+    readonly property string homePath: FolderRoots.home
     readonly property string configDirPath: homePath + "/.config/berri-shell"
     readonly property string picturesDirPath: homePath + "/Pictures"
 

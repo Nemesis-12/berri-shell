@@ -6,6 +6,12 @@ Item {
     property string path: ""
     property bool printErrors: true
     property bool atomicWrites: false
+    property bool blockLoading: false
+    property bool blockWrites: false
+    property bool watchChanges: false
+    property bool preload: true
+    signal fileChanged()
+    function reload() { loaded(); }
     signal loaded()
     signal loadFailed(var error)
     signal saved()

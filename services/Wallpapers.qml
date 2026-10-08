@@ -107,7 +107,7 @@ Singleton {
         addProc.running = true;
     }
 
-    property string wallpapersDir: (Quickshell.env("HOME") || "") + "/.local/share/berri-shell/wallpapers"
+    property string wallpapersDir: FolderRoots.wallpapers
 
     Process {
         id: addProc

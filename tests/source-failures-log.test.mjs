@@ -35,7 +35,7 @@ function run(service, file, rounds) {
       .replace(/^import Quickshell.Io\n/m, "")
       .replace(/^import qs\.common\n/m, "")
       .replace(/Quickshell\.shellPath\(/g, "(")
-      .replace('Quickshell.env("HOME")', '"/synthetic-home"')
+      .replace('FolderRoots.weatherSettings', '"/synthetic-home/.local/state/omarchy/settings/weather.json"')
       .replace(/"\.\.\/logic\/([A-Za-z]+\.js)"/g, (_, name) => JSON.stringify(path.join(repo, "logic", name)));
     fs.writeFileSync(path.join(folder, "ServiceUnderTest.qml"), prepare(`services/${file}`));
     // Shared parts the service uses sit next to it, like the real common folder.

@@ -114,8 +114,8 @@ CardCarousel {
         id: picker
         dialogTitle: "Choose Wallpaper"
         nameFilters: ["Images (*.png *.jpg *.jpeg)"]
-        startDir: (Quickshell.env("HOME") || "") + "/Pictures"
-        fallbackDir: Quickshell.env("HOME") || ""
+        startDir: FolderRoots.home + "/Pictures"
+        fallbackDir: FolderRoots.home
         onChosen: (path) => {
             root.addWaiting = true;
             Wallpapers.add(path);

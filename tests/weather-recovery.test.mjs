@@ -33,7 +33,7 @@ function runWeather(scenario) {
       .replace(/^import Quickshell.Io\n/m, "")
       .replace('"../logic/WeatherParse.js"', JSON.stringify(path.join(repo, "logic/WeatherParse.js")))
       .replace('"../logic/SourceFailures.js"', JSON.stringify(path.join(repo, "logic/SourceFailures.js")))
-      .replace('Quickshell.env("HOME")', '"/synthetic-home"');
+      .replace('FolderRoots.weatherSettings', '"/synthetic-home/.local/state/omarchy/settings/weather.json"');
     fs.writeFileSync(path.join(folder, "WeatherUnderTest.qml"), source);
     const config = { scenario, forecast, timeScale: Number(process.env.WEATHER_TEST_TIME_SCALE || 0.01) };
     const runner = fs.readFileSync(path.join(fixture, "weather-recovery.qml"), "utf8")
