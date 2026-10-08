@@ -433,50 +433,16 @@ Item {
                 anchors.right: parent.right
                 clip: true
 
-                CalendarMonthGrid {
+                CalendarMonthPage {
                     id: gridA
-                    anchors.fill: parent
-                    year: new Date().getFullYear()
-                    month: new Date().getMonth()
-                    weekStart: root.weekStart
-                    selectedDate: root.selectedDate
-                    today: root.today
-                    opacity: root.frontIsA ? root.progress : 1 - root.progress
-                    visible: opacity > 0.001
-                    transform: Translate { y: 10 * root.slideSign * (root.frontIsA ? 1 - root.progress : -root.progress) }
-                    z: root.frontIsA ? 1 : 0
-                    enabled: root.frontIsA
-                    dropKey: root.frontIsA ? root.overKey : ""
-                    onDayPicked: day => root.pick(day)
-                    onDayAddRequested: day => root.addOn(day)
-                    onItemPicked: (day, uid, occurrenceDate) => root.openItem(day, uid, occurrenceDate)
-                    onDragStarted: info => root.beginDrag(info)
-                    onDragMoved: scenePoint => root.moveDrag(scenePoint)
-                    onDragFinished: scenePoint => root.endDrag(scenePoint)
-                    onDragAborted: root.abortDrag()
+                    tab: root
+                    front: root.frontIsA
                 }
 
-                CalendarMonthGrid {
+                CalendarMonthPage {
                     id: gridB
-                    anchors.fill: parent
-                    year: new Date().getFullYear()
-                    month: new Date().getMonth()
-                    weekStart: root.weekStart
-                    selectedDate: root.selectedDate
-                    today: root.today
-                    opacity: root.frontIsA ? 1 - root.progress : root.progress
-                    visible: opacity > 0.001
-                    transform: Translate { y: 10 * root.slideSign * (root.frontIsA ? -root.progress : 1 - root.progress) }
-                    z: root.frontIsA ? 0 : 1
-                    enabled: !root.frontIsA
-                    dropKey: root.frontIsA ? "" : root.overKey
-                    onDayPicked: day => root.pick(day)
-                    onDayAddRequested: day => root.addOn(day)
-                    onItemPicked: (day, uid, occurrenceDate) => root.openItem(day, uid, occurrenceDate)
-                    onDragStarted: info => root.beginDrag(info)
-                    onDragMoved: scenePoint => root.moveDrag(scenePoint)
-                    onDragFinished: scenePoint => root.endDrag(scenePoint)
-                    onDragAborted: root.abortDrag()
+                    tab: root
+                    front: !root.frontIsA
                 }
             }
         }

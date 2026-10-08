@@ -217,18 +217,10 @@ Item {
                 }
             }
 
-            // Thin Spine-style scrollbar, shown only while the list is moving.
-            Rectangle {
-                visible: root.adapter && root.adapter.enabled && listView.contentHeight > listView.height
+            ListScrollBar {
+                view: listView
+                available: !!root.adapter && root.adapter.enabled
                 anchors.right: parent.right
-                width: 3
-                radius: 1.5
-                color: Theme.border
-                opacity: listView.moving ? 1 : 0
-                y: listView.visibleArea.yPosition * listView.height
-                height: listView.visibleArea.heightRatio * listView.height
-
-                Fade on opacity { duration: Theme.stateMs }
             }
         }
     }

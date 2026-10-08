@@ -64,81 +64,42 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             spacing: ringsArea.gap * 2
 
-            Column {
-                spacing: 6
+            RingColumn {
+                width: root.columnWidth
+                boxHeight: root.ringBoxHeight
+                caption: Math.round(SystemUsage.cpuPercent) + "%"
 
-                Item {
-                    width: root.columnWidth
-                    height: root.ringBoxHeight
-
-                    UsageRing {
-                        anchors.centerIn: parent
-                        size: root.ringSize
-                        iconName: "cpu"
-                        value: SystemUsage.cpuPercent
-                    }
-                }
-
-                MonoText {
-                    width: root.columnWidth
-                    horizontalAlignment: Text.AlignHCenter
-                    text: Math.round(SystemUsage.cpuPercent) + "%"
-                    font.weight: Font.Medium
-                    font.pixelSize: 9
-                    font.letterSpacing: 9 * 0.08
-                    color: Theme.dim
+                UsageRing {
+                    anchors.centerIn: parent
+                    size: root.ringSize
+                    iconName: "cpu"
+                    value: SystemUsage.cpuPercent
                 }
             }
 
-            Column {
-                spacing: 6
+            RingColumn {
+                width: root.columnWidth
+                boxHeight: root.ringBoxHeight
+                caption: SystemUsage.ramUsedGb.toFixed(1) + " GB"
 
-                Item {
-                    width: root.columnWidth
-                    height: root.ringBoxHeight
-
-                    UsageRing {
-                        anchors.centerIn: parent
-                        size: root.ringSize
-                        iconName: "memory-stick"
-                        value: SystemUsage.ramPercent
-                    }
-                }
-
-                MonoText {
-                    width: root.columnWidth
-                    horizontalAlignment: Text.AlignHCenter
-                    text: SystemUsage.ramUsedGb.toFixed(1) + " GB"
-                    font.weight: Font.Medium
-                    font.pixelSize: 9
-                    font.letterSpacing: 9 * 0.08
-                    color: Theme.dim
+                UsageRing {
+                    anchors.centerIn: parent
+                    size: root.ringSize
+                    iconName: "memory-stick"
+                    value: SystemUsage.ramPercent
                 }
             }
 
-            Column {
-                spacing: 6
+            RingColumn {
+                width: root.columnWidth
+                boxHeight: root.ringBoxHeight
+                caption: Math.round(SystemUsage.diskUsedGb) + " GB"
 
-                Item {
-                    width: root.columnWidth
-                    height: root.ringBoxHeight
-
-                    UsageRing {
-                        anchors.centerIn: parent
-                        size: root.ringSize
-                        iconName: "database"
-                        value: SystemUsage.diskPercent
-                    }
-                }
-
-                MonoText {
-                    width: root.columnWidth
-                    horizontalAlignment: Text.AlignHCenter
-                    text: Math.round(SystemUsage.diskUsedGb) + " GB"
-                    font.weight: Font.Medium
-                    font.pixelSize: 9
-                    font.letterSpacing: 9 * 0.08
-                    color: Theme.dim
+                UsageRing {
+                    anchors.centerIn: parent
+                    size: root.ringSize
+                    iconName: "database"
+                    value: SystemUsage.diskPercent
                 }
             }
         }

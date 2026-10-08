@@ -24,21 +24,31 @@ Item {
         const nextAngle = value * degreesPerPercent;
         const largeChange = Math.abs(nextAngle - valueArc.sweepAngle) >= animateAboveDegrees;
         arcAnimation.stop();
-        arcBehavior.enabled = visible && largeChange;
-        valueArc.sweepAngle = nextAngle;
+        if (visible && largeChange) {
+            arcAnimation.to = nextAngle;
+            arcAnimation.start();
+        } else {
+            valueArc.sweepAngle = nextAngle;
+        }
     }
 
     onValueChanged: if (arcReady) updateArc()
     onVisibleChanged: {
         if (!arcReady || visible) return;
         arcAnimation.stop();
-        arcBehavior.enabled = false;
         valueArc.sweepAngle = value * degreesPerPercent;
     }
     Component.onCompleted: {
-        arcBehavior.enabled = false;
         valueArc.sweepAngle = value * degreesPerPercent;
         arcReady = true;
+    }
+
+    // A standalone animation: stop() on an animation inside a Behavior logs a Qt warning.
+    StandardMotion {
+        id: arcAnimation
+        target: valueArc
+        property: "sweepAngle"
+        duration: Theme.stateMs
     }
 
     implicitWidth: size
@@ -84,15 +94,6 @@ Item {
                 radiusY: root.radius
                 startAngle: -90
                 sweepAngle: 0
-
-                Behavior on sweepAngle {
-                    id: arcBehavior
-                    enabled: false
-                    StandardMotion {
-                        id: arcAnimation
-                        duration: Theme.stateMs
-                    }
-                }
             }
         }
     }

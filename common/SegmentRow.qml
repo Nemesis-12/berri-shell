@@ -1,7 +1,7 @@
 import QtQuick
 import qs.services
 
-// Four choices on a border grid, with a fill and top bar for the selection.
+// A few choices on a border grid, in equal cells, with a fill and top bar for the selection.
 Rectangle {
     id: seg
 
@@ -30,7 +30,7 @@ Rectangle {
                 readonly property color tint: Theme.accent
                 readonly property color soft: Theme.selectionSoft
 
-                width: (seg.width - 2 - 3) / 4
+                width: (seg.width - 2 - (seg.options.length - 1)) / seg.options.length
                 height: seg.cellHeight
                 color: chosen ? soft : Qt.rgba(soft.r, soft.g, soft.b, 0)
 

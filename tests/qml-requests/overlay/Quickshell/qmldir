@@ -1,3 +1,4 @@
 module Quickshell
 Singleton 1.0 Singleton.qml
+Scope 1.0 Scope.qml
 singleton Quickshell 1.0 Quickshell.qml

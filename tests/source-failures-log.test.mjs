@@ -29,7 +29,7 @@ function run(service, file, rounds) {
   const folder = fs.mkdtempSync(path.join(repo, "scratchpad/failure-log-"));
   try {
     fs.cpSync(path.join(repo, "tests/fixtures/weather-io"), path.join(folder, "Io"), { recursive: true });
-    const source = fs.readFileSync(path.join(repo, "services", file), "utf8")
+    const prepare = (file) => fs.readFileSync(path.join(repo, file), "utf8")
       .replace(/^pragma Singleton\n/, "")
       .replace(/^import Quickshell\n/m, 'import "Io"\n')
       .replace(/^import Quickshell.Io\n/m, "")
@@ -37,7 +37,9 @@ function run(service, file, rounds) {
       .replace(/Quickshell\.shellPath\(/g, "(")
       .replace('Quickshell.env("HOME")', '"/synthetic-home"')
       .replace(/"\.\.\/logic\/([A-Za-z]+\.js)"/g, (_, name) => JSON.stringify(path.join(repo, "logic", name)));
-    fs.writeFileSync(path.join(folder, "ServiceUnderTest.qml"), source);
+    fs.writeFileSync(path.join(folder, "ServiceUnderTest.qml"), prepare(`services/${file}`));
+    // Shared parts the service uses sit next to it, like the real common folder.
+    fs.writeFileSync(path.join(folder, "CachedSource.qml"), prepare("common/CachedSource.qml"));
     const runner = fs.readFileSync(path.join(repo, "tests/fixtures/source-failures.qml"), "utf8")
       .replace("TEST_CONFIG", JSON.stringify({ service, rounds }));
     const entry = path.join(folder, "test.qml");

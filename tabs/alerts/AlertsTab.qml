@@ -252,26 +252,19 @@ Item {
                 color: Theme.fg
             }
 
-            Rectangle {
+            ToggleSwitch {
                 x: parent.width - 14 - width
                 anchors.verticalCenter: parent.verticalCenter
                 width: 30
                 height: 16
-                color: dndRow.on ? Theme.accentLight : Theme.border
-                ColorFade on color  { duration: Theme.stateMs }
-
-                Rectangle {
-                    y: 3
-                    width: 10
-                    height: 10
-                    color: Theme.fg
-                    x: dndRow.on ? 17 : 3
-                    Behavior on x {
-                        EmphasizedMotion {
-                            duration: 200
-                        }
-                    }
-                }
+                radius: 0
+                knobSize: 10
+                knobRadius: 0
+                checked: dndRow.on
+                interactive: false
+                onColor: Theme.accentLight
+                emphasized: true
+                slideMs: 200
             }
 
             MouseArea {

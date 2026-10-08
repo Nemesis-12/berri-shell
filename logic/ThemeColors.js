@@ -18,6 +18,27 @@ var fallbackHex = {
     selection: "#3a2f52", accent: "#c28bf2", darker_background: "#0c0c10"
 };
 
+/**
+ * The six swatches of a palette, in display order: the card color strip and
+ * the notch strip. `raw` is the palette color, `token` is the Theme token
+ * that holds the same color.
+ */
+var swatches = [
+    { raw: "dark_background", token: "shell" },
+    { raw: "background", token: "card" },
+    { raw: "lighter_background", token: "raised" },
+    { raw: "selection", token: "selection" },
+    { raw: "accent", token: "accent" },
+    { raw: "foreground", token: "fg2" }
+];
+
+/**
+ * The six palette colors of the wallpaper transition shader, in shader order:
+ * the darkest color, then the first five swatches.
+ */
+var transitionKeys = ["darker_background"].concat(
+    swatches.slice(0, 5).map(function (swatch) { return swatch.raw; }));
+
 /** "#rrggbb" -> color. */
 function hexToRgb(hex) {
     hex = String(hex).replace("#", "");

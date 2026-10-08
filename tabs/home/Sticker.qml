@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import Qt.labs.folderlistmodel
 import "../../logic/PixelGrid.js" as PixelGrid
+import "../../logic/StickerSize.js" as StickerSize
 import qs.common
 import qs.picker
 import qs.services
@@ -36,7 +37,12 @@ Item {
 
     /** Final size of the cell at rest (set by HomeTab). The cell is smaller while the panel opens; decoding at the final size keeps the decode from restarting on every frame. */
     property size restSize: Qt.size(0, 0)
-    readonly property size decodeSize: Qt.size(restSize.width * dpr, restSize.height * dpr)
+    /** Image size of the cell at rest: one image pixel per device pixel. The display copy and the decode use it. */
+    readonly property size decodeSize: {
+        if (!StickerSize.hasSize(restSize.width, restSize.height)) return Qt.size(0, 0);
+        var pixels = StickerSize.pixelSize(restSize.width, restSize.height, dpr);
+        return Qt.size(pixels.width, pixels.height);
+    }
 
     /** The saved source stays unchanged. A still image uses a small display copy. */
     property string stickerPath: ""
@@ -47,8 +53,7 @@ Item {
     }
     property bool copyAgain: false
     property string copySourcePath: ""
-    property int copyWidth: 0
-    property int copyHeight: 0
+    property size copySize: Qt.size(0, 0)
 
     function fileUrl(path) {
         return "file://" + path + "?" + Date.now();
@@ -56,25 +61,23 @@ Item {
 
     function makeDisplayCopy() {
         if (!stickerPath || useAnimatedImage) return;
-        var width = Math.round(restSize.width * 2);
-        var height = Math.round(restSize.height * 2);
-        if (width < 1 || height < 1) return;
+        if (!StickerSize.hasSize(restSize.width, restSize.height)) return;
         if (displayCopy.running) { copyAgain = true; return; }
         copySourcePath = stickerPath;
-        copyWidth = width;
-        copyHeight = height;
+        copySize = decodeSize;
         displayCopy.command = [
             "sh",
             Quickshell.shellPath("scripts/sticker-display-copy.sh"),
             stickerPath,
             configDirPath + "/sticker-display.png",
-            String(width),
-            String(height)
+            String(copySize.width),
+            String(copySize.height)
         ];
         displayCopy.running = true;
     }
 
     onRestSizeChanged: makeDisplayCopy()
+    onDprChanged: makeDisplayCopy()
 
     Process {
         id: displayCopy
@@ -85,8 +88,8 @@ Item {
                 return;
             }
             if (root.copySourcePath !== root.stickerPath) return;
-            if (root.copyWidth !== Math.round(root.restSize.width * 2)
-                    || root.copyHeight !== Math.round(root.restSize.height * 2)) return;
+            if (root.copySize.width !== root.decodeSize.width
+                    || root.copySize.height !== root.decodeSize.height) return;
             root.stickerSource = root.fileUrl(exitCode === 0
                 ? root.configDirPath + "/sticker-display.png" : root.stickerPath);
         }

@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import "../logic/ThemeColors.js" as Colors
 import qs.common
 import qs.services
 
@@ -199,8 +200,7 @@ Variants {
 
         // --- Theme-switch transition shader (28a) ---
 
-        readonly property var transitionModeIndex: ({ "A": 0, "B": 1, "C2": 2, "D": 3, "F": 4 })
-
+        // The shader reads a mode by its place in Theme.transitionModeIds.
         Connections {
             target: Theme
             function onWallpaperTransition(mode, durationMs) {
@@ -232,17 +232,12 @@ Variants {
                 effect.newHasImage = newPath ? 1 : 0;
                 effect.oldColor = (Theme.fromRaw && Theme.fromRaw.darker_background) || Theme.shell;
                 effect.newColor = (Theme.toRaw && Theme.toRaw.darker_background) || Theme.shell;
-                effect.modeIndex = layer.transitionModeIndex[mode] !== undefined ? layer.transitionModeIndex[mode] : 0;
+                effect.modeIndex = Math.max(0, Theme.transitionModeIds.indexOf(mode));
                 effect.seed = Math.random() * 1000;
                 effect.resolutionPx = Qt.vector2d(layer.width * modelData.devicePixelRatio, layer.height * modelData.devicePixelRatio);
                 var toRaw = Theme.toRaw || {};
-                var order6 = ["darker_background", "dark_background", "background", "lighter_background", "selection", "accent"];
-                effect.paletteColor0 = toRaw[order6[0]] || Theme.shell;
-                effect.paletteColor1 = toRaw[order6[1]] || Theme.shell;
-                effect.paletteColor2 = toRaw[order6[2]] || Theme.shell;
-                effect.paletteColor3 = toRaw[order6[3]] || Theme.shell;
-                effect.paletteColor4 = toRaw[order6[4]] || Theme.shell;
-                effect.paletteColor5 = toRaw[order6[5]] || Theme.shell;
+                for (var i = 0; i < Colors.transitionKeys.length; i++)
+                    effect["paletteColor" + i] = toRaw[Colors.transitionKeys[i]] || Theme.shell;
                 effect.progress = 0;
                 effect.visible = true;
                 progressAnim.duration = durationMs;

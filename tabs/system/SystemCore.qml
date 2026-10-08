@@ -71,15 +71,12 @@ Item {
     }
 
     // Copies of both texts in their over-the-fill colours, shown only inside the fill.
-    Item {
-        anchors.bottom: parent.bottom
-        width: parent.width
-        height: root.fillHeight
-        clip: true
+    FillClip {
+        fillHeight: root.fillHeight
 
         SystemText {
             x: 9
-            lineTop: 10 - (root.height - root.fillHeight)
+            lineTop: 10
             font.pixelSize: 20
             text: Math.round(root.load)
             color: root.difference(Theme.fg, Theme.accentLight)
@@ -88,7 +85,7 @@ Item {
         SystemText {
             x: 9
             mono: true
-            lineTop: root.height - 18 - (root.height - root.fillHeight)
+            lineTop: root.height - 18
             font.pixelSize: 9
             font.weight: Font.DemiBold
             font.letterSpacing: 9 * 0.1
