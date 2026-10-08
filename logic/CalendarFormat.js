@@ -58,6 +58,20 @@ function escapeText(text) {
     return String(text).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
 }
 
+/** Splits on a separator that is not escaped with a backslash. */
+function splitUnescaped(text, sep) {
+    var parts = [];
+    var current = "";
+    for (var i = 0; i < text.length; i++) {
+        var ch = text.charAt(i);
+        if (ch === "\\" && i + 1 < text.length) { current += ch + text.charAt(++i); }
+        else if (ch === sep) { parts.push(current); current = ""; }
+        else current += ch;
+    }
+    parts.push(current);
+    return parts;
+}
+
 function unescapeText(text) {
     return text.replace(/\\([\\;,nN])/g, function (all, c) {
         return (c === "n" || c === "N") ? "\n" : c;
@@ -283,102 +297,125 @@ function zonedSeries(start, endValue, localZone) {
         length: length !== null && length >= 0 ? length : null, offsets: offsets };
 }
 
-function parseItem(node, localZone) {
-    var isTodo = node.name === "VTODO";
-    var item = Items.blankItem();
-    if (isTodo) item.kind = "task";
-    var start = null, endValue = null, sawDoneCompleted = false;
-    var sourceDates = { start: null, end: null, until: null, exdates: [] };
-    var ownColor = null, legacyColor = null;
-    for (var i = 0; i < node.props.length; i++) {
-        var p = node.props[i];
-        switch (p.name) {
-        case "UID": item.uid = p.value; break;
-        case "DTSTAMP": item.stamp = p.value; break;
-        case "SUMMARY": item.title = unescapeText(p.value); break;
-        case "DTSTART": start = parseDateProperty(p, localZone); if (!start) item.raw.push(p.raw); break;
-        case "DTEND": case "DUE":
-            if (p.name === (isTodo ? "DUE" : "DTEND")) {
-                endValue = parseDateProperty(p, localZone);
-                if (!endValue) item.raw.push(p.raw);
-            } else item.raw.push(p.raw);
-            break;
-        case "CATEGORIES": {
-            var oldColor = oldTagColors[p.value.trim().toLowerCase()];
-            if (oldColor) legacyColor = oldColor; // old berri tag, replaced by X-BERRI-COLOR
-            else item.raw.push(p.raw);
-            break;
-        }
-        case "X-BERRI-COLOR": ownColor = p.value.trim(); break;
-        case "RRULE": {
-            var repeatRule = { interval: 1, byDay: [], monthWeekday: null, until: null, count: null };
-            var rule = parseRule(p.value, repeatRule, localZone);
-            if (!rule.freq || item.repeat !== "none") { item.raw.push(p.raw); break; }
-            item.repeat = rule.freq;
-            item.interval = repeatRule.interval;
-            item.byDay = repeatRule.byDay;
-            item.monthWeekday = repeatRule.monthWeekday;
-            item.until = repeatRule.until;
-            sourceDates.until = repeatRule.untilSource || null;
-            item.count = repeatRule.count;
-            item.ruleRest = rule.rest.length ? rule.rest.join(";") : null; // rule parts berri ignores, written back as they were
-            break;
-        }
-        case "EXDATE":
-            var sources = [];
-            p.value.split(",").forEach(function (v) {
-                var d = parseDateValue(v, p.params, localZone);
-                if (d) { item.exdates.push(d.date); sources.push(d); }
-            });
-            sourceDates.exdates.push({ raw: p.raw, values: sources });
-            break;
-        case "STATUS":
-            // COMPLETED and NEEDS-ACTION are derived from the done dates when written.
-            if (p.value.toUpperCase() === "COMPLETED") sawDoneCompleted = true;
-            else if (p.value.toUpperCase() !== "NEEDS-ACTION") item.status = p.value.toUpperCase();
-            break;
-        case "X-BERRI-KIND": if (p.value.toLowerCase() === "reminder") item.kind = "reminder"; break;
-        case "X-BERRI-DONE":
-            p.value.split(",").forEach(function (v) {
-                var d = parseDateValue(v);
-                if (d) item.doneDates.push(d.date);
-            });
-            break;
-        default: item.raw.push(p.raw);
-        }
-    }
-    if (start) {
-        item.date = start.date;
-        item.time = start.time;
-    } else if (endValue) {
-        item.date = endValue.date;
-        item.time = endValue.time;
-    }
-    if (start && endValue) {
-        if (start.time === null) {
-            // All-day: VEVENT DTEND is exclusive, VTODO DUE is inclusive.
-            var last = isTodo ? endValue.date : Items.addDays(endValue.date, -1);
-            item.endDate = Times.dayNum(last) > Times.dayNum(start.date) ? last : null;
-        } else if (endValue.time !== null) {
-            if (endValue.time !== start.time || endValue.date !== start.date) item.end = endValue.time;
-            if (endValue.date !== start.date) item.endDate = endValue.date;
-        }
-    }
-    sourceDates.start = start;
-    sourceDates.end = endValue;
-    item.sourceDates = sourceDates;
-    if (item.repeat !== "none" && start) item.zoned = zonedSeries(start, endValue, localZone);
-    if (item.uid === "") item.uid = Items.newUid();
+/** DTSTART, or DTEND for events and DUE for tasks. A date that cannot be read stays raw. */
+function readDateProperty(read, p, localZone) {
+    var isStart = p.name === "DTSTART";
+    if (!isStart && p.name !== (read.isTodo ? "DUE" : "DTEND")) { read.item.raw.push(p.raw); return; }
+    var value = parseDateProperty(p, localZone);
+    if (isStart) read.start = value;
+    else read.endValue = value;
+    if (!value) read.item.raw.push(p.raw);
+}
 
-    // Children: the one simple VALARM is taken over, the rest stays raw.
-    for (var c = 0; c < node.children.length; c++) {
-        var child = node.children[c];
+/** An old berri tag becomes a color. Any other category stays raw. */
+function readCategory(read, p) {
+    var oldColor = oldTagColors[p.value.trim().toLowerCase()];
+    if (oldColor) read.legacyColor = oldColor; // old berri tag, replaced by X-BERRI-COLOR
+    else read.item.raw.push(p.raw);
+}
+
+/** The first usable RRULE fills the repeat fields. A second or unusable one stays raw. */
+function readRepeatRule(read, p, localZone) {
+    var item = read.item;
+    var repeatRule = { interval: 1, byDay: [], monthWeekday: null, until: null, count: null };
+    var rule = parseRule(p.value, repeatRule, localZone);
+    if (!rule.freq || item.repeat !== "none") { item.raw.push(p.raw); return; }
+    item.repeat = rule.freq;
+    item.interval = repeatRule.interval;
+    item.byDay = repeatRule.byDay;
+    item.monthWeekday = repeatRule.monthWeekday;
+    item.until = repeatRule.until;
+    read.sourceDates.until = repeatRule.untilSource || null;
+    item.count = repeatRule.count;
+    item.ruleRest = rule.rest.length ? rule.rest.join(";") : null; // rule parts berri ignores, written back as they were
+}
+
+function readExdates(read, p, localZone) {
+    var sources = [];
+    p.value.split(",").forEach(function (v) {
+        var d = parseDateValue(v, p.params, localZone);
+        if (d) { read.item.exdates.push(d.date); sources.push(d); }
+    });
+    read.sourceDates.exdates.push({ raw: p.raw, values: sources });
+}
+
+/** COMPLETED and NEEDS-ACTION are derived from the done dates when written. */
+function readStatus(read, p) {
+    var status = p.value.toUpperCase();
+    if (status === "COMPLETED") read.sawDoneCompleted = true;
+    else if (status !== "NEEDS-ACTION") read.item.status = status;
+}
+
+function readDoneDates(read, p) {
+    p.value.split(",").forEach(function (v) {
+        var d = parseDateValue(v);
+        if (d) read.item.doneDates.push(d.date);
+    });
+}
+
+/** Routes one property to the step that reads it. Unknown properties stay raw. */
+function readProperty(read, p, localZone) {
+    var item = read.item;
+    switch (p.name) {
+    case "UID": item.uid = p.value; break;
+    case "DTSTAMP": item.stamp = p.value; break;
+    case "SUMMARY": item.title = unescapeText(p.value); break;
+    case "DTSTART": case "DTEND": case "DUE": readDateProperty(read, p, localZone); break;
+    case "CATEGORIES": readCategory(read, p); break;
+    case "X-BERRI-COLOR": read.ownColor = p.value.trim(); break;
+    case "RRULE": readRepeatRule(read, p, localZone); break;
+    case "EXDATE": readExdates(read, p, localZone); break;
+    case "STATUS": readStatus(read, p); break;
+    case "X-BERRI-KIND": if (p.value.toLowerCase() === "reminder") item.kind = "reminder"; break;
+    case "X-BERRI-DONE": readDoneDates(read, p); break;
+    default: item.raw.push(p.raw);
+    }
+}
+
+/** Sets date, time, end and end date from the start and end values. A lone end sets the date. */
+function setItemDates(item, start, endValue, isTodo) {
+    var first = start || endValue;
+    if (first) {
+        item.date = first.date;
+        item.time = first.time;
+    }
+    if (!start || !endValue) return;
+    if (start.time === null) {
+        // All-day: VEVENT DTEND is exclusive, VTODO DUE is inclusive.
+        var last = isTodo ? endValue.date : Items.addDays(endValue.date, -1);
+        item.endDate = Times.dayNum(last) > Times.dayNum(start.date) ? last : null;
+    } else if (endValue.time !== null) {
+        if (endValue.time !== start.time || endValue.date !== start.date) item.end = endValue.time;
+        if (endValue.date !== start.date) item.endDate = endValue.date;
+    }
+}
+
+/** The one simple VALARM is taken over, the other children stay raw. */
+function readChildren(item, children) {
+    for (var c = 0; c < children.length; c++) {
+        var child = children[c];
         var minutes = (child.name === "VALARM" && item.alarmMinutes === null) ? parseAlarm(child) : null;
         if (minutes !== null) item.alarmMinutes = minutes;
         else item.rawChildren.push(child.lines);
     }
-    if (sawDoneCompleted && item.repeat === "none" && item.date && item.doneDates.indexOf(item.date) < 0) item.doneDates.push(item.date);
-    item.color = Items.cleanColor(ownColor) || legacyColor || "accent";
+}
+
+function parseItem(node, localZone) {
+    var isTodo = node.name === "VTODO";
+    var item = Items.blankItem();
+    if (isTodo) item.kind = "task";
+    var read = { item: item, isTodo: isTodo, start: null, endValue: null, sawDoneCompleted: false,
+        ownColor: null, legacyColor: null, sourceDates: { start: null, end: null, until: null, exdates: [] } };
+    for (var i = 0; i < node.props.length; i++) readProperty(read, node.props[i], localZone);
+    setItemDates(item, read.start, read.endValue, isTodo);
+    read.sourceDates.start = read.start;
+    read.sourceDates.end = read.endValue;
+    item.sourceDates = read.sourceDates;
+    if (item.repeat !== "none" && read.start) item.zoned = zonedSeries(read.start, read.endValue, localZone);
+    if (item.uid === "") item.uid = Items.newUid();
+    readChildren(item, node.children);
+    if (read.sawDoneCompleted && item.repeat === "none" && item.date && item.doneDates.indexOf(item.date) < 0) item.doneDates.push(item.date);
+    item.color = Items.cleanColor(read.ownColor) || read.legacyColor || "accent";
     return item;
 }
 
@@ -464,26 +501,86 @@ function dateProp(name, key, time, source, localZone) {
     return name + ":" + utcClock(local.getTime()) + "Z";
 }
 
+/** The UNTIL value: the source text when unchanged, else a date or an end-of-day clock in the source form. */
+function untilValue(item) {
+    var source = item.sourceDates && item.sourceDates.until;
+    var start = item.sourceDates && item.sourceDates.start;
+    if (source && source.date === item.until) return source.value;
+    if (item.time === null) return icsDate(item.until);
+    var inUtc = (source && source.form === "utc") || (start && (start.form === "utc" || start.form === "zone"));
+    if (!inUtc) return icsDate(item.until) + "T235959";
+    var end = new Date(+item.until.slice(0, 4), +item.until.slice(5, 7) - 1, +item.until.slice(8, 10), 23, 59, 59);
+    return utcClock(end.getTime()) + "Z";
+}
+
 function ruleText(item) {
     var parts = ["FREQ=" + item.repeat.toUpperCase()];
     if (item.interval > 1) parts.push("INTERVAL=" + item.interval);
     if (item.repeat === "weekly" && item.byDay.length) parts.push("BYDAY=" + item.byDay.map(function (d) { return weekdays[d]; }).join(","));
     if (item.repeat === "monthly" && item.monthWeekday) parts.push("BYDAY=" + item.monthWeekday.nth + weekdays[item.monthWeekday.day]);
     if (item.count) parts.push("COUNT=" + item.count);
-    else if (item.until) {
-        var source = item.sourceDates && item.sourceDates.until;
-        var start = item.sourceDates && item.sourceDates.start;
-        var value;
-        if (source && source.date === item.until) value = source.value;
-        else if (item.time === null) value = icsDate(item.until);
-        else if (source && source.form === "utc" || start && (start.form === "utc" || start.form === "zone")) {
-            var end = new Date(+item.until.slice(0, 4), +item.until.slice(5, 7) - 1, +item.until.slice(8, 10), 23, 59, 59);
-            value = utcClock(end.getTime()) + "Z";
-        } else value = icsDate(item.until) + "T235959";
-        parts.push("UNTIL=" + value);
-    }
+    else if (item.until) parts.push("UNTIL=" + untilValue(item));
     if (item.ruleRest) parts.push(item.ruleRest);
     return parts.join(";");
+}
+
+/** DTSTART and DTEND, or DUE for a task. Source lines are kept when nothing changed. */
+function dateLines(item, isTodo, localZone) {
+    var lines = [];
+    var sources = item.sourceDates || {};
+    if (!item.date) return lines;
+    // A task imported with DUE alone must not gain a different DTSTART.
+    if (sources.start || !sources.end || !isTodo) lines.push(dateProp("DTSTART", item.date, item.time, sources.start, localZone));
+    var lastDay = item.endDate || item.date;
+    var endSource = sources.end || sources.start;
+    if (isTodo) {
+        lines.push(dateProp("DUE", lastDay, item.time === null ? null : (item.end || item.time), endSource, localZone));
+    } else if (item.time === null) {
+        lines.push(dateProp("DTEND", Items.addDays(lastDay, 1), null, sources.end, localZone));
+    } else if (item.end) {
+        lines.push(dateProp("DTEND", lastDay, item.end, endSource, localZone));
+    } else if (sources.end && sources.start && sources.start.date === item.date && sources.start.time === item.time &&
+        sources.end.date === lastDay && sources.end.time === item.time) {
+        lines.push(sources.end.raw);
+    }
+    return lines;
+}
+
+/** EXDATE lines. A source line is kept while all its dates are still excluded. */
+function exdateLines(item, localZone) {
+    var lines = [];
+    var sources = item.sourceDates || {};
+    var pending = item.exdates.slice();
+    var saved = sources.exdates || [];
+    for (var ex = 0; ex < saved.length; ex++) {
+        var group = saved[ex];
+        if (!group.values.every(function (v) { return pending.indexOf(v.date) >= 0; })) continue;
+        lines.push(group.raw);
+        pending = pending.filter(function (d) { return !group.values.some(function (v) { return v.date === d; }); });
+    }
+    if (!item.sourceDates) {
+        lines.push("EXDATE" + (item.time === null ? ";VALUE=DATE" : "") + ":" + pending.map(function (d) {
+            return item.time === null ? icsDate(d) : icsDateTime(d, item.time);
+        }).join(","));
+    } else {
+        for (var e = 0; e < pending.length; e++)
+            lines.push(dateProp("EXDATE", pending[e], item.time, sources.start, localZone));
+    }
+    return lines;
+}
+
+/** STATUS: a task is always written, an event only for a status other than COMPLETED. */
+function statusLines(item, isTodo, recurring) {
+    var completed = item.date !== null && item.doneDates.indexOf(item.date) >= 0 && !recurring;
+    var kept = item.status && item.status !== "COMPLETED" ? item.status : null;
+    if (isTodo) return ["STATUS:" + (completed ? "COMPLETED" : (kept || "NEEDS-ACTION"))];
+    return kept ? ["STATUS:" + kept] : [];
+}
+
+function alarmLines(item) {
+    if (item.alarmMinutes === null) return [];
+    return ["BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + escapeText(item.title),
+        "TRIGGER:" + (item.alarmMinutes > 0 ? "-PT" + item.alarmMinutes + "M" : "PT0S"), "END:VALARM"];
 }
 
 function itemLines(item, localZone) {
@@ -491,53 +588,16 @@ function itemLines(item, localZone) {
     var name = isTodo ? "VTODO" : "VEVENT";
     var recurring = item.repeat !== "none";
     var lines = ["BEGIN:" + name, "UID:" + item.uid, "DTSTAMP:" + (item.stamp || Items.stampNow()), "SUMMARY:" + escapeText(item.title)];
-    var sources = item.sourceDates || {};
-    if (item.date) {
-        // A task imported with DUE alone must not gain a different DTSTART.
-        if (sources.start || !sources.end || !isTodo) lines.push(dateProp("DTSTART", item.date, item.time, sources.start, localZone));
-        var lastDay = item.endDate || item.date;
-        if (isTodo) {
-            lines.push(dateProp("DUE", lastDay, item.time === null ? null : (item.end || item.time), sources.end || sources.start, localZone));
-        } else if (item.time === null) {
-            lines.push(dateProp("DTEND", Items.addDays(lastDay, 1), null, sources.end, localZone));
-        } else if (item.end) {
-            lines.push(dateProp("DTEND", lastDay, item.end, sources.end || sources.start, localZone));
-        } else if (sources.end && sources.start && sources.start.date === item.date && sources.start.time === item.time &&
-            sources.end.date === lastDay && sources.end.time === item.time) {
-            lines.push(sources.end.raw);
-        }
-    }
+    appendLines(lines, dateLines(item, isTodo, localZone));
     if (recurring) lines.push("RRULE:" + ruleText(item));
     else if (item.ruleRest) lines.push("RRULE:" + item.ruleRest);
-    if (item.exdates.length) {
-        var pending = item.exdates.slice();
-        var saved = sources.exdates || [];
-        for (var ex = 0; ex < saved.length; ex++) {
-            var group = saved[ex];
-            if (!group.values.every(function (v) { return pending.indexOf(v.date) >= 0; })) continue;
-            lines.push(group.raw);
-            pending = pending.filter(function (d) { return !group.values.some(function (v) { return v.date === d; }); });
-        }
-        if (!item.sourceDates) {
-            lines.push("EXDATE" + (item.time === null ? ";VALUE=DATE" : "") + ":" + pending.map(function (d) {
-                return item.time === null ? icsDate(d) : icsDateTime(d, item.time);
-            }).join(","));
-        } else {
-            for (var e = 0; e < pending.length; e++)
-                lines.push(dateProp("EXDATE", pending[e], item.time, sources.start, localZone));
-        }
-    }
+    if (item.exdates.length) appendLines(lines, exdateLines(item, localZone));
     if (item.color !== "accent") lines.push("X-BERRI-COLOR:" + item.color);
-    var completed = item.date !== null && item.doneDates.indexOf(item.date) >= 0 && !recurring;
-    if (isTodo) lines.push("STATUS:" + (completed ? "COMPLETED" : (item.status && item.status !== "COMPLETED" ? item.status : "NEEDS-ACTION")));
-    else if (item.status && item.status !== "COMPLETED") lines.push("STATUS:" + item.status);
+    appendLines(lines, statusLines(item, isTodo, recurring));
     if (item.kind === "reminder") lines.push("X-BERRI-KIND:reminder");
     if (item.doneDates.length && !(isTodo && !recurring)) lines.push("X-BERRI-DONE:" + item.doneDates.map(icsDate).join(","));
-    for (var i = 0; i < item.raw.length; i++) lines.push(item.raw[i]);
-    if (item.alarmMinutes !== null) {
-        lines.push("BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + escapeText(item.title),
-            "TRIGGER:" + (item.alarmMinutes > 0 ? "-PT" + item.alarmMinutes + "M" : "PT0S"), "END:VALARM");
-    }
+    appendLines(lines, item.raw);
+    appendLines(lines, alarmLines(item));
     for (var c = 0; c < item.rawChildren.length; c++) appendLines(lines, item.rawChildren[c]);
     lines.push("END:" + name);
     return lines;
