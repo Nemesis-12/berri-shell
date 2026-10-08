@@ -53,20 +53,6 @@ function escapeText(text) {
     return String(text).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r\n|\r|\n/g, "\\n");
 }
 
-/** Splits on a separator that is not escaped with a backslash. */
-function splitUnescaped(text, sep) {
-    var parts = [];
-    var current = "";
-    for (var i = 0; i < text.length; i++) {
-        var ch = text.charAt(i);
-        if (ch === "\\" && i + 1 < text.length) { current += ch + text.charAt(++i); }
-        else if (ch === sep) { parts.push(current); current = ""; }
-        else current += ch;
-    }
-    parts.push(current);
-    return parts;
-}
-
 function unescapeText(text) {
     return text.replace(/\\([\\;,nN])/g, function (all, c) {
         return (c === "n" || c === "N") ? "\n" : c;
