@@ -23,6 +23,7 @@ ICONS_DIR = ROOT / "assets" / "icons" / "lucide"
 OUT_FILE = ROOT / "common/Icons.js"
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
+COMMANDS = "MmLlHhVvCcSsQqTtAaZz"
 
 
 def num(v: str) -> float:
@@ -105,6 +106,36 @@ class UnsupportedPathError(ValueError):
     """An SVG path holds a character the generator cannot read."""
 
 
+def skip_digits(d: str, i: int) -> tuple[int, bool]:
+    """Returns the index after a run of digits and whether the run held any."""
+    start = i
+    while i < len(d) and d[i].isdigit():
+        i += 1
+    return i, i > start
+
+
+def read_number(d: str, i: int, source: str) -> tuple[str, int]:
+    """Reads one number (optional sign, digits, decimal point, exponent) at index i; returns its text and the next index."""
+    start = i
+    if i < len(d) and d[i] in '+-':
+        i += 1
+    i, has_digits = skip_digits(d, i)
+    if i < len(d) and d[i] == '.':
+        i += 1
+        i, more = skip_digits(d, i)
+        has_digits = has_digits or more
+    if has_digits and i < len(d) and d[i] in 'eE':
+        i += 1
+        if i < len(d) and d[i] in '+-':
+            i += 1
+        i, _ = skip_digits(d, i)
+    if i == start:
+        raise UnsupportedPathError(
+            f"{source}: unsupported character {d[i]!r} at position {i + 1}"
+        )
+    return d[start:i], i
+
+
 def tokenize_path(d: str, source: str = "path") -> list:
     """Tokenize SVG path string into commands and number tokens.
 
@@ -120,43 +151,56 @@ def tokenize_path(d: str, source: str = "path") -> list:
             i += 1
         if i >= len(d):
             break
-
-        # Command letter
-        if d[i] in 'MmLlHhVvCcSsQqTtAaZz':
+        if d[i] in COMMANDS:
             tokens.append(d[i])
             i += 1
-        else:
-            # Parse number: [+-]? (\d+\.?\d* | \.\d+) ([eE][+-]?\d+)?
-            start = i
-            if i < len(d) and d[i] in '+-':
-                i += 1
-
-            has_digits = False
-            while i < len(d) and d[i].isdigit():
-                has_digits = True
-                i += 1
-
-            if i < len(d) and d[i] == '.':
-                i += 1
-                while i < len(d) and d[i].isdigit():
-                    has_digits = True
-                    i += 1
-
-            if has_digits and i < len(d) and d[i] in 'eE':
-                i += 1
-                if i < len(d) and d[i] in '+-':
-                    i += 1
-                while i < len(d) and d[i].isdigit():
-                    i += 1
-
-            if i == start:
-                raise UnsupportedPathError(
-                    f"{source}: unsupported character {d[i]!r} at position {i + 1}"
-                )
-            if i == start + 1 or has_digits:
-                tokens.append(d[start:i])
-
+            continue
+        number, after = read_number(d, i, source)
+        # A lone sign is dropped; a signed number or a number with digits is kept.
+        if after == i + 1 or any(c.isdigit() for c in number):
+            tokens.append(number)
+        i = after
     return tokens
+
+
+def is_argument(tokens: list, i: int) -> bool:
+    return i < len(tokens) and tokens[i] not in COMMANDS
+
+
+def take_plain_args(tokens: list, i: int, count: int, args: list) -> int:
+    """Copies up to `count` argument tokens into args; returns the next index."""
+    for _ in range(count):
+        if not is_argument(tokens, i):
+            break
+        args.append(tokens[i])
+        i += 1
+    return i
+
+
+def take_flags(tokens: list, i: int, args: list) -> int:
+    """Copies the two arc flags as single digits. A flag glued to the next number is split off."""
+    for _ in range(2):
+        if not is_argument(tokens, i):
+            break
+        token = tokens[i]
+        if token and token[0] in '01':
+            args.append(token[0])
+            i += 1
+            if token[1:]:
+                tokens.insert(i, token[1:])  # the rest is the next argument
+        else:
+            args.append(token)  # not valid SVG, kept as it is
+            i += 1
+    return i
+
+
+def take_arc(tokens: list, i: int) -> tuple[list, int]:
+    """Reads one arc: rx ry rotation large-arc-flag sweep-flag x y. A short arc has fewer than 7 args."""
+    args = []
+    i = take_plain_args(tokens, i, 3, args)
+    i = take_flags(tokens, i, args)
+    i = take_plain_args(tokens, i, 2, args)
+    return args, i
 
 
 def normalize_arc_commands(d: str, source: str = "path") -> str:
@@ -169,69 +213,25 @@ def normalize_arc_commands(d: str, source: str = "path") -> str:
     tokens = tokenize_path(d, source)
     normalized = []
     i = 0
-
     while i < len(tokens):
         token = tokens[i]
+        normalized.append(token)
+        i += 1
+        if token not in 'Aa':
+            continue
+        while is_argument(tokens, i):
+            arc_args, i = take_arc(tokens, i)
+            normalized.extend(arc_args)
+            if len(arc_args) < 7:
+                break
+    return serialize_tokens(normalized)
 
-        if token in 'Aa':
-            normalized.append(token)
-            i += 1
 
-            # Process arc arguments (7 per arc: rx ry rotation large-arc-flag sweep-flag x y)
-            while i < len(tokens) and tokens[i] not in 'MmLlHhVvCcSsQqTtAaZz':
-                arc_args = []
-
-                # rx, ry, rotation (first 3 args)
-                for _ in range(3):
-                    if i < len(tokens) and tokens[i] not in 'MmLlHhVvCcSsQqTtAaZz':
-                        arc_args.append(tokens[i])
-                        i += 1
-                    else:
-                        break
-
-                # large-arc-flag, sweep-flag (args 3-4, must be single digits 0 or 1)
-                for _ in range(2):
-                    if i < len(tokens) and tokens[i] not in 'MmLlHhVvCcSsQqTtAaZz':
-                        token_str = tokens[i]
-                        if token_str and token_str[0] in '01':
-                            arc_args.append(token_str[0])
-                            remainder = token_str[1:]
-                            i += 1
-                            if remainder:
-                                # Insert remainder back for next iteration
-                                tokens.insert(i, remainder)
-                        else:
-                            # Shouldn't happen in valid SVG, but handle gracefully
-                            arc_args.append(token_str)
-                            i += 1
-                    else:
-                        break
-
-                # x, y (args 5-6)
-                for _ in range(2):
-                    if i < len(tokens) and tokens[i] not in 'MmLlHhVvCcSsQqTtAaZz':
-                        arc_args.append(tokens[i])
-                        i += 1
-                    else:
-                        break
-
-                normalized.extend(arc_args)
-
-                # If we couldn't read a full 7-arg arc, stop this sequence
-                if len(arc_args) < 7:
-                    break
-        else:
-            normalized.append(token)
-            i += 1
-
-    # Serialize with single space between command and args
+def serialize_tokens(tokens: list) -> str:
+    """One space before each number; commands stay glued to the text before them."""
     result = ""
-    for token in normalized:
-        if token in 'MmLlHhVvCcSsQqTtAaZz':
-            result += token
-        else:
-            result += " " + token
-
+    for token in tokens:
+        result += token if token in COMMANDS else " " + token
     return result.strip()
 
 
