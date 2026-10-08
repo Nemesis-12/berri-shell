@@ -12,7 +12,10 @@ import qs.tabs.home
 Row {
     id: root
 
-    spacing: 1
+    /** Space between the tiles; the tab passes its own gap. */
+    property int gap: 1
+
+    spacing: root.gap
 
     readonly property var outputs: Pipewire.nodes.values.filter(n => n.isSink && !n.isStream && n.audio).slice(0, 3)
     readonly property var defaultSink: Pipewire.defaultAudioSink
@@ -42,7 +45,7 @@ Row {
             readonly property var node: root.outputs[index] || null
             readonly property string kind: node ? root.outputKind(node) : ""
 
-            width: (parent.width - 2 * root.spacing) / 3
+            width: (parent.width - 2 * root.gap) / 3
             height: parent.height
 
             Rectangle {

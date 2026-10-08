@@ -63,25 +63,25 @@ Item {
         color: Theme.dim
     }
 
-    /** Shows a copy of the dragged item. `info` has shape, title, meta, done, tint, width and height. */
-    function pickUp(info) {
+    /** Shows a copy of the dragged item. `dragInfo` has shape, title, meta, done, tint, width and height. */
+    function pickUp(dragInfo) {
         settle.stop();
-        root.info = info;
+        root.info = dragInfo;
         root.opacity = 0.8;
-        root.width = info.width;
-        root.height = info.height;
+        root.width = dragInfo.width;
+        root.height = dragInfo.height;
     }
 
-    /** Puts the ghost at whole-pixel position (x, y) in the tab. */
-    function moveTo(x, y) {
-        root.x = x;
-        root.y = y;
+    /** Puts the ghost at whole-pixel position (newX, newY) in the tab. */
+    function moveTo(newX, newY) {
+        root.x = newX;
+        root.y = newY;
     }
 
-    /** Moves to (x, y) and fades out. */
-    function flyTo(x, y) {
-        settleX.to = x;
-        settleY.to = y;
+    /** Moves to (targetX, targetY) and fades out. */
+    function flyTo(targetX, targetY) {
+        settleX.to = targetX;
+        settleY.to = targetY;
         settle.restart();
     }
 

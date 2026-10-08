@@ -81,6 +81,7 @@ Item {
     }
 
     MediaOutputs {
+        gap: root.gap
         x: 0
         y: root.artSize + root.gap
         width: root.artSize

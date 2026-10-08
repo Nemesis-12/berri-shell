@@ -16,7 +16,6 @@ Item {
     signal tabClicked(string key)
     signal closeClicked
 
-
     // Segmented Themes/Wallpapers tabs.
     Rectangle {
         id: tabsBg

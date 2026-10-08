@@ -34,7 +34,6 @@ Item {
     visible: opacity > 0.001 && root.pillShown
     WhileVisible { service: Clock }
 
-
     // A notification card covers the pill: the clock fades out under it.
     // States/Transitions, not a Behavior: the fade in has a delay.
     property real uncovered: 1
