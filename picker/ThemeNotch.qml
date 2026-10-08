@@ -121,7 +121,7 @@ Item {
     property real wallRestOpacity: 1
     // Refocuses the wallpapers carousel each time the walls tab is switched
     // into, on the wallpaper shown on this notch's own monitor (or index 0).
-    onPickerTabChanged: if (root.pickerTab === "walls") wallpapersCarousel.focusToCurrent();
+    onPickerTabChanged: if (root.pickerTab === "walls") wallsBody.carousel.focusToCurrent();
 
     /** Output scale (2 on eDP-2, 1 on HDMI-A-1); used to snap the notch to whole device pixels. */
     readonly property real dpr: PixelGrid.dpr(Screen.devicePixelRatio)
@@ -159,7 +159,7 @@ Item {
         root.wallRestOpacity = 1;
         root.motionTab = root.pickerTab;
         slide.openSlide();
-        if (root.pickerTab === "walls") wallpapersCarousel.focusToCurrent();
+        if (root.pickerTab === "walls") wallsBody.carousel.focusToCurrent();
         else themesCarousel.focusToCurrent();
     }
 
@@ -314,128 +314,15 @@ Item {
             opacity: Timeline.fadeSlice(root.elapsedMs, root.headerStartMs, root.headerMs, root.closing, root.totalMs)
             visible: opacity > 0.001
             enabled: root.pickerWide
-
-            Item {
+            PickerHeaderRow {
                 id: headerRow
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.right: parent.right
                 height: root.headerRowHeight
-
-                // Segmented Themes/Wallpapers tabs.
-                Rectangle {
-                    id: tabsBg
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: tabsRow.width + 6
-                    height: 34
-                    radius: 5
-                    color: Theme.card
-
-                    Row {
-                        id: tabsRow
-                        anchors.centerIn: parent
-                        spacing: 2
-
-                        Repeater {
-                            model: [
-                                { key: "themes", label: "Themes" },
-                                { key: "walls", label: "Wallpapers" }
-                            ]
-
-                            delegate: Rectangle {
-                                id: tabBtn
-                                required property var modelData
-                                readonly property bool active: root.pickerTab === modelData.key
-                                width: tabLabel.implicitWidth + 28
-                                height: 28
-                                radius: 5
-                                color: active ? Theme.accent : "transparent"
-                                ColorFade on color { duration: Theme.stateMs }
-
-                                Text {
-                                    textFormat: Text.PlainText
-                                    id: tabLabel
-                                    anchors.centerIn: parent
-                                    text: tabBtn.modelData.label
-                                    font.family: Theme.condensed
-                                    font.weight: Font.DemiBold
-                                    font.pixelSize: 12
-                                    color: tabBtn.active ? Theme.onAccent : Theme.dim
-                                    ColorFade on color { duration: Theme.stateMs }
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.pickerTab = tabBtn.modelData.key
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Sub line: e.g. "Wine Lilac applied · 9 themes".
-                Text {
-                    textFormat: Text.PlainText
-                    id: subLabel
-                    anchors.left: tabsBg.right
-                    anchors.leftMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    font.family: Theme.mono
-                    font.weight: Font.Medium
-                    font.pixelSize: 10
-                    color: Theme.dim
-                    text: {
-                        var cur = Theme.current;
-                        if (!cur) return "";
-                        return root.pickerTab === "themes"
-                            ? (cur.name + " applied · " + Theme.palettes.length + " themes")
-                            : ("Saved for " + cur.name);
-                    }
-                }
-
-                // Close button (28x28, Lucide x).
-                Rectangle {
-                    id: closeBtn
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 28
-                    height: 28
-                    radius: 5
-                    color: closeArea.containsMouse ? Theme.raised : "transparent"
-                    ColorFade on color {}
-
-                    Icon {
-                        anchors.centerIn: parent
-                        name: "x"
-                        size: 13
-                        strokeWidth: 2.2
-                        color: closeArea.containsMouse ? Theme.fg : Theme.dim
-                        ColorFade on color {}
-                    }
-
-                    MouseArea {
-                        id: closeArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.closePicker()
-                    }
-                }
-
-                // Hint text, right of the sub line, left of the close button.
-                Text {
-                    textFormat: Text.PlainText
-                    anchors.right: closeBtn.left
-                    anchors.rightMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    font.family: Theme.mono
-                    font.weight: Font.Medium
-                    font.pixelSize: 10
-                    color: Theme.dim
-                    text: "← → browse · Enter apply · Esc close"
-                }
+                pickerTab: root.pickerTab
+                onTabClicked: key => root.pickerTab = key
+                onCloseClicked: root.closePicker()
             }
 
             // Body: switches per tab.
@@ -454,9 +341,12 @@ Item {
 
                 // Wallpapers tab (ticket 28): the carousel above the SHOW ON
                 // row, with its own extra bottom margin.
-                Item {
+                PickerWallpapers {
                     id: wallsBody
                     visible: root.pickerTab === "walls"
+                    screenName: root.screenName
+                    shown: root.pickerOpen && root.pickerTab === "walls"
+                    rowGap: root.wallsRowGap
                     // parent.top already sits bodyTopMargin (4) below
                     // headerRow (shared with the Themes tab); this adds the
                     // rest of wallsHeaderGap on top of that.
@@ -466,34 +356,15 @@ Item {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: root.wallsBottomExtra
-
-                    WallpapersCarousel {
-                        id: wallpapersCarousel
-                        visible: root.pickerOpen && root.pickerTab === "walls"
-                        screenName: root.screenName
-                        anchors.top: parent.top
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.bottom: showOnRow.top
-                        anchors.bottomMargin: root.wallsRowGap
-                        onAddRequested: {
-                            root.focusBeforeAdd = wallpapersCarousel.focusIndex;
-                            slide.runAfterClose(() => wallpapersCarousel.chooseFile());
-                            root.closePicker();
-                        }
-                        onAddDone: (path) => {
-                            root.openPicker();
-                            wallpapersCarousel.focusIndex = root.focusBeforeAdd;
-                            wallpapersCarousel.focusPath(path);
-                        }
+                    onAddRequested: {
+                        root.focusBeforeAdd = wallsBody.carousel.focusIndex;
+                        slide.runAfterClose(() => wallsBody.carousel.chooseFile());
+                        root.closePicker();
                     }
-
-                    WallpaperScreens {
-                        id: showOnRow
-                        carousel: wallpapersCarousel
-                        anchors.bottom: parent.bottom
-                        anchors.left: parent.left
-                        anchors.right: parent.right
+                    onAddDone: path => {
+                        root.openPicker();
+                        wallsBody.carousel.focusIndex = root.focusBeforeAdd;
+                        wallsBody.carousel.focusPath(path);
                     }
                 }
             }
@@ -509,7 +380,7 @@ Item {
             Keys.onEscapePressed: root.closePicker()
             Keys.onPressed: (event) => {
                 var carousel = root.pickerTab === "themes" ? themesCarousel
-                    : root.pickerTab === "walls" ? wallpapersCarousel : null;
+                    : root.pickerTab === "walls" ? wallsBody.carousel : null;
                 if (carousel) {
                     if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
                         carousel.moveFocus(event.key === Qt.Key_Left ? -1 : 1);
@@ -528,11 +399,11 @@ Item {
                         for (var i = 0; i < Wallpapers.monitors.length; i++) {
                             if (Wallpapers.monitors[i].number === digit) { hasMonitor = true; break; }
                         }
-                        if (hasMonitor) wallpapersCarousel.assignFocusedToMonitor(digit);
+                        if (hasMonitor) wallsBody.carousel.assignFocusedToMonitor(digit);
                         event.accepted = true;
                         return;
                     } else if (event.key === Qt.Key_A) {
-                        wallpapersCarousel.assignFocusedToAll();
+                        wallsBody.carousel.assignFocusedToAll();
                         event.accepted = true;
                         return;
                     } else if (event.key === Qt.Key_I) {
