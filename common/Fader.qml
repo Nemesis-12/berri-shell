@@ -124,16 +124,10 @@ Item {
             detailColor: root.expanded ? Theme.fg : Theme.dim
         }
 
-        Item {
-            id: accentClip
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: fill.height
-            clip: true
+        FillClip {
+            fillHeight: fill.height
 
             MeterText {
-                y: accentClip.height - track.height
                 width: track.width
                 height: track.height
                 textColor: Theme.onAccent

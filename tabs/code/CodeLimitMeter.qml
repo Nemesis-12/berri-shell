@@ -98,17 +98,13 @@ Item {
 
     Readout { tone: Theme.fg }
 
-    Item {
-        width: parent.width
-        y: parent.height - height
-        height: root.fillHeight
-        clip: true
+    FillClip {
+        fillHeight: root.fillHeight
 
         Readout {
             tone: Theme.onAccent
             width: root.width
             height: root.height
-            y: parent.height - root.height
         }
     }
 }

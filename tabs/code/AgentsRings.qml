@@ -61,115 +61,83 @@ Item {
             spacing: ringsArea.gap * 2
 
             // Claude 5-hour
-            Column {
+            RingColumn {
                 width: root.claudeRingSize
-                spacing: 6
+                boxHeight: root.boxHeight
+                caption: AgentUsage.claudeSessionLabel
 
-                Item {
-                    width: root.claudeRingSize
-                    height: root.boxHeight
+                AgentRing {
+                    anchors.centerIn: parent
+                    size: root.claudeRingSize
+                    radius: 17
+                    valueColor: Theme.accent
+                    value: AgentUsage.ringValue(AgentUsage.claudeSessionPercent)
 
-                    AgentRing {
+                    BrandMark {
                         anchors.centerIn: parent
-                        size: root.claudeRingSize
-                        radius: 17
-                        valueColor: Theme.accent
-                        value: AgentUsage.ringValue(AgentUsage.claudeSessionPercent)
-
-                        BrandMark {
-                            anchors.centerIn: parent
-                            brand: "claude"
-                            size: 15
-                            color: Theme.fg
-                        }
+                        brand: "claude"
+                        size: 15
+                        color: Theme.fg
                     }
-                }
-
-                MonoText {
-                    width: root.claudeRingSize
-                    horizontalAlignment: Text.AlignHCenter
-                    text: AgentUsage.claudeSessionLabel
-                    font.letterSpacing: 9 * 0.08
                 }
             }
 
             // Codex 5-hour
-            Column {
+            RingColumn {
                 width: root.codexRingSize
-                spacing: 6
+                boxHeight: root.boxHeight
+                caption: AgentUsage.codexSessionLabel
 
-                Item {
-                    width: root.codexRingSize
-                    height: root.boxHeight
+                AgentRing {
+                    anchors.centerIn: parent
+                    size: root.codexRingSize
+                    radius: 17
+                    valueColor: Theme.accentSecondary
+                    value: AgentUsage.ringValue(AgentUsage.codexSessionPercent)
 
-                    AgentRing {
+                    BrandMark {
                         anchors.centerIn: parent
-                        size: root.codexRingSize
-                        radius: 17
-                        valueColor: Theme.accentSecondary
-                        value: AgentUsage.ringValue(AgentUsage.codexSessionPercent)
-
-                        BrandMark {
-                            anchors.centerIn: parent
-                            brand: "codex"
-                            size: 15
-                            color: Theme.fg
-                        }
+                        brand: "codex"
+                        size: 15
+                        color: Theme.fg
                     }
-                }
-
-                MonoText {
-                    width: root.codexRingSize
-                    horizontalAlignment: Text.AlignHCenter
-                    text: AgentUsage.codexSessionLabel
-                    font.letterSpacing: 9 * 0.08
                 }
             }
 
             // Weekly double ring: outer = Claude, inner = Codex
-            Column {
+            RingColumn {
                 width: root.weeklyRingSize
-                spacing: 6
+                boxHeight: root.boxHeight
+                caption: AgentUsage.weeklyLabel
 
                 Item {
+                    anchors.centerIn: parent
                     width: root.weeklyRingSize
-                    height: root.boxHeight
+                    height: root.weeklyRingSize
 
-                    Item {
-                        anchors.centerIn: parent
-                        width: root.weeklyRingSize
-                        height: root.weeklyRingSize
+                    AgentRing {
+                        anchors.fill: parent
+                        size: root.weeklyRingSize
+                        radius: 15
+                        valueColor: Theme.accentSecondary
+                        value: AgentUsage.ringValue(AgentUsage.codexWeeklyPercent)
+                    }
 
-                        AgentRing {
-                            anchors.fill: parent
-                            size: root.weeklyRingSize
-                            radius: 15
-                            valueColor: Theme.accentSecondary
-                            value: AgentUsage.ringValue(AgentUsage.codexWeeklyPercent)
-                        }
+                    AgentRing {
+                        anchors.fill: parent
+                        size: root.weeklyRingSize
+                        radius: 22
+                        valueColor: Theme.accent
+                        value: AgentUsage.ringValue(AgentUsage.claudeWeeklyPercent)
 
-                        AgentRing {
-                            anchors.fill: parent
-                            size: root.weeklyRingSize
-                            radius: 22
-                            valueColor: Theme.accent
-                            value: AgentUsage.ringValue(AgentUsage.claudeWeeklyPercent)
-
-                            Icon {
-                                anchors.centerIn: parent
-                                name: "calendar"
-                                size: 13
-                                strokeWidth: 1.5
-                                color: Theme.fg
-                            }
+                        Icon {
+                            anchors.centerIn: parent
+                            name: "calendar"
+                            size: 13
+                            strokeWidth: 1.5
+                            color: Theme.fg
                         }
                     }
-                }
-
-                MonoText {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: AgentUsage.weeklyLabel
-                    font.letterSpacing: 9 * 0.08
                 }
             }
         }

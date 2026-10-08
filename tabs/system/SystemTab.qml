@@ -174,14 +174,12 @@ Item {
         }
 
         // Scroll thumb, shown only when the list is taller than its window.
-        Rectangle {
-            visible: list.contentHeight > list.height
+        ListScrollBar {
+            view: list
+            thickness: 6
+            onlyWhileMoving: false
+            viewTop: list.y
             x: parent.width - 6
-            y: list.y + list.visibleArea.yPosition * list.height
-            width: 6
-            height: list.visibleArea.heightRatio * list.height
-            radius: 3
-            color: Theme.border
         }
     }
 

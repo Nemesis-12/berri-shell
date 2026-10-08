@@ -11,6 +11,7 @@ QtObject {
  property int hoverMs: 180
  property int stateMs: 300
  property int transitionDurationMs: 450
+ property var transitionModeIds: ["A", "B", "C2", "D", "F"]
  property var springCurve: [0.32, 0.72, 0, 1, 1, 1]
  property var standardCurve: [0.4, 0, 0.2, 1, 1, 1]
  property string mono: "sans-serif"

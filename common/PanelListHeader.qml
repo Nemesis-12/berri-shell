@@ -58,33 +58,10 @@ Item {
         color: Theme.fg2
     }
 
-    Rectangle {
+    ToggleSwitch {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        width: 34
-        height: 18
-        radius: 2
-        color: root.checked ? Theme.accent : Theme.border
-
-        ColorFade on color { duration: Theme.stateMs }
-
-        Rectangle {
-            width: 14
-            height: 14
-            radius: 1
-            y: 2
-            x: root.checked ? 18 : 2
-            color: Theme.fg
-
-            Behavior on x {
-                StandardMotion { duration: 450 }
-            }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: root.toggled()
-        }
+        checked: root.checked
+        onToggled: root.toggled()
     }
 }
