@@ -70,4 +70,20 @@ TestCase {
             FillClip { fillHeight: 30; Rectangle { width: 10; height: 10 } }
         }
     }
+
+    // A ring stops its motion when its value jumps or it hides. Qt logs a warning if it does that wrongly.
+    function test_arc_ring_changes_value_and_hides_without_warning() {
+        failOnWarning(/.*/);
+        const ring = createTemporaryObject(ringType, tests);
+        ring.value = 80;
+        ring.value = 10;
+        ring.visible = false;
+        ring.value = 50;
+        ring.visible = true;
+        wait(50);
+        ring.value = 90;
+        tryCompare(ring, "value", 90);
+    }
+
+    Component { id: ringType; ArcRing { size: 40 } }
 }
