@@ -37,7 +37,7 @@ class PickerTests(unittest.TestCase):
         for name in ("picker", "common", "logic", "scripts", "shaders"):
             shutil.copytree(REPO / name, self.root / name,
                             ignore=shutil.ignore_patterns("__pycache__"))
-        for path in ("tabs/home/Sticker.qml", "services/Wallpapers.qml", "services/SavedState.qml"):
+        for path in ("tabs/home/Sticker.qml", "services/Wallpapers.qml", "services/SavedState.qml", "services/FolderRoots.qml"):
             target = self.root / path
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(REPO / path, target)
