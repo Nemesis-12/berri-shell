@@ -46,3 +46,10 @@ test("time left uses the shared duration text", () => {
     assert.equal(format.timeLeft(new Date(now.getTime() - 1), now), "--");
     assert.equal(format.timeLeft(null, now), "--");
 });
+
+test("usage choices reject a misspelled source and keep missing readings distinct", () => {
+    const usage = { claude: { today: { tokens: 34, cost: 0.5 } }, codex: {} };
+    assert.deepEqual(format.usageFor(usage, "claude"), usage.claude);
+    assert.deepEqual(format.usageFor(usage, "codex"), usage.codex);
+    assert.throws(() => format.usageFor(usage, "cluade"), /Unknown usage source: cluade/);
+});

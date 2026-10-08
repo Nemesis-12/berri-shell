@@ -4,6 +4,17 @@
 var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+var CLAUDE_SOURCE = "claude";
+var CODEX_SOURCE = "codex";
+var USAGE_CHOICES = [{ id: CLAUDE_SOURCE, label: "Claude" }, { id: CODEX_SOURCE, label: "Codex" }];
+
+/** Usage of a supported source. A missing reading is empty; an unknown choice is an error. */
+function usageFor(usage, source) {
+    if (source !== CLAUDE_SOURCE && source !== CODEX_SOURCE)
+        throw new Error("Unknown usage source: " + source);
+    return usage[source] || {};
+}
+
 /** 1210000 -> "1.21M", 7300 -> "7.3K", 42 -> "42". The unit follows the rounded value: 999999 -> "1.00M". */
 function tokens(n) {
     if (n >= 99.995e6) return Math.round(n / 1e6) + "M";

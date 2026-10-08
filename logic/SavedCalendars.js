@@ -1,4 +1,5 @@
 .pragma library
+.import "CalendarChoices.js" as Choices
 
 /**
  * True when a saved calendar entry names files only inside the calendar
@@ -12,5 +13,5 @@ function isSafeEntry(entry) {
     if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(entry.id)) return false;
     if (entry.kind === "link") return entry.file === "subscriptions/" + entry.id + ".ics";
     if (entry.kind !== "file") return false;
-    return /^[^\/\0.][^\/\0]*\.ics$/i.test(entry.file) && entry.file.toLowerCase() !== "berri.ics";
+    return /^[^\/\0.][^\/\0]*\.ics$/i.test(entry.file) && entry.file.toLowerCase() !== Choices.LOCAL_FILE;
 }
