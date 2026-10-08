@@ -199,8 +199,7 @@ Variants {
 
         // --- Theme-switch transition shader (28a) ---
 
-        readonly property var transitionModeIndex: ({ "A": 0, "B": 1, "C2": 2, "D": 3, "F": 4 })
-
+        // The shader reads a mode by its place in Theme.transitionModeIds.
         Connections {
             target: Theme
             function onWallpaperTransition(mode, durationMs) {
@@ -232,7 +231,7 @@ Variants {
                 effect.newHasImage = newPath ? 1 : 0;
                 effect.oldColor = (Theme.fromRaw && Theme.fromRaw.darker_background) || Theme.shell;
                 effect.newColor = (Theme.toRaw && Theme.toRaw.darker_background) || Theme.shell;
-                effect.modeIndex = layer.transitionModeIndex[mode] !== undefined ? layer.transitionModeIndex[mode] : 0;
+                effect.modeIndex = Math.max(0, Theme.transitionModeIds.indexOf(mode));
                 effect.seed = Math.random() * 1000;
                 effect.resolutionPx = Qt.vector2d(layer.width * modelData.devicePixelRatio, layer.height * modelData.devicePixelRatio);
                 var toRaw = Theme.toRaw || {};

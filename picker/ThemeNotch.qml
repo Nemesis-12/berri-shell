@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Window
 import "../logic/PanelTimeline.js" as PanelTimeline
 import "../logic/PixelGrid.js" as PixelGrid
+import "../logic/ThemeColors.js" as Colors
 import "../logic/Timeline.js" as Timeline
 import qs.common
 import qs.services
@@ -280,7 +281,7 @@ Item {
             z: 1
             anchors.fill: parent
             style: Theme.dashboardStyle
-            colors: [Theme.shell, Theme.card, Theme.raised, Theme.selection, Theme.accent, Theme.fg2]
+            colors: Colors.swatches.map(swatch => Theme[swatch.token])
             progress: root.motionTab !== "themes" ? 0
                 : (root.closing ? Timeline.closeSlice(root.elapsedMs, 0, paletteStrip.spanMs, root.stripCloseAtMs)
                                 : Timeline.slice(root.elapsedMs, 0, paletteStrip.spanMs))
@@ -508,34 +509,21 @@ Item {
             focus: root.pickerOpen
             Keys.onEscapePressed: root.closePicker()
             Keys.onPressed: (event) => {
-                if (root.pickerTab === "themes") {
-                    if (event.key === Qt.Key_Left) {
-                        themesCarousel.moveFocus(-1);
-                        event.accepted = true;
-                        return;
-                    } else if (event.key === Qt.Key_Right) {
-                        themesCarousel.moveFocus(1);
+                var carousel = root.pickerTab === "themes" ? themesCarousel
+                    : root.pickerTab === "walls" ? wallpapersCarousel : null;
+                if (carousel) {
+                    if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
+                        carousel.moveFocus(event.key === Qt.Key_Left ? -1 : 1);
                         event.accepted = true;
                         return;
                     } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                        themesCarousel.applyFocused();
+                        carousel.applyFocused();
                         event.accepted = true;
                         return;
                     }
-                } else if (root.pickerTab === "walls") {
-                    if (event.key === Qt.Key_Left) {
-                        wallpapersCarousel.moveFocus(-1);
-                        event.accepted = true;
-                        return;
-                    } else if (event.key === Qt.Key_Right) {
-                        wallpapersCarousel.moveFocus(1);
-                        event.accepted = true;
-                        return;
-                    } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                        wallpapersCarousel.applyFocused();
-                        event.accepted = true;
-                        return;
-                    } else if (event.key >= Qt.Key_1 && event.key <= Qt.Key_9) {
+                }
+                if (root.pickerTab === "walls") {
+                    if (event.key >= Qt.Key_1 && event.key <= Qt.Key_9) {
                         var digit = event.key - Qt.Key_0;
                         var hasMonitor = false;
                         for (var i = 0; i < Wallpapers.monitors.length; i++) {

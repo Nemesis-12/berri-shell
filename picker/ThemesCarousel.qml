@@ -1,6 +1,5 @@
 import QtQuick
-import QtQuick.Window
-import "../logic/PixelGrid.js" as PixelGrid
+import "../logic/ThemeColors.js" as Colors
 import qs.services
 import qs.common
 
@@ -14,18 +13,15 @@ import qs.common
  * (Left/Right/Enter/Tab, gated to while the picker is open) and calls
  * focusToCurrent()/moveFocus()/applyFocused() here.
  */
-Item {
+CardCarousel {
     id: root
 
-    /** Index into Theme.palettes that is currently focused (scaled up, centered). */
-    property int focusIndex: 0
-
-    readonly property int cardWidth: 236
+    // focusIndex is an index into Theme.palettes (the focused card is scaled up and centered).
+    count: Theme.palettes.length
+    cardWidth: 236
+    cardGap: 12
+    trackHeight: cardHeight
     readonly property int cardHeight: 200
-    readonly property int cardGap: 12
-    readonly property int cardStep: cardWidth + cardGap
-    // Matches the mock's picker body width (900 wide frame minus its 18px*2 padding).
-    readonly property int viewportWidth: 864
 
     // Card color-strip layout, shared with ThemeNotch.qml so the phase-1
     // picker strip can land exactly on the focused card's own strip (the
@@ -59,8 +55,6 @@ Item {
     /** Distance from the card's own bottom edge up to the strip's bottom edge. */
     readonly property real stripBottomOffset: frameBottomMargin + frameInnerInset
 
-    readonly property real dpr: PixelGrid.dpr(Screen.devicePixelRatio)
-
     /** Sets focus to the applied theme; called when the picker opens. */
     function focusToCurrent() {
         var palettes = Theme.palettes;
@@ -74,179 +68,151 @@ Item {
         root.focusIndex = 0;
     }
 
-    /** Moves focus by `delta` cards, clamped to the palette list. */
-    function moveFocus(delta) {
-        var n = Theme.palettes.length;
-        if (n === 0) return;
-        root.focusIndex = Math.max(0, Math.min(n - 1, root.focusIndex + delta));
-    }
-
     /** Applies the currently focused theme (Enter key). */
     function applyFocused() {
         var p = Theme.palettes[root.focusIndex];
         if (p) Theme.apply(p.key, { wallpaper: true, durationMs: Theme.transitionDurationMs });
     }
 
-    clip: true
+    Repeater {
+        model: Theme.palettes
 
-    Item {
-        id: track
-        width: row.width
-        height: root.cardHeight
-        anchors.verticalCenter: parent.verticalCenter
-        // Centers the focused card: -(focusIndex * step - (viewport - card) / 2).
-        x: PixelGrid.snap(-(root.focusIndex * root.cardStep - (root.viewportWidth - root.cardWidth) / 2), root.dpr)
-        Behavior on x {
-            SpringMotion {
-                duration: 500
+        delegate: Rectangle {
+            id: card
+            required property var modelData
+            required property int index
+
+            readonly property var c: modelData.c
+            readonly property bool focused: index === root.focusIndex
+            readonly property bool applied: Theme.current && Theme.current.key === modelData.key
+
+            width: root.cardWidth
+            height: root.cardHeight
+            radius: 8
+            color: c.background
+            border.width: 2
+            border.color: focused ? c.accent : "transparent"
+            scale: focused ? 1 : 0.92
+            opacity: focused ? 1 : 0.72
+
+            Behavior on scale {
+                SpringMotion {
+                    duration: 450
+                }
             }
-        }
+            Fade on opacity { duration: Theme.stateMs }
+            ColorFade on border.color { duration: Theme.stateMs }
 
-        Row {
-            id: row
-            spacing: root.cardGap
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    root.focusIndex = card.index;
+                    Theme.apply(card.modelData.key, { wallpaper: true, durationMs: Theme.transitionDurationMs });
+                }
+            }
 
-            Repeater {
-                model: Theme.palettes
+            // Name + APPLIED badge row.
+            Item {
+                id: headerRow
+                anchors.top: parent.top
+                anchors.topMargin: root.titleTopMargin
+                anchors.left: parent.left
+                anchors.leftMargin: 14
+                anchors.right: parent.right
+                anchors.rightMargin: 14
+                height: root.titleHeight
 
-                delegate: Rectangle {
-                    id: card
-                    required property var modelData
-                    required property int index
+                Text {
+                    textFormat: Text.PlainText
+                    id: nameLabel
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: card.modelData.name
+                    font.family: root.titleFontFamily
+                    font.weight: root.titleFontWeight
+                    font.pixelSize: root.titleFontPixelSize
+                    color: card.c.bright_foreground
+                }
 
-                    readonly property var c: modelData.c
-                    readonly property bool focused: index === root.focusIndex
-                    readonly property bool applied: Theme.current && Theme.current.key === modelData.key
+                Rectangle {
+                    visible: card.applied
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: appliedLabel.implicitWidth + 12
+                    height: appliedLabel.implicitHeight + 8
+                    radius: 5
+                    color: card.c.accent
 
-                    width: root.cardWidth
-                    height: root.cardHeight
-                    radius: 8
-                    color: c.background
-                    border.width: 2
-                    border.color: focused ? c.accent : "transparent"
-                    scale: focused ? 1 : 0.92
-                    opacity: focused ? 1 : 0.72
-
-                    Behavior on scale {
-                        SpringMotion {
-                            duration: 450
-                        }
+                    Text {
+                        textFormat: Text.PlainText
+                        id: appliedLabel
+                        anchors.centerIn: parent
+                        text: "APPLIED"
+                        font.family: Theme.mono
+                        font.weight: Font.DemiBold
+                        font.pixelSize: 9
+                        font.letterSpacing: 0.72
+                        color: card.c.darker_background
                     }
-                    Fade on opacity { duration: Theme.stateMs }
-                    ColorFade on border.color { duration: Theme.stateMs }
+                }
+            }
 
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            root.focusIndex = card.index;
-                            Theme.apply(card.modelData.key, { wallpaper: true, durationMs: Theme.transitionDurationMs });
-                        }
-                    }
+            // 6-color strip with the thin double frame (mock's box-shadow
+            // stack: 1px bright_foreground@30%, 2px card background,
+            // 1px bright_foreground@10%; approximated with nested insets).
+            // The strip itself is radius 10 (mock line 95); the frame rings
+            // around it grow the radius by each shadow's spread: 10+1, 10+3,
+            // 10+4 for the 1px/3px/4px spreads.
+            Rectangle {
+                id: frameOuter
+                anchors.top: headerRow.bottom
+                anchors.topMargin: root.frameTopMargin
+                anchors.left: parent.left
+                anchors.leftMargin: root.frameSideMargin
+                anchors.right: parent.right
+                anchors.rightMargin: root.frameSideMargin
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: root.frameBottomMargin
+                radius: 14
+                color: Qt.rgba(card.c.bright_foreground.r, card.c.bright_foreground.g, card.c.bright_foreground.b, 0.10)
 
-                    // Name + APPLIED badge row.
-                    Item {
-                        id: headerRow
-                        anchors.top: parent.top
-                        anchors.topMargin: root.titleTopMargin
-                        anchors.left: parent.left
-                        anchors.leftMargin: 14
-                        anchors.right: parent.right
-                        anchors.rightMargin: 14
-                        height: root.titleHeight
+                Rectangle {
+                    anchors.fill: parent
+                    anchors.margins: 1
+                    radius: 13
+                    color: card.c.background
 
-                        Text {
-                            textFormat: Text.PlainText
-                            id: nameLabel
-                            anchors.left: parent.left
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: card.modelData.name
-                            font.family: root.titleFontFamily
-                            font.weight: root.titleFontWeight
-                            font.pixelSize: root.titleFontPixelSize
-                            color: card.c.bright_foreground
-                        }
-
-                        Rectangle {
-                            visible: card.applied
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: appliedLabel.implicitWidth + 12
-                            height: appliedLabel.implicitHeight + 8
-                            radius: 5
-                            color: card.c.accent
-
-                            Text {
-                                textFormat: Text.PlainText
-                                id: appliedLabel
-                                anchors.centerIn: parent
-                                text: "APPLIED"
-                                font.family: Theme.mono
-                                font.weight: Font.DemiBold
-                                font.pixelSize: 9
-                                font.letterSpacing: 0.72
-                                color: card.c.darker_background
-                            }
-                        }
-                    }
-
-                    // 6-color strip with the thin double frame (mock's box-shadow
-                    // stack: 1px bright_foreground@30%, 2px card background,
-                    // 1px bright_foreground@10%; approximated with nested insets).
-                    // The strip itself is radius 10 (mock line 95); the frame rings
-                    // around it grow the radius by each shadow's spread: 10+1, 10+3,
-                    // 10+4 for the 1px/3px/4px spreads.
                     Rectangle {
-                        id: frameOuter
-                        anchors.top: headerRow.bottom
-                        anchors.topMargin: root.frameTopMargin
-                        anchors.left: parent.left
-                        anchors.leftMargin: root.frameSideMargin
-                        anchors.right: parent.right
-                        anchors.rightMargin: root.frameSideMargin
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: root.frameBottomMargin
-                        radius: 14
-                        color: Qt.rgba(card.c.bright_foreground.r, card.c.bright_foreground.g, card.c.bright_foreground.b, 0.10)
+                        anchors.fill: parent
+                        anchors.margins: 2
+                        radius: 11
+                        color: Qt.rgba(card.c.bright_foreground.r, card.c.bright_foreground.g, card.c.bright_foreground.b, 0.30)
 
-                        Rectangle {
+                        Row {
+                            id: strip
                             anchors.fill: parent
                             anchors.margins: 1
-                            radius: 13
-                            color: card.c.background
+                            spacing: 0
+                            clip: true
 
-                            Rectangle {
-                                anchors.fill: parent
-                                anchors.margins: 2
-                                radius: 11
-                                color: Qt.rgba(card.c.bright_foreground.r, card.c.bright_foreground.g, card.c.bright_foreground.b, 0.30)
+                            Repeater {
+                                id: stripRepeater
+                                model: Colors.swatches.map(swatch => card.c[swatch.raw])
 
-                                Row {
-                                    id: strip
-                                    anchors.fill: parent
-                                    anchors.margins: 1
-                                    spacing: 0
-                                    clip: true
-
-                                    Repeater {
-                                        id: stripRepeater
-                                        model: [card.c.dark_background, card.c.background, card.c.lighter_background, card.c.selection, card.c.accent, card.c.foreground]
-
-                                        delegate: Rectangle {
-                                            required property var modelData
-                                            required property int index
-                                            width: strip.width / 6
-                                            height: strip.height
-                                            color: modelData
-                                            // Only the outer edges of the first/last column are
-                                            // rounded, so the strip clips to a radius-10 rounded
-                                            // rect without an OpacityMask layer.
-                                            topLeftRadius: index === 0 ? 10 : 0
-                                            bottomLeftRadius: index === 0 ? 10 : 0
-                                            topRightRadius: index === stripRepeater.count - 1 ? 10 : 0
-                                            bottomRightRadius: index === stripRepeater.count - 1 ? 10 : 0
-                                        }
-                                    }
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    required property int index
+                                    width: strip.width / 6
+                                    height: strip.height
+                                    color: modelData
+                                    // Only the outer edges of the first/last column are
+                                    // rounded, so the strip clips to a radius-10 rounded
+                                    // rect without an OpacityMask layer.
+                                    topLeftRadius: index === 0 ? 10 : 0
+                                    bottomLeftRadius: index === 0 ? 10 : 0
+                                    topRightRadius: index === stripRepeater.count - 1 ? 10 : 0
+                                    bottomRightRadius: index === stripRepeater.count - 1 ? 10 : 0
                                 }
                             }
                         }

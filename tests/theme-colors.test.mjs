@@ -71,3 +71,13 @@ test("Theme.qml declares one color property for each table entry", () => {
   const theme = fs.readFileSync(new URL("../services/Theme.qml", import.meta.url), "utf8");
   for (const { name } of lib.tokenTable) assert.match(theme, new RegExp(`property color ${name}:`), name);
 });
+
+test("each swatch token holds the same color as its palette color", () => {
+  assert.equal(lib.swatches.length, 6);
+  const raw = lib.rawPalette(themes[0].c);
+  const tokens = lib.computeTokens(raw);
+  for (const swatch of lib.swatches) {
+    assert.ok(lib.rawKeys.includes(swatch.raw), swatch.raw);
+    assert.deepEqual(tokens[swatch.token], raw[swatch.raw], swatch.token);
+  }
+});
