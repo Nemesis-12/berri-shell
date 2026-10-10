@@ -241,6 +241,17 @@ Item {
             compare(speaker.connectCalls, 1);
         }
 
+        function test_failed_pairing_does_not_connect_later() {
+            const speaker = createTemporaryObject(deviceType, host, { address: "A" });
+            BluetoothPairing.pair(speaker);
+            speaker.pairing = false;
+            wait(BluetoothPairing.graceMs + 300);
+            compare(BluetoothPairing.pending.length, 0);
+            speaker.paired = true;
+            compare(speaker.trusted, false);
+            compare(speaker.connectCalls, 0);
+        }
+
         function test_failed_pair_call_is_dropped() {
             const speaker = createTemporaryObject(deviceType, host, { address: "A", pairThrows: true });
             BluetoothPairing.pair(speaker);
