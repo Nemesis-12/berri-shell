@@ -37,7 +37,7 @@ Singleton {
     id: root
 
     /** How many calendar views are visible now (see WhileVisible.qml). The folder is scanned when the first one opens. */
-    property alias viewers: files.viewers
+    property alias viewers: calendarFiles.viewers
 
     readonly property string dir: FolderRoots.calendar
     readonly property string defaultPath: dir + "/" + Identity.LOCAL_FILE
@@ -136,7 +136,7 @@ Singleton {
         if (fields.calendarId && (!target || target.kind === "link")) return false;
         if (target) path = dir + "/" + target.file;
         var calendar = target || _calendars[Identity.LOCAL_ID];
-        if (!disk.canWrite(calendar)) return false;
+        if (!canWriteCalendar(calendar.id)) return false;
         var doc = calendar.document || Format.emptyCalendar();
         var item = Items.makeItem(Catalog.cleanDates(fields));
         doc.items.push(item);
@@ -234,8 +234,8 @@ Singleton {
         var path = dir + "/" + meta.file;
         delete _calendars[id];
         _order = _order.filter(function (o) { return o !== id; });
-        files.cancelDownloads(id);
-        files.removeFile(path);
+        calendarFiles.cancelDownloads(id);
+        calendarFiles.removeFile(path);
         _applyCalendarListChange();
         return true;
     }
@@ -290,6 +290,215 @@ Singleton {
         _rebuild();
     }
 
+    // ---- helper interface. Helpers pass results; Calendar owns stored state and notification order.
+
+    /**
+     * True when an edit may write this calendar. After a failed read, the
+     * file may hold changes berri never saw, so a write could overwrite them.
+     * Such a calendar reads the file again first. If that fails, the
+     * edit is refused and `saveFailed` carries the read error.
+     */
+    function canWriteCalendar(id: string): bool {
+        var calendar = _calendars[id];
+        if (!calendar) return false;
+        if (!calendar.readFailed) return true;
+        var text = calendarFiles.readNow(calendar.path);
+        if (text !== null) {
+            acceptCalendarRead(calendar.path, text, false);
+            return true;
+        }
+        root.lastError = root.readErrorText(calendar.name);
+        root.saveFailed(root.lastError);
+        return false;
+    }
+
+    // Shows an error for a subscription whose records could not be read. The calendar counts as loaded.
+    function _recordsFailed(calendar: var, message: string): void {
+        calendar.error = message;
+        console.error("Calendar: " + message + " for " + calendar.name);
+        calendar.loaded = true;
+        _rebuild();
+        _checkReady();
+    }
+
+    // A file could not be read. Keep any cached document for display, but refuse edits until a read succeeds.
+    function _readFailed(calendar: var): void {
+        calendar.readFailed = true;
+        calendar.error = root.readErrorText(calendar.name);
+        calendar.loaded = true;
+        _rebuild();
+        _checkReady();
+    }
+
+    // Puts the read text of a link's records file into the calendar.
+    function _takeRecords(calendar: var, text: string, signature: string, unnamed: bool): bool {
+        var parsed = Catalog.parseRecords(text);
+        if (!parsed) { _recordsFailed(calendar, root.recordsErrorText); return false; }
+        calendar.records = parsed.records;
+        calendar.signature = signature;
+        if (unnamed) calendar.name = parsed.name || calendar.file.replace(/\.ics$/i, "");
+        // Old records stay on screen as a fallback while a failed conversion shows its error.
+        calendar.error = calendar.convertError || "";
+        return true;
+    }
+
+    /** Accepts a file read and updates its calendar without exposing stored entries. */
+    function acceptCalendarRead(path: string, text: string, failed: bool): void {
+        var id = _idOfPath(path);
+        if (!id) return;
+        var calendar = _calendars[id];
+        if (failed && calendar.kind !== "link") { _readFailed(calendar); return; }
+        if (!failed) { calendar.readFailed = false; if (calendar.kind !== "link") calendar.error = ""; }
+        var signature = text.length + ":" + Items.shortHash(text);
+        if (failed && calendar.kind === "link") { _recordsFailed(calendar, calendar.convertError || root.parserError || root.recordsErrorText); return; }
+        if ((!calendar.document && !calendar.records) || !failed && calendar.signature !== signature) {
+            var unnamed = !calendar.name;
+            if (calendar.kind === "link") {
+                if (!_takeRecords(calendar, text, signature, unnamed)) return;
+            } else {
+                calendar.document = Format.readCalendar(text, _localZone);
+                calendar.text = text;
+                calendar.signature = signature;
+                if (unnamed) calendar.name = Queries.calendarName(calendar.document) || calendar.file.replace(/\.ics$/i, "");
+            }
+            if (unnamed) _saveState();
+            _rebuild();
+        }
+        calendar.loaded = true;
+        _checkReady();
+    }
+
+    /** Write text for a stored document. The result carries text only, never the stored document. */
+    function prepareCalendarWrite(path: string): var {
+        var calendar = _calendars[_idOfPath(path)];
+        return { nextText: Format.writeCalendar(calendar.document, _localZone),
+            previousText: calendar.text, failurePrefix: "Could not save " + calendar.name };
+    }
+
+    /** Accepts a write result, restores a failed edit, then updates views before reporting failure. */
+    function acceptCalendarWrite(path: string, written: var, uids: var): bool {
+        var calendar = _calendars[_idOfPath(path)];
+        if (written.saved) {
+            calendar.text = written.text;
+            calendar.signature = written.text.length + ":" + Items.shortHash(written.text);
+            calendar.loaded = true;
+        } else {
+            calendar.document = Format.readCalendar(written.text, _localZone);
+        }
+        lastError = written.error;
+        if (uids) _rebuildItem(calendar, uids);
+        else _rebuild();
+        if (!written.saved) saveFailed(written.error);
+        return written.saved;
+    }
+
+    /** Clears the last import error and duplicate count when an import starts. */
+    function beginCalendarImport(): void {
+        lastError = "";
+        lastImportDuplicates = 0;
+    }
+
+    /** Reports why an import failed. */
+    function failCalendarImport(message: string): void { lastError = message; }
+
+    /** Plans a file import using the current names and items, or finds an identical file. */
+    function prepareCalendarImport(from: string, text: string): var {
+        for (var i = 0; i < _order.length; i++) {
+            var other = _calendars[_order[i]];
+            if (other.kind === "file" && other.text === text) return { existingId: other.id };
+        }
+        var file = Catalog.importFileName(from, function (name) { return Catalog.fileTaken(_order, _calendars, name); });
+        var doc = Format.readCalendar(text, _localZone);
+        var duplicates = Queries.countDuplicates(doc.items, Catalog.existingItems(_order, _calendars));
+        return { file: file, path: dir + "/" + file, document: doc, duplicates: duplicates, from: from };
+    }
+
+    /** Adds an imported document after its file was written, then updates readers and views. */
+    function acceptCalendarImport(prepared: var, text: string, color): string {
+        var name = Queries.calendarName(prepared.document) || Catalog.importStem(prepared.from);
+        var meta = _addCalendar("f-" + Items.shortHash(prepared.file), "file", name, prepared.file, "", color);
+        meta.document = prepared.document;
+        meta.text = text;
+        meta.signature = text.length + ":" + Items.shortHash(text);
+        meta.loaded = true;
+        _applyCalendarListChange();
+        lastImportDuplicates = prepared.duplicates;
+        return meta.id;
+    }
+
+    /** Sets the parser error that a failed link read shows. An empty text clears it. */
+    function setParserError(message: string): void { parserError = message; }
+
+    /** Allocates the id carried by each subscribe result, including immediate results. */
+    function nextSubscriptionRequest(): int { return ++_nextSubscription; }
+
+    /** True when a calendar id is already present. Helpers do not need its stored entry. */
+    function hasCalendar(id: string): bool { return !!_calendars[id]; }
+
+    /** Starts a valid link refresh once and supplies only the data needed for its download. */
+    function beginLinkRefresh(id: string, badLinkText: string): var {
+        var meta = _calendars[id];
+        if (!meta || meta.kind !== "link" || meta.refreshing) return null;
+        // A saved link is checked like a typed one: no download for a rejected link.
+        var https = Queries.feedUrl(meta.url);
+        if (!https) { meta.error = badLinkText; return null; }
+        meta.refreshing = true;
+        return { shownUrl: meta.url, url: https, calendarId: id };
+    }
+
+    /** Link ids in calendar order, optionally restricted to caches older than 30 minutes. */
+    function linkRefreshIds(onlyStale: bool): var {
+        var limit = Date.now() - 30 * 60000;
+        var ids = [];
+        for (var i = 0; i < _order.length; i++) {
+            var meta = _calendars[_order[i]];
+            if (meta.kind === "link" && (!onlyStale || meta.updatedAt < limit)) ids.push(meta.id);
+        }
+        return ids;
+    }
+
+    /** Counts checked link items already present in the stored calendars. */
+    function countLinkDuplicates(records: var): int {
+        var calendars = _order.map(function (id) { return _calendars[id]; });
+        return Queries.countStoredDuplicates(records, calendars);
+    }
+
+    // A new link becomes a calendar with its records.
+    function acceptSubscription(request: var, name: string, doc: var, json: string, error: string): void {
+        var id = request.calendarId;
+        if (error) { root.subscribed(request.shownUrl, "", error, request.requestId); return; }
+        if (_calendars[id]) { root.subscribed(request.shownUrl, id, "", request.requestId); return; }
+        var calendar = _addCalendar(id, "link", name, "subscriptions/" + id + ".ics", request.url, request.color);
+        calendar.records = doc.records;
+        calendar.signature = Catalog.recordsSignature(json);
+        calendar.loaded = true;
+        _applyCalendarListChange();
+        root.subscribed(request.shownUrl, id, "", request.requestId);
+    }
+
+    // A refresh keeps the old records on an error. A feed with the same text and no error to clear keeps its cached months.
+    function acceptLinkRefresh(id: string, doc: var, json: string, error: string): void {
+        var meta = _calendars[id];
+        if (!meta) return;
+        meta.refreshing = false;
+        var result = error ? null : Catalog.refreshResult(meta, doc, json);
+        var same = !error && result.same;
+        if (error) {
+            meta.error = error;
+        } else {
+            if (!same) meta.records = doc.records;
+            meta.signature = result.signature;
+            meta.loaded = true;
+            meta.error = "";
+            meta.convertError = "";
+            meta.colorOverrides = result.overrides;
+            meta.updatedAt = Date.now();
+            _saveState();
+        }
+        if (same) _refreshRow(meta);
+        else _rebuild();
+    }
+
     // ---- storage
 
     // Editable calendars keep documents and text; links keep compact records.
@@ -304,7 +513,7 @@ Singleton {
         var identity = Items.itemIdentity(uid);
         var meta = identity ? _calendars[identity.calendarId] : null;
         if (!meta || forEdit && meta.kind === "link") return null;
-        if (forEdit && !disk.canWrite(meta)) return null;
+        if (forEdit && !canWriteCalendar(meta.id)) return null;
         var doc = meta.document;
         var items = doc ? doc.items : meta.records || [];
         var index = Items.itemIndex(items, uid, meta.id);
@@ -312,7 +521,7 @@ Singleton {
     }
 
     function _idOfPath(path: string): string {
-        return Catalog.idOfPath(_order, _calendars, path, files.recordPath);
+        return Catalog.idOfPath(_order, _calendars, path, calendarFiles.recordPath);
     }
 
     function _usedColors(): var {
@@ -374,7 +583,7 @@ Singleton {
         _calendars = restored.calendars;
         _order = restored.order;
         _stateRead = true;
-        files.active = true;
+        calendarFiles.active = true;
     }
 
     function _saveState(): void {
@@ -391,21 +600,20 @@ Singleton {
     CalendarDisk {
         id: disk
         store: root
+        files: calendarFiles
     }
 
     CalendarLinks {
         id: links
         store: root
+        files: calendarFiles
     }
 
-    /** The file access, for CalendarDisk and CalendarLinks. */
-    readonly property alias _files: files
-
     CalendarFiles {
-        id: files
+        id: calendarFiles
         folder: root.dir
         onListed: paths => root._reconcile(paths)
-        onRead: (path, text, failed) => disk.ingest(path, text, failed)
+        onRead: (path, text, failed) => root.acceptCalendarRead(path, text, failed)
         onDownloaded: (request, code, jsonPath) => links.downloaded(request, code, jsonPath)
         onConvertFailed: jsonPath => {
             var id = root._idOfPath(jsonPath);
@@ -432,14 +640,14 @@ Singleton {
 
     // File readers and readiness follow the same calendar list.
     function _syncPaths(): void {
-        files.paths = _order.map(function (id) {
+        calendarFiles.paths = _order.map(function (id) {
             var calendar = _calendars[id];
-            return calendar.kind === "link" ? files.recordPath(calendar.path) : calendar.path;
+            return calendar.kind === "link" ? calendarFiles.recordPath(calendar.path) : calendar.path;
         });
         _checkReady();
     }
 
     function _checkReady(): void {
-        if (!ready && _stateRead && files.folderReady && _order.every(function (id) { return _calendars[id].loaded; })) ready = true;
+        if (!ready && _stateRead && calendarFiles.folderReady && _order.every(function (id) { return _calendars[id].loaded; })) ready = true;
     }
 }
