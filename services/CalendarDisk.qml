@@ -15,14 +15,13 @@ QtObject {
 
     /** Reports why an import was refused. */
     function fail(message: string): string {
-        store.lastError = message;
+        store.failCalendarImport(message);
         return "";
     }
 
     /** Copies an .ics file into the calendar folder as a new file calendar (see Calendar.importFile). */
     function importFile(path: string, color): string {
-        store.lastError = "";
-        store.lastImportDuplicates = 0;
+        store.beginCalendarImport();
         var from = String(path).replace(/^file:\/\//, "");
         if (!/\.ics$/i.test(from)) return fail("Not an .ics file");
         var text = files.readNow(from);
@@ -31,7 +30,7 @@ QtObject {
         var prepared = store.prepareCalendarImport(from, text);
         if (prepared.existingId) return prepared.existingId;
         var written = write(prepared.path, text, "", "Could not import calendar");
-        if (!written.saved) { store.lastError = written.error; return ""; }
+        if (!written.saved) return fail(written.error);
         return store.acceptCalendarImport(prepared, text, color);
     }
 

@@ -96,8 +96,8 @@ QtObject {
         if (request.purpose === "check" && jsonPath) removeCheckFiles(jsonPath);
         if (error) {
             console.error("Calendar: " + error);
-            if (code === files.exitParserMissing) store.parserError = error;
-        } else store.parserError = "";
+            if (code === files.exitParserMissing) store.setParserError(error);
+        } else store.setParserError("");
         var name = doc ? doc.name || Queries.linkHost(request.url) : "";
         if (request.purpose === "check") finishCheck(request.shownUrl, name, doc, error);
         else if (request.purpose === "subscribe") store.acceptSubscription(request, name, doc, json, error);

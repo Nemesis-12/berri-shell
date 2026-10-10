@@ -368,7 +368,7 @@ Singleton {
         _checkReady();
     }
 
-    /** Write text for a stored document. Helpers never receive the mutable document. */
+    /** Write text for a stored document. The result carries text only, never the stored document. */
     function prepareCalendarWrite(path: string): var {
         var calendar = _calendars[_idOfPath(path)];
         return { nextText: Format.writeCalendar(calendar.document, _localZone),
@@ -376,7 +376,7 @@ Singleton {
     }
 
     /** Accepts a write result, restores a failed edit, then updates views before reporting failure. */
-    function acceptCalendarWrite(path: string, written: var, uids): bool {
+    function acceptCalendarWrite(path: string, written: var, uids: var): bool {
         var calendar = _calendars[_idOfPath(path)];
         if (written.saved) {
             calendar.text = written.text;
@@ -391,6 +391,15 @@ Singleton {
         if (!written.saved) saveFailed(written.error);
         return written.saved;
     }
+
+    /** Clears the last import error and duplicate count when an import starts. */
+    function beginCalendarImport(): void {
+        lastError = "";
+        lastImportDuplicates = 0;
+    }
+
+    /** Reports why an import failed. */
+    function failCalendarImport(message: string): void { lastError = message; }
 
     /** Plans a file import using the current names and items, or finds an identical file. */
     function prepareCalendarImport(from: string, text: string): var {
@@ -416,6 +425,9 @@ Singleton {
         lastImportDuplicates = prepared.duplicates;
         return meta.id;
     }
+
+    /** Sets the parser error that a failed link read shows. An empty text clears it. */
+    function setParserError(message: string): void { parserError = message; }
 
     /** Allocates the id carried by each subscribe result, including immediate results. */
     function nextSubscriptionRequest(): int { return ++_nextSubscription; }
