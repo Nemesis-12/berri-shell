@@ -2,13 +2,19 @@ import QtQuick
 import "../logic/ArtUrl.js" as ArtUrl
 import qs.services
 
-/** Shows album art and releases decoded images when hidden. */
+/**
+ * Shows album art and releases decoded images when hidden. `failed` is true
+ * when the link cannot be loaded; the owner then shows its fallback icon.
+ */
 Item {
     id: root
 
     property string artUrl: ""
     readonly property string safeUrl: ArtUrl.safeArtUrl(artUrl)
     property real dpr: 1
+
+    /** True when a link is set but its image cannot be loaded. */
+    readonly property bool failed: front.status === Image.Error
 
     function loadArt() {
         if (!root.visible || !root.safeUrl) {
@@ -24,13 +30,14 @@ Item {
         if (front.status === Image.Ready) front.opacity = 1;
     }
 
-    onArtUrlChanged: loadArt()
+    onSafeUrlChanged: loadArt()
     onVisibleChanged: loadArt()
     Component.onCompleted: loadArt()
 
     // Keep the previous art only until the new art has faded in.
     Image {
         id: back
+        objectName: "back"
         anchors.fill: parent
         fillMode: Image.PreserveAspectCrop
         sourceSize: Qt.size(width * root.dpr, height * root.dpr)
@@ -43,6 +50,7 @@ Item {
 
     Image {
         id: front
+        objectName: "front"
         anchors.fill: parent
         fillMode: Image.PreserveAspectCrop
         sourceSize: Qt.size(width * root.dpr, height * root.dpr)
@@ -53,7 +61,10 @@ Item {
         opacity: 0
         visible: source !== ""
 
-        onStatusChanged: if (status === Image.Ready) opacity = 1
+        onStatusChanged: {
+            if (status === Image.Ready) opacity = 1;
+            else if (status === Image.Error) back.source = "";
+        }
         onOpacityChanged: if (opacity >= 1) back.source = ""
 
         Fade on opacity { duration: Theme.stateMs }
