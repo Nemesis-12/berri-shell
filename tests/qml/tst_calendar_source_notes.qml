@@ -57,8 +57,6 @@ TestCase {
         waitForRendering(view);
         if (capturePath !== "") {
             grabImage(view).save(capturePath + "/sources.png");
-            grabImage(normal).save(capturePath + "/normal.png");
-            grabImage(failed).save(capturePath + "/failed.png");
         }
         compare(normal.sourceLine, "0 items");
         compare(failed.sourceLine, "Download failed");

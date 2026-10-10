@@ -279,7 +279,7 @@ function curlError(code) {
     }
 }
 
-/** Uses the existing source problem text for unsupported recurrence properties. */
+/** A source note for unsupported recurrence properties, separate from read or sync failures. */
 function recurrenceNote(items) {
     var names = [];
     for (var i = 0; i < items.length; i++) {
@@ -304,7 +304,8 @@ function projectStoredCalendars(calendars) {
         rows.push({ id: cal.id, name: cal.name, kind: cal.kind, color: cal.color,
             hidden: cal.hidden, itemCount: cal.kind === "link" ? records.length : items.length,
             source: cal.kind === "link" ? linkHost(cal.url) : cal.kind === "file" ? cal.file : "",
-            updatedAt: cal.updatedAt, readOnly: cal.kind === "link", error: cal.error || recurrenceNote(cal.kind === "link" ? records : items) });
+            updatedAt: cal.updatedAt, readOnly: cal.kind === "link", error: cal.error || "",
+            note: recurrenceNote(cal.kind === "link" ? records : items) });
         if (cal.kind === "link") {
             if (!cal.hidden) sources.push({ id: cal.id, color: cal.color,
                 colorOverrides: cal.colorOverrides, records: records });

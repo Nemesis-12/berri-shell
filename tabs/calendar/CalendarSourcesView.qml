@@ -273,7 +273,8 @@ Item {
             itemCount: c.itemCount || 0,
             source: c.source || "",
             updatedAt: c.updatedAt || 0,
-            failure: c.error || ""
+            failure: c.error || "",
+            note: c.note || ""
         };
     }
 

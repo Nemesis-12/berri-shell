@@ -23,11 +23,13 @@ Item {
     required property string source
     required property real updatedAt
     required property string failure
+    required property string note
 
     readonly property color tint: CalendarColors.resolve(calColor)
     readonly property bool isLink: kind === "link"
     readonly property string sourceLine: failure !== ""
         ? failure
+        : note !== "" ? note
         : isLink ? (source + " · " + Times.ageText(updatedAt, row.now, "ago")) : (itemCount + (itemCount === 1 ? " item" : " items"))
 
     width: ListView.view.width
