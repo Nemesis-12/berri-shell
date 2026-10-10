@@ -44,7 +44,11 @@ Item {
             property bool trusted: false
             property bool connected: false
             property int connectCalls: 0
-            function pair() { pairing = true; }
+            property bool pairThrows: false
+            function pair() {
+                if (pairThrows) throw new Error("pair failed");
+                pairing = true;
+            }
             function connect() { connectCalls += 1; }
         }
     }
@@ -204,14 +208,36 @@ Item {
             compare([second.trusted, second.connectCalls], [true, 1]);
         }
 
-        function test_failed_pairing_does_not_connect_later() {
+        function test_pairing_that_ends_before_paired_still_connects() {
             const speaker = createTemporaryObject(deviceType, host, { address: "A" });
             btList.chooseDevice(speaker);
             speaker.pairing = false;
             wait(50);
             speaker.paired = true;
+            compare(speaker.trusted, true);
+            compare(speaker.connectCalls, 1);
+        }
+
+        function test_failed_pair_call_is_dropped() {
+            const speaker = createTemporaryObject(deviceType, host, { address: "A", pairThrows: true });
+            BluetoothPairing.pair(speaker);
+            compare(BluetoothPairing.pending.length, 0);
+            speaker.paired = true;
             compare(speaker.connectCalls, 0);
             compare(speaker.trusted, false);
+        }
+
+        function test_destroyed_device_is_dropped() {
+            const speaker = createTemporaryObject(deviceType, host, { address: "A" });
+            const other = createTemporaryObject(deviceType, host, { address: "B" });
+            BluetoothPairing.pair(speaker);
+            BluetoothPairing.pair(other);
+            compare(BluetoothPairing.pending.length, 2);
+            speaker.destroy();
+            wait(50);
+            other.paired = true;
+            compare(other.connectCalls, 1);
+            compare(BluetoothPairing.pending.length, 0);
         }
 
         function test_process_rows_are_updated_in_place() {
