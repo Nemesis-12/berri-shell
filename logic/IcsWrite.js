@@ -35,7 +35,7 @@ function dateProp(name, key, time, source, localZone) {
     return name + ":" + Zones.utcClock(local.getTime()) + "Z";
 }
 
-/** The UNTIL value: the source text when unchanged, else a date or an end-of-day clock in the source form. */
+/** Keeps an unchanged UNTIL; an edit ends the chosen local display day, in the required source form. */
 function untilValue(item, localZone) {
     var source = item.sourceDates && item.sourceDates.until;
     var start = item.sourceDates && item.sourceDates.start;
@@ -43,8 +43,7 @@ function untilValue(item, localZone) {
     if (item.time === null) return icsDate(item.until);
     var inUtc = (source && source.form === "utc") || (start && (start.form === "utc" || start.form === "zone"));
     if (!inUtc) return icsDate(item.until) + "T235959";
-    var wall = icsDate(item.until) + "T235959";
-    var endMs = start && start.form === "zone" ? Zones.zoneInstant(wall, start.tzid, localZone) : Zones.clockMs(wall);
+    var endMs = new Date(+item.until.slice(0, 4), +item.until.slice(5, 7) - 1, +item.until.slice(8, 10), 23, 59, 59).getTime();
     return Zones.utcClock(endMs) + "Z";
 }
 

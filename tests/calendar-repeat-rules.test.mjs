@@ -70,11 +70,11 @@ for (const [name, start, before, equal] of [
   });
 }
 
-test("changing a zoned UNTIL day writes the end of that day in the source zone", () => {
+test("changing a zoned UNTIL day writes the end of the chosen local day", () => {
   const doc = calendar("DTSTART;TZID=Europe/Berlin:20261008T090000", "RRULE:FREQ=DAILY;UNTIL=20261009T215959Z");
   doc.items[0] = Items.applyChanges(doc.items[0], { until: "2026-10-10" });
   const text = Format.writeCalendar(doc);
-  assert.match(text, /UNTIL=20261010T215959Z/);
+  assert.match(text, /UNTIL=20261011T045959Z/);
   assert.deepEqual(monthDates(saved(doc).items[0]), ["2026-10-08", "2026-10-09", "2026-10-10"]);
 });
 
