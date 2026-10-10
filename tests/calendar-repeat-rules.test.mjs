@@ -77,3 +77,18 @@ test("changing a zoned UNTIL day writes the end of that day in the source zone",
   assert.match(text, /UNTIL=20261010T215959Z/);
   assert.deepEqual(monthDates(saved(doc).items[0]), ["2026-10-08", "2026-10-09", "2026-10-10"]);
 });
+
+for (const [name, start, exclusion, edited, expected] of [
+  ["floating", "DTSTART:20261008T090000", "EXDATE:20261009T090000", "10:00", "EXDATE:20261009T100000"],
+  ["UTC", "DTSTART:20261008T140000Z", "EXDATE:20261009T140000Z", "10:00", "EXDATE:20261009T150000Z"],
+  ["Berlin", "DTSTART;TZID=Europe/Berlin:20261008T090000", "EXDATE;TZID=Europe/Berlin:20261009T090000", "03:00", "EXDATE;TZID=Europe/Berlin:20261009T100000"],
+]) {
+  test(`${name} EXDATE follows a series time edit and survives read-save-read`, () => {
+    const doc = calendar(start, "RRULE:FREQ=DAILY;COUNT=3", exclusion);
+    assert.ok(Format.writeCalendar(doc).includes(exclusion));
+    doc.items[0] = Items.applyChanges(doc.items[0], { time: edited });
+    const text = Format.writeCalendar(doc);
+    assert.ok(text.includes(expected), text);
+    assert.deepEqual(monthDates(Format.readCalendar(text).items[0]), ["2026-10-08", "2026-10-10"]);
+  });
+}
