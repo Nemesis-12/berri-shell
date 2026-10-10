@@ -10,7 +10,7 @@ import "../logic/CalendarSave.js" as Save
 QtObject {
     id: disk
 
-    required property var store
+    required property QtObject store
     required property CalendarFiles files
 
     /** Reports why an import was refused. */

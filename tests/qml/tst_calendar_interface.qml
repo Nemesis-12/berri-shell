@@ -48,4 +48,29 @@ TestCase {
         compare(Calendar.prepareCalendarImport("/outside/other.ics", text).existingId, id);
     }
 
+    // Refresh requests carry only link data, and failed refreshes keep the old items.
+    function test_link_requests_and_results_keep_the_previous_items_on_error() {
+        const request = { calendarId: "l-test", url: "https://example.test/feed", shownUrl: "webcal://example.test/feed", color: "blue", requestId: Calendar.nextSubscriptionRequest() };
+        const doc = { name: "Feed", records: [{ uid: "one", kind: "event", title: "First", date: "2026-10-05" }] };
+        const json = JSON.stringify(doc);
+        TestIo.texts[Calendar.dir + "/subscriptions/l-test.json"] = json;
+        Calendar.acceptSubscription(request, doc.name, doc, json, "");
+        compare(Calendar.hasCalendar("l-test"), true);
+        compare(Calendar.linkRefreshIds(false), ["l-test"]);
+        compare(Calendar.linkRefreshIds(true), []);
+        compare(Calendar.countLinkDuplicates(doc.records), 1);
+        const refresh = Calendar.beginLinkRefresh("l-test", "Invalid link");
+        compare(refresh, { shownUrl: request.url, url: request.url, calendarId: "l-test" });
+        compare(Calendar.beginLinkRefresh("l-test", "Invalid link"), null);
+        Calendar.acceptLinkRefresh("l-test", null, "", "Download failed");
+        compare(Calendar.itemsOn("2026-10-05").map(item => item.title), ["First"]);
+        compare(Calendar.calendars.find(calendar => calendar.id === "l-test").error, "Download failed");
+        verify(Calendar.beginLinkRefresh("l-test", "Invalid link") !== null);
+        const next = { name: "Feed", records: [{ uid: "two", kind: "event", title: "Second", date: "2026-10-06" }] };
+        Calendar.acceptLinkRefresh("l-test", next, JSON.stringify(next), "");
+        compare(Calendar.itemsOn("2026-10-05"), []);
+        compare(Calendar.itemsOn("2026-10-06").map(item => item.title), ["Second"]);
+        compare(Calendar.calendars.find(calendar => calendar.id === "l-test").error, "");
+    }
+
 }

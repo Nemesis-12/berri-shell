@@ -136,7 +136,7 @@ Singleton {
         if (fields.calendarId && (!target || target.kind === "link")) return false;
         if (target) path = dir + "/" + target.file;
         var calendar = target || _calendars[Identity.LOCAL_ID];
-        if (!canWriteCalendar(calendar)) return false;
+        if (!canWriteCalendar(calendar.id)) return false;
         var doc = calendar.document || Format.emptyCalendar();
         var item = Items.makeItem(Catalog.cleanDates(fields));
         doc.items.push(item);
@@ -298,7 +298,8 @@ Singleton {
      * Such a calendar reads the file again first. If that fails, the
      * edit is refused and `saveFailed` carries the read error.
      */
-    function canWriteCalendar(calendar: var): bool {
+    function canWriteCalendar(id: string): bool {
+        var calendar = _calendars[id];
         if (!calendar.readFailed) return true;
         var text = calendarFiles.readNow(calendar.path);
         if (text !== null) {
@@ -415,6 +416,76 @@ Singleton {
         return meta.id;
     }
 
+    /** Allocates the id carried by each subscribe result, including immediate results. */
+    function nextSubscriptionRequest(): int { return ++_nextSubscription; }
+
+    /** True when a calendar id is already present. Helpers do not need its stored entry. */
+    function hasCalendar(id: string): bool { return !!_calendars[id]; }
+
+    /** Starts a valid link refresh once and supplies only the data needed for its download. */
+    function beginLinkRefresh(id: string, badLinkText: string): var {
+        var meta = _calendars[id];
+        if (!meta || meta.kind !== "link" || meta.refreshing) return null;
+        // A saved link is checked like a typed one: no download for a rejected link.
+        var https = Queries.feedUrl(meta.url);
+        if (!https) { meta.error = badLinkText; return null; }
+        meta.refreshing = true;
+        return { shownUrl: meta.url, url: https, calendarId: id };
+    }
+
+    /** Link ids in calendar order, optionally restricted to caches older than 30 minutes. */
+    function linkRefreshIds(onlyStale: bool): var {
+        var limit = Date.now() - 30 * 60000;
+        var ids = [];
+        for (var i = 0; i < _order.length; i++) {
+            var meta = _calendars[_order[i]];
+            if (meta.kind === "link" && (!onlyStale || meta.updatedAt < limit)) ids.push(meta.id);
+        }
+        return ids;
+    }
+
+    /** Counts checked link items already present in the stored calendars. */
+    function countLinkDuplicates(records: var): int {
+        var calendars = _order.map(function (id) { return _calendars[id]; });
+        return Queries.countStoredDuplicates(records, calendars);
+    }
+
+    // A new link becomes a calendar with its records.
+    function acceptSubscription(request: var, name: string, doc: var, json: string, error: string): void {
+        var id = request.calendarId;
+        if (error) { root.subscribed(request.shownUrl, "", error, request.requestId); return; }
+        if (_calendars[id]) { root.subscribed(request.shownUrl, id, "", request.requestId); return; }
+        var calendar = _addCalendar(id, "link", name, "subscriptions/" + id + ".ics", request.url, request.color);
+        calendar.records = doc.records;
+        calendar.signature = Catalog.recordsSignature(json);
+        calendar.loaded = true;
+        _applyCalendarListChange();
+        root.subscribed(request.shownUrl, id, "", request.requestId);
+    }
+
+    // A refresh keeps the old records on an error. A feed with the same text and no error to clear keeps its cached months.
+    function acceptLinkRefresh(id: string, doc: var, json: string, error: string): void {
+        var meta = _calendars[id];
+        if (!meta) return;
+        meta.refreshing = false;
+        var result = error ? null : Catalog.refreshResult(meta, doc, json);
+        var same = !error && result.same;
+        if (error) {
+            meta.error = error;
+        } else {
+            if (!same) meta.records = doc.records;
+            meta.signature = result.signature;
+            meta.loaded = true;
+            meta.error = "";
+            meta.convertError = "";
+            meta.colorOverrides = result.overrides;
+            meta.updatedAt = Date.now();
+            _saveState();
+        }
+        if (same) _refreshRow(meta);
+        else _rebuild();
+    }
+
     // ---- storage
 
     // Editable calendars keep documents and text; links keep compact records.
@@ -429,7 +500,7 @@ Singleton {
         var identity = Items.itemIdentity(uid);
         var meta = identity ? _calendars[identity.calendarId] : null;
         if (!meta || forEdit && meta.kind === "link") return null;
-        if (forEdit && !canWriteCalendar(meta)) return null;
+        if (forEdit && !canWriteCalendar(meta.id)) return null;
         var doc = meta.document;
         var items = doc ? doc.items : meta.records || [];
         var index = Items.itemIndex(items, uid, meta.id);
