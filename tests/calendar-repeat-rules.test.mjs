@@ -92,3 +92,10 @@ for (const [name, start, exclusion, edited, expected] of [
     assert.deepEqual(monthDates(Format.readCalendar(text).items[0]), ["2026-10-08", "2026-10-10"]);
   });
 }
+
+test("an edited UTC series writes an excluded winter occurrence at its UTC clock", () => {
+  const doc = calendar("DTSTART:20261026T140000Z", "RRULE:FREQ=WEEKLY;COUNT=3", "EXDATE:20261102T140000Z");
+  doc.items[0] = Items.applyChanges(doc.items[0], { time: "10:00" });
+  assert.match(Format.writeCalendar(doc), /EXDATE:20261102T150000Z/);
+  assert.deepEqual(monthDates(saved(doc).items[0], 2026, 11), ["2026-11-09"]);
+});

@@ -81,7 +81,24 @@ function dateLines(item, isTodo, localZone) {
     return lines;
 }
 
-/** EXDATE lines. A source line is kept while all its dates are still excluded. */
+/** Writes an exclusion at the series source clock on the requested display day. */
+function exdateProp(item, key, localZone) {
+    var source = item.sourceDates && item.sourceDates.start;
+    var start = Text.parseLine(dateProp("DTSTART", item.date, item.time, source, localZone));
+    var zone = start.params.TZID;
+    var utc = /Z$/.test(start.value);
+    if (item.time === null || (!zone && !utc)) return dateProp("EXDATE", key, item.time, source, localZone);
+    var clock = start.value.slice(8);
+    for (var d = -2; d <= 2; d++) {
+        var value = icsDate(Items.addDays(key, d)) + clock;
+        var ms = utc ? Zones.clockMs(value) : Zones.zoneInstant(value, zone, localZone);
+        if (Times.dayKey(new Date(ms)) === key)
+            return start.raw.slice(0, start.raw.length - start.value.length).replace(/^DTSTART/, "EXDATE") + value;
+    }
+    return dateProp("EXDATE", key, item.time, source, localZone);
+}
+
+/** EXDATE lines. A source line is kept while the series clock and all excluded dates are unchanged. */
 function exdateLines(item, localZone) {
     var lines = [];
     var sources = item.sourceDates || {};
@@ -89,6 +106,7 @@ function exdateLines(item, localZone) {
     var saved = sources.exdates || [];
     for (var ex = 0; ex < saved.length; ex++) {
         var group = saved[ex];
+        if (sources.start && (sources.start.date !== item.date || sources.start.time !== item.time)) continue;
         if (!group.values.every(function (v) { return pending.indexOf(v.date) >= 0; })) continue;
         lines.push(group.raw);
         pending = pending.filter(function (d) { return !group.values.some(function (v) { return v.date === d; }); });
@@ -99,7 +117,7 @@ function exdateLines(item, localZone) {
         }).join(","));
     } else {
         for (var e = 0; e < pending.length; e++)
-            lines.push(dateProp("EXDATE", pending[e], item.time, sources.start, localZone));
+            lines.push(exdateProp(item, pending[e], localZone));
     }
     return lines;
 }
