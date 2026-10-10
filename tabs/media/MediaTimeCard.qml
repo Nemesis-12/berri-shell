@@ -5,8 +5,11 @@ import qs.services
 
 /**
  * Time card of the media tab: the elapsed time, the length and a scrubber.
- * Press or drag the scrubber to seek. The tab sets the position and size,
- * and passes the playback values it reads from MediaPlayer.
+ * Press or drag the scrubber to seek; the card only emits `seekRequested`
+ * and the tab sends it to MediaPlayer. The tab sets the position and size,
+ * and passes the playback values it reads from MediaPlayer. A position below
+ * 0 means unknown and a length of 0 means unknown: the card then shows no
+ * such time.
  */
 Rectangle {
     id: root
@@ -16,6 +19,9 @@ Rectangle {
     required property real progress
     required property bool isPlaying
     required property bool canSeek
+
+    /** The scrubber was pressed or dragged to `ratio` (0 to 1) of its width. */
+    signal seekRequested(real ratio)
 
     /** True while the scrubber is pressed; the tab then keeps the shown position steady. */
     readonly property bool scrubbing: scrub.pressed
@@ -41,9 +47,10 @@ Rectangle {
         Text {
             textFormat: Text.PlainText
             id: elapsed
-            width: implicitWidth
+            width: Math.min(implicitWidth, readout.width - (total.visible ? total.width + 8 : 0))
+            elide: Text.ElideRight
             height: 61
-            text: Times.minutesSeconds(root.displayPosition)
+            text: root.displayPosition >= 0 ? Times.minutesSeconds(root.displayPosition) : ""
             color: Theme.fg
             font.family: Theme.condensed
             font.weight: Font.Medium
@@ -55,6 +62,8 @@ Rectangle {
         }
 
         MonoText {
+            id: total
+            visible: root.length > 0
             x: elapsed.width + 8
             anchors.baseline: elapsed.baseline
             anchors.baselineOffset: -19
@@ -114,7 +123,7 @@ Rectangle {
 
             function seek(mouseX) {
                 const ratio = Math.max(0, Math.min(1, mouseX / width));
-                MediaPlayer.seekTo(ratio * root.length);
+                root.seekRequested(ratio);
             }
             onPressed: mouse => seek(mouse.x)
             onPositionChanged: mouse => { if (pressed) seek(mouse.x); }

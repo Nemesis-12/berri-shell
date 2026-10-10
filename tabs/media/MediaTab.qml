@@ -44,8 +44,7 @@ Item {
         return parts.join(" · ").toUpperCase();
     }
     readonly property string artUrl: ArtUrl.safeArtUrl(hasPlayer ? activePlayer.trackArtUrl : "")
-    readonly property real length: hasPlayer ? activePlayer.length : 0
-    readonly property bool canSeek: hasPlayer && activePlayer.canSeek && activePlayer.positionSupported
+    readonly property real length: MediaPlayer.length
 
     readonly property real progress: length > 0 ? Math.max(0, Math.min(1, displayPosition / length)) : 0
 
@@ -69,10 +68,13 @@ Item {
             size: 28
             strokeWidth: 1.5
             color: Theme.dim
-            visible: root.artUrl === ""
+            opacity: root.artUrl === "" || albumArt.failed ? 1 : 0
+
+            Fade on opacity { duration: Theme.stateMs }
         }
 
         AlbumArt {
+            id: albumArt
             anchors.fill: parent
             artUrl: root.artUrl
             dpr: root.dpr
@@ -133,11 +135,12 @@ Item {
         x: root.middleX
         y: 151
         width: root.middleWidth
-        displayPosition: root.displayPosition
+        displayPosition: MediaPlayer.shownPosition
         length: root.length
         progress: root.progress
         isPlaying: root.isPlaying
-        canSeek: root.canSeek
+        canSeek: MediaPlayer.canSeek
+        onSeekRequested: ratio => MediaPlayer.seekToRatio(ratio)
     }
 
     // Shuffle and repeat.
@@ -152,9 +155,9 @@ Item {
             id: shuffleTile
             width: (parent.width - root.gap) / 2
             height: parent.height
-            available: root.hasPlayer && root.activePlayer.shuffleSupported
-            on: root.hasPlayer && root.activePlayer.shuffle
-            onClicked: root.activePlayer.shuffle = !root.activePlayer.shuffle
+            available: MediaPlayer.canShuffle
+            on: MediaPlayer.shuffleOn
+            onClicked: MediaPlayer.toggleShuffle()
 
             Row {
                 x: 14
@@ -183,15 +186,9 @@ Item {
             id: repeatTile
             width: (parent.width - root.gap) / 2
             height: parent.height
-            available: root.hasPlayer && root.activePlayer.loopSupported
-            on: root.hasPlayer && root.activePlayer.loopState !== MprisLoopState.None
-
-            // Off, then all tracks, then this track, then off again.
-            onClicked: {
-                const state = root.activePlayer.loopState;
-                root.activePlayer.loopState = state === MprisLoopState.None ? MprisLoopState.Playlist
-                    : state === MprisLoopState.Playlist ? MprisLoopState.Track : MprisLoopState.None;
-            }
+            available: MediaPlayer.canRepeat
+            on: MediaPlayer.repeatState !== MprisLoopState.None
+            onClicked: MediaPlayer.cycleRepeat()
 
             Row {
                 x: 14
@@ -200,7 +197,7 @@ Item {
 
                 Icon {
                     anchors.verticalCenter: parent.verticalCenter
-                    name: root.hasPlayer && root.activePlayer.loopState === MprisLoopState.Track ? "repeat-1" : "repeat"
+                    name: MediaPlayer.repeatState === MprisLoopState.Track ? "repeat-1" : "repeat"
                     size: 17
                     strokeWidth: 1.6
                     color: repeatTile.iconColor
@@ -241,8 +238,8 @@ Item {
                     id: cell
                     required property var modelData
                     readonly property bool isPlay: modelData.kind === "play"
-                    readonly property bool usable: root.hasPlayer && (isPlay ? root.activePlayer.canTogglePlaying
-                        : modelData.kind === "prev" ? root.activePlayer.canGoPrevious : root.activePlayer.canGoNext)
+                    readonly property bool usable: isPlay ? MediaPlayer.canTogglePlay
+                        : modelData.kind === "prev" ? MediaPlayer.canPrevious : MediaPlayer.canNext
 
                     width: transport.unit * modelData.span
                     height: transport.height
@@ -308,9 +305,9 @@ Item {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            if (cell.isPlay) root.activePlayer.togglePlaying();
-                            else if (cell.modelData.kind === "prev") root.activePlayer.previous();
-                            else root.activePlayer.next();
+                            if (cell.isPlay) MediaPlayer.togglePlay();
+                            else if (cell.modelData.kind === "prev") MediaPlayer.previous();
+                            else MediaPlayer.next();
                         }
                     }
                 }

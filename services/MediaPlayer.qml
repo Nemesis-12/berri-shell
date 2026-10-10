@@ -2,12 +2,14 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Services.Mpris
+import "../logic/MediaRules.js" as MediaRules
 
 /**
  * The media player the shell shows: the one that is playing, else the last
  * one that played, else the first in the list. Media.qml (Home) and
- * MediaTab.qml only read this. The choice follows player changes and needs
- * no timer. Only the play position needs a 1 s timer, because Mpris does not
+ * MediaTab.qml only read this and call its commands; the rules for length,
+ * seek and permissions are in logic/MediaRules.js. The choice follows player
+ * changes and needs no timer. Only the play position needs a 1 s timer, because Mpris does not
  * push the position while a track plays. That timer runs only while a view is
  * visible (`viewers` > 0) and a track plays. When a view opens, the current
  * player and position are read at once, so a change made while all views were
@@ -20,7 +22,8 @@ Singleton {
     property int viewers: 0
 
     property var activePlayer: null
-    property string lastPlayingId: ""
+    /** The player that played last (an object, not a track id). */
+    property var lastPlayer: null
 
     /** Play position in seconds, as shown. */
     property real displayPosition: 0
@@ -34,28 +37,52 @@ Singleton {
     readonly property bool isPlaying: activePlayer !== null && activePlayer.playbackState === MprisPlaybackState.Playing
     readonly property string titleText: activePlayer ? (activePlayer.trackTitle || "Unknown title") : "Nothing playing"
 
-    /** Moves the play position to `seconds` (seek bar). */
-    function seekTo(seconds: real): void {
-        if (!root.activePlayer) return;
+    /** Track length in seconds; 0 when unknown (live stream) or not believable. */
+    readonly property real length: MediaRules.knownLength(activePlayer)
+
+    /** Shown play position in seconds; -1 when the player does not report one. */
+    readonly property real shownPosition: MediaRules.knownPosition(activePlayer, displayPosition)
+
+    /** "1:00 / 3:00", "1:00" when the length is unknown, "" when nothing is known. */
+    readonly property string timeText: MediaRules.timeText(shownPosition, length)
+
+    readonly property bool canSeek: MediaRules.canSeek(activePlayer)
+    readonly property bool canShuffle: MediaRules.canShuffle(activePlayer)
+    readonly property bool canRepeat: MediaRules.canRepeat(activePlayer)
+    readonly property bool canPrevious: activePlayer !== null && activePlayer.canGoPrevious
+    readonly property bool canNext: activePlayer !== null && activePlayer.canGoNext
+    readonly property bool canTogglePlay: activePlayer !== null && activePlayer.canTogglePlaying
+    readonly property bool shuffleOn: activePlayer !== null && activePlayer.shuffle
+    readonly property int repeatState: activePlayer !== null ? activePlayer.loopState : MprisLoopState.None
+
+    function previous(): void { if (root.canPrevious) root.activePlayer.previous(); }
+    function next(): void { if (root.canNext) root.activePlayer.next(); }
+    function togglePlay(): void { if (root.canTogglePlay) root.activePlayer.togglePlaying(); }
+
+    function toggleShuffle(): void {
+        if (root.canShuffle) root.activePlayer.shuffle = !root.activePlayer.shuffle;
+    }
+
+    /** Off, then all tracks, then this track, then off again. */
+    function cycleRepeat(): void {
+        if (!root.canRepeat) return;
+        const state = root.activePlayer.loopState;
+        root.activePlayer.loopState = state === MprisLoopState.None ? MprisLoopState.Playlist
+            : state === MprisLoopState.Playlist ? MprisLoopState.Track : MprisLoopState.None;
+    }
+
+    /** Moves the play position to `ratio` (0 to 1) of the track length (seek bar). */
+    function seekToRatio(ratio: real): void {
+        if (!root.canSeek) return;
+        const seconds = Math.max(0, Math.min(1, ratio)) * root.length;
         root.displayPosition = seconds;
         root.activePlayer.position = seconds;
     }
 
     function choosePlayer() {
-        const list = Mpris.players.values;
-        for (let i = 0; i < list.length; i++) {
-            if (list[i].playbackState === MprisPlaybackState.Playing) {
-                root.lastPlayingId = String(list[i].uniqueId);
-                return list[i];
-            }
-        }
-        if (root.lastPlayingId !== "") {
-            for (let i = 0; i < list.length; i++) {
-                if (String(list[i].uniqueId) === root.lastPlayingId)
-                    return list[i];
-            }
-        }
-        return list.length > 0 ? list[0] : null;
+        const choice = MediaRules.choosePlayer(Mpris.players.values, root.lastPlayer, MprisPlaybackState.Playing);
+        root.lastPlayer = choice.remembered;
+        return choice.player;
     }
 
     /** Picks the player again; a new player resets the position to its own. */

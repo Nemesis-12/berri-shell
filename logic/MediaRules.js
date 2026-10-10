@@ -56,7 +56,10 @@ function choosePlayer(players, remembered, playingState) {
         if (players[i].playbackState === playingState)
             return { player: players[i], remembered: players[i] };
     }
-    if (remembered && players.indexOf(remembered) >= 0)
-        return { player: remembered, remembered: remembered };
+    // A Quickshell player list is not a real Array, so no indexOf here.
+    for (var j = 0; j < players.length; j++) {
+        if (remembered && players[j] === remembered)
+            return { player: remembered, remembered: remembered };
+    }
     return { player: players.length > 0 ? players[0] : null, remembered: null };
 }
