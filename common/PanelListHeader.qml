@@ -11,6 +11,9 @@ Item {
     property string title: ""
     property bool checked: false
 
+    /** False when the switch cannot do anything, for example without a Bluetooth adapter. */
+    property bool switchEnabled: true
+
     signal backClicked
     signal toggled
 
@@ -62,6 +65,7 @@ Item {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         checked: root.checked
+        interactive: root.switchEnabled
         onToggled: root.toggled()
     }
 }

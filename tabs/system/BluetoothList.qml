@@ -10,7 +10,9 @@ import "../../logic/ListSync.js" as ListSync
  * scrolling list of devices - paired devices first (connected first), then
  * nearby devices found while the list is open. Clicking a connected device
  * disconnects it; clicking a paired device connects it; clicking an
- * unpaired device pairs, trusts and connects it (shown as "PAIRING…").
+ * unpaired device pairs, trusts and connects it (shown as "PAIRING…"). The
+ * BluetoothPairing service owns the pairing, so it ends right when the list
+ * is closed.
  */
 Item {
     id: root
@@ -30,10 +32,6 @@ Item {
      *  other paired devices, then discovered ones. Each entry is the live
      *  BluetoothDevice object, so its own properties stay reactive in the row. */
     property var devices: []
-
-    /** Address of the device this list is pairing, so a pairedChanged signal
-     *  knows to trust and connect it once BlueZ finishes pairing. */
-    property string pendingPairAddress: ""
 
     function isBareMacAddress(name) {
         // Match six hex pairs separated by : or -
@@ -69,8 +67,7 @@ Item {
         } else if (device.paired) {
             device.connect();
         } else {
-            root.pendingPairAddress = device.address;
-            device.pair();
+            BluetoothPairing.pair(device);
         }
     }
 
@@ -103,13 +100,7 @@ Item {
 
     onAdapterChanged: if (active) refreshDevices()
 
-    onActiveChanged: {
-        if (active) {
-            refreshDevices();
-        } else {
-            root.pendingPairAddress = "";
-        }
-    }
+    onActiveChanged: if (active) refreshDevices()
 
     // Discovery runs while the list is on screen and Bluetooth is on. It
     // starts when Bluetooth is switched on with the list open, and it stays
@@ -137,6 +128,7 @@ Item {
             width: parent.width
             title: "BLUETOOTH"
             checked: root.adapter ? root.adapter.enabled : false
+            switchEnabled: root.adapter !== null
             onBackClicked: root.backClicked()
             onToggled: if (root.adapter) root.adapter.enabled = !root.adapter.enabled
         }
@@ -155,7 +147,7 @@ Item {
                 anchors.leftMargin: 6
                 anchors.rightMargin: 6
                 anchors.topMargin: 14
-                text: "Bluetooth is off. Switch it on to find devices."
+                text: root.adapter ? "Bluetooth is off. Switch it on to find devices." : "No Bluetooth adapter."
                 font.family: Theme.condensed
                 font.weight: Font.Medium
                 font.pixelSize: 12
@@ -201,17 +193,6 @@ Item {
                         font.pixelSize: 13
                         color: Theme.fg
                         elide: Text.ElideRight
-                    }
-
-                    Connections {
-                        target: row.modelData
-                        function onPairedChanged() {
-                            if (row.modelData.paired && root.pendingPairAddress === row.modelData.address) {
-                                root.pendingPairAddress = "";
-                                row.modelData.trusted = true;
-                                row.modelData.connect();
-                            }
-                        }
                     }
                 }
             }
