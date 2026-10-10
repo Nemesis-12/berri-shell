@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Warm every berri view and report process memory in MiB."""
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -16,6 +17,7 @@ def parse_smaps(text):
 
 
 # Sum distinct DRM clients; duplicate file descriptors share the same allocation.
+# DRM counters without a unit are bytes, per the kernel's drm-usage-stats docs.
 def parse_gpu(texts):
     clients = {}
     units = {"B": 1 / 1024, "kB": 1, "KiB": 1, "MiB": 1024}
@@ -28,8 +30,8 @@ def parse_gpu(texts):
             continue
         totals = {}
         for name in ("VRAM", "GTT"):
-            value, unit = fields[f"drm-memory-{name.lower()}"].split()
-            totals[name] = int(value) * units[unit]
+            value, *unit = fields[f"drm-memory-{name.lower()}"].split()
+            totals[name] = int(value) * units[unit[0] if unit else "B"]
         clients[key] = totals
     if not clients:
         raise ValueError("no DRM memory counters; GPU memory is unavailable")
@@ -98,6 +100,13 @@ def read_memory(pid):
     return totals
 
 
+# Stop before measuring: pickertest silently opens nothing without the laptop display.
+def require_laptop_display(monitors_json):
+    names = {monitor["name"] for monitor in json.loads(monitors_json)}
+    if "eDP-2" not in names:
+        raise ValueError("laptop display eDP-2 is missing; pickertest would open nothing")
+
+
 # Print full precision only after summing or averaging KiB values.
 def report(label, totals):
     print(f"{label}: " + " | ".join(f"{name} {value / 1024:.2f} MiB"
@@ -117,6 +126,7 @@ def main():
     repo = Path(__file__).resolve().parent.parent
     # Require an existing instance before restarting. A worktree cannot start a second shell.
     find_instance(repo)
+    require_laptop_display(run("hyprctl", "monitors", "-j"))
     samples = []
     for number in range(1, args.runs + 1):
         if not args.no_restart:

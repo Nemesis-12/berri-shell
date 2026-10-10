@@ -45,6 +45,16 @@ class MemoryTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             memory.parse_gpu([client.replace("MiB", "unknown")])
 
+    def test_gpu_reads_unitless_counters_as_bytes(self):
+        client = "drm-client-id: 9\ndrm-memory-vram: 1234\ndrm-memory-gtt: 2048\n"
+        self.assertEqual(memory.parse_gpu([client]), {"VRAM": 1234 / 1024, "GTT": 2})
+
+    def test_laptop_display_must_exist_before_warming_views(self):
+        monitors = '[{"name": "DP-1"}, {"name": "eDP-2"}]'
+        memory.require_laptop_display(monitors)
+        with self.assertRaisesRegex(ValueError, "eDP-2"):
+            memory.require_laptop_display('[{"name": "DP-1"}]')
+
     def test_warm_up_opens_all_tabs_and_both_actual_picker_bodies(self):
         from unittest.mock import patch
         with patch.object(memory.subprocess, "run") as commands, \

@@ -24,7 +24,7 @@ seconds each, closes the dashboard, then opens `themes` and `walls` for three
 seconds each. It closes each picker body and waits one second before continuing.
 It waits another 20 seconds after closing the last body before reading memory.
 The TEMP `pickertest` IPC handler in `shell.qml` and the laptop display `eDP-2`
-are required. No theme or wallpaper is selected. Do not interact with the shell
+are required; the tool checks for `eDP-2` with `hyprctl monitors -j` and stops before any measurement if it is missing. No theme or wallpaper is selected. Do not interact with the shell
 during a run. Keep monitors, applications, and other conditions the same.
 
 To measure the existing process without restarting:
