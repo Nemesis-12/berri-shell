@@ -46,7 +46,7 @@ pub fn repeat_rule(record: &mut Record, value: &str) {
                     }
                 }
             },
-            _ => rest.push(part)
+            _ => rest.push(part),
         }
     }
     // A week number counts only in a monthly rule, and FREQ can come after BYDAY.
