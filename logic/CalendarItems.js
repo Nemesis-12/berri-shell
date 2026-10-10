@@ -13,12 +13,12 @@
  *
  * Item shape (all dates "YYYY-MM-DD", all times "HH:MM", local display time):
  *   uid, kind ("event" | "task" | "reminder"), title,
- *   date, time (null = all-day / no time), startSecond (precision for timed bounds), end (end time, events only),
+ *   date, time (null = all-day / no time), startSecond (seconds of the first start), end (end time, events only),
  *   endDate (last day of a multi-day all-day event, else null),
  *   color (preset key "accent" | "blue" | "green" | "yellow" | "red" | "cyan" | "magenta" | "orange",
  *   or a custom "#rrggbb"; stored as X-BERRI-COLOR, "accent" is not written),
  *   repeat ("none" | "daily" | "weekly" | "monthly" | "yearly"), interval,
- *   byDay (daily, weekly or monthly, 0 = Sunday), monthWeekday (monthly only: { nth, day }, nth 1 to 5 or -1 for the last,
+ *   byDay (plain weekdays, 0 = Sunday), monthWeekday (monthly only: { nth, day }, nth 1 to 5 or -1 for the last,
  *   day 0 = Sunday; from BYDAY=2TU), until, untilMs (inclusive timed bound), count,
  *   exdates (skipped occurrence dates), doneDates (occurrence dates ticked off),
  *   alarmMinutes (VALARM minutes before start, null = none), status, stamp,
@@ -170,7 +170,6 @@ function normalize(item) {
         item.interval = 1; item.byDay = []; item.until = null; item.untilMs = null; item.count = null; item.exdates = []; item.ruleRest = null;
         item.zoned = null; item.changedOccurrences = [];
     }
-    if (["daily", "weekly", "monthly"].indexOf(item.repeat) < 0) item.byDay = [];
     if (item.repeat !== "monthly") item.monthWeekday = null;
     return item;
 }
