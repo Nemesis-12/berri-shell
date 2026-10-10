@@ -140,3 +140,13 @@ test("UTC weekday repeats keep the correct local day, cached month and reminder 
   assert.deepEqual(Array.from(due, o => [o.occurrenceDate, o.time, o.dueMs]),
     [["2026-11-02", "18:30", Date.parse("2026-11-03T00:30:00Z")]]);
 });
+
+test("a zoned UNTIL includes the last start when source and display dates differ by two days", () => {
+  process.env.TZ = "Etc/GMT+12";
+  try {
+    const doc = calendar("DTSTART;TZID=Pacific/Kiritimati:20261005T003000", "RRULE:FREQ=WEEKLY;UNTIL=20261011T103000Z");
+    for (const read of [doc, saved(doc)]) assert.deepEqual(monthDates(read.items[0]), ["2026-10-03", "2026-10-10"]);
+  } finally {
+    process.env.TZ = "America/Chicago";
+  }
+});
