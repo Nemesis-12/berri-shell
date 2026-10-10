@@ -37,3 +37,12 @@ test("daily INTERVAL selects days before BYDAY and COUNT counts only selected da
   const expected = ["2026-10-05", "2026-10-07", "2026-10-09", "2026-10-19"];
   for (const read of [doc, saved(doc)]) assert.deepEqual(monthDates(read.items[0]), expected);
 });
+
+test("monthly BYDAY lists select every matching weekday and survive save and edits", () => {
+  const doc = calendar("DTSTART:20261005T090000", "RRULE:FREQ=MONTHLY;BYDAY=MO,WE;COUNT=7");
+  const expected = ["2026-10-05", "2026-10-07", "2026-10-12", "2026-10-14", "2026-10-19", "2026-10-21", "2026-10-26"];
+  for (const read of [doc, saved(doc)]) assert.deepEqual(monthDates(read.items[0]), expected);
+  doc.items[0] = Items.applyChanges(doc.items[0], { title: "Edited" });
+  assert.match(Format.writeCalendar(doc), /BYDAY=MO,WE/);
+  assert.deepEqual(monthDates(saved(doc).items[0]), expected);
+});
