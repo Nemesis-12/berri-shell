@@ -13,6 +13,7 @@ QtObject {
     id: links
 
     required property var store
+    required property CalendarFiles files
 
     readonly property string badLinkText: "Use an https:// or webcal:// link"
 
@@ -65,7 +66,7 @@ QtObject {
     }
 
     function download(purpose: string, shownUrl: string, url: string, id: string, color, requestId): void {
-        store._files.download({ purpose: purpose, shownUrl: shownUrl, url: url, calendarId: id,
+        files.download({ purpose: purpose, shownUrl: shownUrl, url: url, calendarId: id,
             color: color === undefined || color === null ? "" : String(color), requestId: requestId || 0 });
     }
 
@@ -122,7 +123,6 @@ QtObject {
 
     // Handles a finished download: the error, the records and what the request wanted.
     function downloaded(request: var, code: int, jsonPath: string): void {
-        var files = store._files;
         var error = Catalog.downloadError(code, { parserMissing: files.exitParserMissing, notCalendar: files.exitNotCalendar,
             saveFailed: files.exitSaveFailed }, { parserMissing: store.parserMissingText });
         var doc = null;
