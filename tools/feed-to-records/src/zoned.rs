@@ -83,12 +83,13 @@ fn series_length(record: &Record, start: i64) -> Option<i64> {
 pub fn zoned_series(record: &Record) -> Option<ZonedSeries> {
     let Some(CalendarDate::DateTime {
         value,
-        zone: Some(zone),
-        utc: false,
+        zone,
+        utc,
     }) = &record.start
     else {
         return None;
     };
+    let zone = if *utc { "UTC" } else { zone.as_deref()? };
     if !record.repeats() || !zone_known(zone) {
         return None;
     }
@@ -99,7 +100,9 @@ pub fn zoned_series(record: &Record) -> Option<ZonedSeries> {
     );
     let clock_seconds =
         value[9..11].parse::<i64>().ok()? * 3600 + value[11..13].parse::<i64>().ok()? * 60;
-    let offsets = {
+    let offsets = if *utc {
+        vec![(day_key(first), 0)]
+    } else {
         let _restore = ZoneGuard::set(zone);
         zone_offsets(first, clock_seconds)?
     };

@@ -23,7 +23,7 @@
  *   exdates (skipped occurrence dates), doneDates (occurrence dates ticked off),
  *   alarmMinutes (VALARM minutes before start, null = none), status, stamp,
  *   ruleRest (RRULE parts berri ignores, written back unchanged),
- *   zoned (repeating event with a named time zone: { date, time, length, offsets }, the first source clock,
+ *   zoned (repeating event in UTC or a named time zone: { date, time, length, offsets }, the first source clock,
  *   the length in minutes and the [first day, UTC offset in seconds] changes of that zone, so each
  *   occurrence follows the daylight-saving changes of the zone; null otherwise),
  *   changedOccurrences (RECURRENCE-ID components of a repeating event: { from, cancelled, title, date, time, end, endDate },

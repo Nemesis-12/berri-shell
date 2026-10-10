@@ -95,18 +95,18 @@ var ZONE_SCAN_STEP = 21;
  * follows the daylight-saving changes of that zone. Null when the zone is unknown.
  */
 function zonedSeries(start, endValue, localZone) {
-    if (start.form !== "zone" || start.instantMs === null) return null;
+    if ((start.form !== "zone" && start.form !== "utc") || start.instantMs === null) return null;
     var hhmm = start.value.slice(9, 13);
     function offsetOn(dayN) {
         var wall = Times.keyOfDayNum(dayN).replace(/-/g, "") + "T" + hhmm + "00";
         return Math.round((Zones.clockMs(wall) - Zones.zoneInstant(wall, start.tzid, localZone)) / 1000);
     }
     var first = Times.dayNum(start.value.slice(0, 4) + "-" + start.value.slice(4, 6) + "-" + start.value.slice(6, 8));
-    var offset = offsetOn(first);
+    var offset = start.form === "utc" ? 0 : offsetOn(first);
     if (!isFinite(offset)) return null;
     var offsets = [[Times.keyOfDayNum(first), offset]];
     var before = first;
-    for (var n = first + ZONE_SCAN_STEP; n <= first + ZONE_SCAN_DAYS; n += ZONE_SCAN_STEP) {
+    for (var n = first + ZONE_SCAN_STEP; start.form !== "utc" && n <= first + ZONE_SCAN_DAYS; n += ZONE_SCAN_STEP) {
         var now = offsetOn(n);
         if (now === offset) { before = n; continue; }
         var low = before, high = n; // the offset changes on a day after `low`, up to `high`

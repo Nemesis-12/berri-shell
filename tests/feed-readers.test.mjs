@@ -160,3 +160,9 @@ test("both readers show a monthly BYDAY list and count each selected day", () =>
     assert.deepEqual(Object.keys(days).sort(), ["2026-10-05", "2026-10-07", "2026-10-12", "2026-10-14", "2026-10-19", "2026-10-21", "2026-10-26"]);
   });
 });
+
+test("both readers keep UTC repeats at 14:00Z through local DST", () => {
+  everyReader("utc-weekly.ics", 2026, 11, zone, days => {
+    assert.deepEqual(days, { "2026-11-02": ["08:00 UTC weekly"] });
+  });
+});
