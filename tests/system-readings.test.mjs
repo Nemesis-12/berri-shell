@@ -77,7 +77,7 @@ test("process rows use CPU ticks from the last sample and sort by them", () => {
     + `301\t0.2\tbackup\t${procLine(301, "backup", 5, 0, 1000)}\n`;
   const before = readings.readProcesses(first, null);
   assert.deepEqual(Array.from(before.rows, row => [row.name, row.cpu, row.mem]),
-    [["firefox", 0, 3], ["code", 0, 0.5], ["backup", 0, 0.2]]);
+    [["firefox", null, 3], ["code", null, 0.5], ["backup", null, 0.2]]);
   const after = readings.readProcesses(second, before.sample);
   assert.deepEqual(Array.from(after.rows, row => [row.name, row.cpu, row.mem]),
     [["code", 30, 0.5], ["firefox", 20, 3], ["backup", 0.5, 0.2]]);
@@ -112,7 +112,7 @@ test("the first process sample shows memory rows before CPU deltas exist", () =>
     + `201\t0.5\tcode\t${procLine(201, "code", 20, 0, 1000)}\n`;
   const result = readings.readProcesses(sample, null);
   assert.deepEqual(Array.from(result.rows, row => [row.name, row.cpu, row.mem]),
-    [["firefox", 0, 3], ["code", 0, 0.5]]);
+    [["firefox", null, 3], ["code", null, 0.5]]);
 });
 
 test("core topology supports six SMT cores and sparse CPU numbers", () => {
@@ -123,7 +123,7 @@ test("core topology supports six SMT cores and sparse CPU numbers", () => {
   const after = "cpu 600 0 0 1800\n" + [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22]
     .map(id => `cpu${id} ${id === 2 ? 100 : 0} 0 0 ${id === 2 ? 100 : 200}`).join("\n");
   const first = readings.readCpuLoad(before, null, topology);
-  assert.deepEqual(Array.from(first.coreLoads), [0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(Array.from(first.coreLoads), [null, null, null, null, null, null]);
   assert.deepEqual(Array.from(readings.readCpuLoad(after, first.counters, topology).coreLoads),
     [50, 0, 0, 0, 0, 0]);
 });
@@ -161,7 +161,7 @@ test("core meters are not capped at eight and offline siblings are excluded", ()
   const groups = readings.readCoreGroups(Array.from({ length: 12 }, (_, i) => `${i} 0 ${i}`).join("\n"));
   const sample = "cpu 0 0 0 1200\n" + Array.from({ length: 12 }, (_, i) => `cpu${i} 0 0 0 100`).join("\n");
   assert.deepEqual(Array.from(readings.readCpuLoad(sample, null, groups).coreLoads),
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    Array(12).fill(null));
   const paired = readings.readCoreGroups("0 0 0\n1 0 0\n2 0 1\n3 0 1\n");
   const before = readings.readCpuLoad("cpu 0 0 0 200\ncpu0 0 0 0 100\ncpu2 0 0 0 100", null, paired);
   const after = readings.readCpuLoad("cpu 100 0 0 300\ncpu0 100 0 0 100\ncpu2 0 0 0 200", before.counters, paired);

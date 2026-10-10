@@ -61,18 +61,21 @@ Rectangle {
         boundsBehavior: Flickable.StopAtBounds
         clip: true
 
+        // The model is the row count, so a new sample updates the rows in place.
+        // A model of row objects would rebuild all rows each sample, which loses
+        // the hover highlight and restarts the bar animation.
         Repeater {
-            model: SystemStats.processes
+            model: SystemStats.processes.length
 
             SystemProcessRow {
-                required property var modelData
                 required property int index
+                readonly property var sample: SystemStats.processes[index]
 
                 y: index * 29
                 width: list.width
-                name: modelData.name
-                cpu: modelData.cpu
-                mem: modelData.mem
+                name: sample ? sample.name : ""
+                cpu: sample ? sample.cpu : null
+                mem: sample ? sample.mem : 0
             }
         }
     }

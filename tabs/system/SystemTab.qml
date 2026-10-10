@@ -48,7 +48,7 @@ Item {
             lineBox: 0.78
             font.pixelSize: 96
             font.letterSpacing: -96 * 0.04
-            text: Math.round(SystemStats.cpuPercent)
+            text: Fmt.wholePercent(SystemStats.cpuPercent)
         }
 
         SystemText {
@@ -154,7 +154,7 @@ Item {
                     lineTop: 48.4
                     lineBox: 0.8
                     font.pixelSize: 32
-                    text: Fmt.rate(SystemStats.downMBs)
+                    text: Fmt.rate(SystemStats.downMiBs)
                 }
 
                 SystemText {
@@ -162,7 +162,7 @@ Item {
                     lineTop: 65
                     font.pixelSize: 9
                     color: Theme.dim
-                    text: "MB/S"
+                    text: Fmt.rateUnit
                 }
             }
 
@@ -181,7 +181,7 @@ Item {
                     lineTop: 48.4
                     lineBox: 0.8
                     font.pixelSize: 32
-                    text: Fmt.rate(SystemStats.upMBs)
+                    text: Fmt.rate(SystemStats.upMiBs)
                 }
 
                 SystemText {
@@ -189,7 +189,7 @@ Item {
                     lineTop: 65
                     font.pixelSize: 9
                     color: Theme.dim
-                    text: "MB/S"
+                    text: Fmt.rateUnit
                 }
             }
         }

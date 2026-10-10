@@ -14,5 +14,5 @@ test("a shifted process state returns no reading while the valid line keeps its 
   const prefix = "cpu 100 0 0 900\n101\t1.5\tworker\t";
   assert.deepEqual(Array.from(readings.readProcesses(prefix + shifted, null).rows), []);
   assert.deepEqual(Array.from(readings.readProcesses(prefix + stat, null).rows, row => [row.name, row.cpu, row.mem]),
-    [["worker", 0, 1.5]]);
+    [["worker", null, 1.5]]);
 });

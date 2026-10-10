@@ -2,12 +2,15 @@ import QtQuick
 import qs.services
 import qs.common
 
+import "../../logic/SystemFormat.js" as Fmt
+
 /** One process row: name, CPU bar with value, memory value. The row lights up under the pointer. */
 Item {
     id: root
 
     property string name: ""
-    property real cpu: 0
+    /** CPU share in percent, or null until two samples exist. */
+    property var cpu: null
     property real mem: 0
     /** Number of threads used to measure the whole CPU share. */
     property int threadCount: SystemStats.threadCount
@@ -47,7 +50,7 @@ Item {
         width: 92
         height: 10
         color: Theme.raised
-        value: root.cpu * Math.max(1, root.threadCount) * 4 / 100
+        value: (root.cpu || 0) * Math.max(1, root.threadCount) * 4 / 100
     }
 
     SystemText {
@@ -55,8 +58,8 @@ Item {
         mono: true
         lineTop: 9
         font.pixelSize: 10
-        text: root.cpu > 0 && root.cpu < 0.05 ? "<0.05%" : root.cpu.toFixed(1) + "%"
-        color: root.cpu > 20 / Math.max(1, root.threadCount) ? Theme.accentLight : Theme.fg2
+        text: Fmt.processCpu(root.cpu)
+        color: (root.cpu || 0) > 20 / Math.max(1, root.threadCount) ? Theme.accentLight : Theme.fg2
     }
 
     SystemText {

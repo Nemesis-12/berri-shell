@@ -36,7 +36,7 @@ test("the actual process command supplies rows within the opening deadline", () 
   const result = systemLogic("SystemReadings").readProcesses(sample, null);
   assert.ok(result.rows.length >= 1, "A completed first sample must show a row");
   assert.match(result.rows[0].name, /\S/);
-  assert.equal(result.rows[0].cpu, 0);
+  assert.equal(result.rows[0].cpu, null);
 });
 
 test("shared usage publishes disk, memory, and uptime from completed samples", () => {

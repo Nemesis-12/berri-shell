@@ -1,4 +1,5 @@
 import QtQuick
+import "../../logic/SystemFormat.js" as Fmt
 import qs.common
 import qs.services
 
@@ -37,7 +38,7 @@ Rectangle {
         lineTop: 32
         font.pixelSize: 10
         color: Theme.dim
-        text: "/ " + Math.round(SystemStats.ramTotalGb) + " GB"
+        text: Fmt.memoryTotal(SystemStats.ramTotalGb)
     }
 
     SystemMeter {
