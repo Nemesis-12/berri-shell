@@ -154,3 +154,9 @@ test("an alarm of 99999999999999999 weeks gives no alarm value in both readers",
   const { editable, subscribed } = readBoth(path.join(feedsDir, "alarm-too-large.ics"));
   for (const reader of [editable, subscribed]) assert.equal(reader.big.alarmMinutes, null);
 });
+
+test("both readers show a monthly BYDAY list and count each selected day", () => {
+  everyReader("monthly-weekday-list.ics", 2026, 10, zone, days => {
+    assert.deepEqual(Object.keys(days).sort(), ["2026-10-05", "2026-10-07", "2026-10-12", "2026-10-14", "2026-10-19", "2026-10-21", "2026-10-26"]);
+  });
+});

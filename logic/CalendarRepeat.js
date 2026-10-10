@@ -91,6 +91,12 @@ function monthlyStep(item, c, k) {
         var weekday = weekdayInMonth(y, mo, item.monthWeekday.nth, item.monthWeekday.day);
         return { base: base, list: weekday === null ? [] : [weekday] };
     }
+    if (item.byDay.length) {
+        var days = [];
+        for (var d = 0; d < daysInMonth(y, mo); d++)
+            if (item.byDay.indexOf(weekdayOf(base + d)) >= 0) days.push(base + d);
+        return { base: base, list: days };
+    }
     // No such day this month: skipped, as RFC 5545 says.
     return { base: base, list: c.sd <= daysInMonth(y, mo) ? [base + c.sd - 1] : [] };
 }
