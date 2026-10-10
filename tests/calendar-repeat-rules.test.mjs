@@ -31,3 +31,9 @@ test("a daily weekday series keeps BYDAY on save and has no weekend days in Octo
   assert.match(Format.writeCalendar(doc), /RRULE:FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR\r\n/);
   assert.deepEqual(monthDates(saved(doc).items[0]), expected);
 });
+
+test("daily INTERVAL selects days before BYDAY and COUNT counts only selected days", () => {
+  const doc = calendar("DTSTART:20261005T090000", "RRULE:FREQ=DAILY;INTERVAL=2;BYDAY=MO,WE,FR;COUNT=4");
+  const expected = ["2026-10-05", "2026-10-07", "2026-10-09", "2026-10-19"];
+  for (const read of [doc, saved(doc)]) assert.deepEqual(monthDates(read.items[0]), expected);
+});

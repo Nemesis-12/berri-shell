@@ -50,7 +50,7 @@ function untilValue(item) {
 function ruleText(item) {
     var parts = ["FREQ=" + item.repeat.toUpperCase()];
     if (item.interval > 1) parts.push("INTERVAL=" + item.interval);
-    if (item.repeat === "weekly" && item.byDay.length) parts.push("BYDAY=" + item.byDay.map(function (d) { return Text.weekdays[d]; }).join(","));
+    if (item.byDay.length) parts.push("BYDAY=" + item.byDay.map(function (d) { return Text.weekdays[d]; }).join(","));
     if (item.repeat === "monthly" && item.monthWeekday) parts.push("BYDAY=" + item.monthWeekday.nth + Text.weekdays[item.monthWeekday.day]);
     if (item.count) parts.push("COUNT=" + item.count);
     else if (item.until) parts.push("UNTIL=" + untilValue(item));

@@ -120,7 +120,7 @@ function startDays(item, fromN, toN, budget) {
     var hi = item.until ? Math.min(toN, Times.dayNum(item.until)) : toN;
     var limit = item.count > 0 ? item.count : 0;
     // Daily and plain weekly series emit exactly one start per step, so a count can be skipped to as well.
-    var oneEach = item.repeat === "daily" || (item.repeat === "weekly" && !c.byDay.length);
+    var oneEach = (item.repeat === "daily" && !item.byDay.length) || (item.repeat === "weekly" && !c.byDay.length);
     var lowK = (!limit || oneEach) ? firstStep(item, fromN, c) : 0;
     var emitted = limit && oneEach ? lowK : 0;
     for (var k = lowK; k < lowK + 200000; k++) {
@@ -130,6 +130,7 @@ function startDays(item, fromN, toN, budget) {
         for (var i = 0; i < step.list.length; i++) {
             var n = step.list[i];
             if (n < c.s) continue;
+            if (item.repeat === "daily" && item.byDay.length && item.byDay.indexOf(weekdayOf(n)) < 0) continue;
             emitted++;
             if (limit && emitted > limit) return out;
             if (n > hi) return out;
