@@ -300,6 +300,7 @@ Singleton {
      */
     function canWriteCalendar(id: string): bool {
         var calendar = _calendars[id];
+        if (!calendar) return false;
         if (!calendar.readFailed) return true;
         var text = calendarFiles.readNow(calendar.path);
         if (text !== null) {

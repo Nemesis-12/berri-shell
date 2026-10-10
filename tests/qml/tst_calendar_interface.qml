@@ -9,9 +9,12 @@ TestCase {
     id: tests
     name: "CalendarInterface"
 
+    SignalSpy { id: failedSaves; target: Calendar; signalName: "saveFailed" }
+
     // Set up an unread local calendar without starting saved-state loading.
     function init() {
         TestIo.reset();
+        failedSaves.clear();
         const files = Calendar.children.find(child => child instanceof CalendarFiles);
         files.paths = [];
         Calendar.ready = false;
@@ -71,6 +74,44 @@ TestCase {
         compare(Calendar.itemsOn("2026-10-05"), []);
         compare(Calendar.itemsOn("2026-10-06").map(item => item.title), ["Second"]);
         compare(Calendar.calendars.find(calendar => calendar.id === "l-test").error, "");
+    }
+
+    // An unknown id is not writable. It does not throw.
+    function test_unknown_calendar_is_not_writable() {
+        compare(Calendar.canWriteCalendar("missing"), false);
+        compare(failedSaves.count, 0);
+    }
+    // A failed read stays refused while the re-read fails, and the error is reported.
+    function test_failed_read_then_failed_reread_refuses_writes() {
+        Calendar.acceptCalendarRead(Calendar.defaultPath, "", true);
+        TestIo.deniedReads[Calendar.defaultPath] = true;
+        compare(Calendar.canWriteCalendar("berri"), false);
+        compare(failedSaves.count, 1);
+        compare(failedSaves.signalArguments[0][0], "Could not read berri");
+        compare(Calendar.lastError, "Could not read berri");
+    }
+    // A good re-read after failed ones allows writes again.
+    function test_failed_reread_then_good_reread_allows_writes() {
+        Calendar.acceptCalendarRead(Calendar.defaultPath, "", true);
+        TestIo.deniedReads[Calendar.defaultPath] = true;
+        compare(Calendar.canWriteCalendar("berri"), false);
+        TestIo.deniedReads = ({});
+        TestIo.texts[Calendar.defaultPath] = Format.writeCalendar(Format.emptyCalendar());
+        compare(Calendar.canWriteCalendar("berri"), true);
+        compare(failedSaves.count, 1);
+    }
+    // A failed write puts the old document back and reports the error.
+    function test_failed_write_restores_the_old_document() {
+        const text = Format.writeCalendar(Object.assign(Format.emptyCalendar(), {
+            items: [Items.makeItem({ uid: "kept", title: "Kept", date: "2026-10-05" })] }));
+        Calendar.acceptCalendarRead(Calendar.defaultPath, text, false);
+        Calendar._calendars.berri.document.items.push(Items.makeItem({ uid: "lost", title: "Lost", date: "2026-10-05" }));
+        const saved = Calendar.acceptCalendarWrite(Calendar.defaultPath, { saved: false, text: text, error: "Disk full" }, null);
+        compare(saved, false);
+        compare(Calendar.itemsOn("2026-10-05").map(item => item.title), ["Kept"]);
+        compare(Calendar.lastError, "Disk full");
+        compare(failedSaves.count, 1);
+        compare(failedSaves.signalArguments[0][0], "Disk full");
     }
 
 }
