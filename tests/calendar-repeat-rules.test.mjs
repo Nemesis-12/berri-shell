@@ -128,3 +128,15 @@ for (const [name, start, before, equal] of [
     }
   });
 }
+
+test("UTC weekday repeats keep the correct local day, cached month and reminder instant across DST", () => {
+  const doc = calendar("DTSTART:20261027T003000Z", "RRULE:FREQ=WEEKLY;BYDAY=TU;COUNT=2", "X-BERRI-KIND:reminder");
+  const Months = calendarModule("CalendarMonths.js");
+  const cache = Months.createMonthCache([{ id: "repeat", name: "Repeat", kind: "file", document: doc }]);
+  const days = Months.cachedItemsInMonth(cache, 2026, 11);
+  assert.deepEqual(Object.keys(days), ["2026-11-02"]);
+  assert.equal(days["2026-11-02"][0].time, "18:30");
+  const due = Items.dueBetween(doc.items, Date.parse("2026-11-03T00:29:00Z"), Date.parse("2026-11-03T00:31:00Z"));
+  assert.deepEqual(Array.from(due, o => [o.occurrenceDate, o.time, o.dueMs]),
+    [["2026-11-02", "18:30", Date.parse("2026-11-03T00:30:00Z")]]);
+});

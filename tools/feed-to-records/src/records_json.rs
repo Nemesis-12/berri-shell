@@ -68,8 +68,9 @@ fn record_json(output: &mut String, record: &Record) {
     zoned_json(output, zoned_series(record).as_ref());
     changed_json(output, &record.changed);
     let until_ms = match &record.until {
-        Some(CalendarDate::DateTime { value, zone, utc }) =>
-            instant_of(value, source_zone(zone.as_deref(), *utc)).map(|seconds| seconds * 1000),
+        Some(CalendarDate::DateTime { value, zone, utc }) => {
+            instant_of(value, source_zone(zone.as_deref(), *utc)).map(|seconds| seconds * 1000)
+        }
         _ => None,
     };
     output.push_str("\"untilMs\":");
