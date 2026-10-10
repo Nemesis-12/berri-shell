@@ -1,6 +1,7 @@
 .pragma library
 .import "CalendarIdentity.js" as Identity
 .import "Times.js" as Times
+.import "IcsText.js" as Text
 
 /** Finds the occurrences of repeating items on given days, within a work limit. */
 
@@ -59,6 +60,8 @@ function retainedRuleParts(item) {
 function seriesOf(item) {
     var s = Times.dayNum(item.date);
     var parts = retainedRuleParts(item);
+    var firstWeekday = Text.weekdays.indexOf((parts.WKST || "MO").toUpperCase());
+    if (firstWeekday < 0) firstWeekday = 1;
     return {
         s: s,
         months: parts.BYMONTH ? parts.BYMONTH.split(",").map(Number) : [],
@@ -67,8 +70,8 @@ function seriesOf(item) {
         iv: Math.max(1, item.interval || 1),
         sy: +item.date.slice(0, 4), sm: +item.date.slice(5, 7), sd: +item.date.slice(8, 10),
         monthIndex: +item.date.slice(0, 4) * 12 + +item.date.slice(5, 7) - 1,
-        weekStart: s - ((weekdayOf(s) + 6) % 7), // Monday of the first week
-        byDay: item.byDay.map(function (d) { return (d + 6) % 7; }).sort(function (a, b) { return a - b; })
+        weekStart: s - ((weekdayOf(s) - firstWeekday + 7) % 7),
+        byDay: item.byDay.map(function (d) { return (d - firstWeekday + 7) % 7; }).sort(function (a, b) { return a - b; })
     };
 }
 
