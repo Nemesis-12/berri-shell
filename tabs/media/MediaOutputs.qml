@@ -1,10 +1,12 @@
 import QtQuick
+import "../../logic/OutputChoice.js" as OutputChoice
 import Quickshell.Services.Pipewire
 import qs.common
 import qs.services
 
 /**
  * Row of up to three output devices (Pipewire sinks) under the album art.
+ * The active output always has a tile.
  * A click on a tile makes that sink the default output. The tab sets
  * `x`, `y`, `width` and `height`.
  */
@@ -16,8 +18,9 @@ Row {
 
     spacing: root.gap
 
-    readonly property var outputs: Pipewire.nodes.values.filter(n => n.isSink && !n.isStream && n.audio).slice(0, 3)
     readonly property var defaultSink: Pipewire.defaultAudioSink
+    readonly property var outputs: OutputChoice.shownOutputs(
+        Pipewire.nodes.values.filter(n => n.isSink && !n.isStream && n.audio), root.defaultSink, 3)
 
     PwObjectTracker {
         objects: root.outputs.concat(root.defaultSink ? [root.defaultSink] : [])
