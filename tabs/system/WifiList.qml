@@ -215,6 +215,10 @@ Item {
                         font.pixelSize: 13
                         color: root.canChoose(row.modelData) || row.modelData.connected ? Theme.fg : Theme.dim
                         elide: Text.ElideRight
+
+                        Behavior on color {
+                            ColorAnimation { duration: Theme.stateMs; easing.type: Easing.OutCubic }
+                        }
                     }
 
                     Rectangle {

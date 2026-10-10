@@ -104,6 +104,29 @@ Item {
             return createTemporaryObject(networkType, host, properties);
         }
 
+        // The Text items of the list whose text is `value`.
+        function textItems(item, value, found) {
+            for (const child of item.children) {
+                if (child.text === value && child.visible) found.push(child);
+                textItems(child, value, found);
+            }
+            return found;
+        }
+
+        function test_network_name_color_fades_when_it_becomes_choosable() {
+            const secured = network({ name: "Fade", security: WifiSecurityType.Wpa2Eap });
+            wifi.networks = { values: [secured] };
+            wifiList.open = true;
+            tryCompare(wifiList, "networks", [secured]);
+            tryVerify(() => textItems(wifiList, "Fade", []).length === 1);
+            const label = textItems(wifiList, "Fade", [])[0];
+            compare(label.color, Theme.dim);
+            secured.known = true;
+            tryVerify(() => label.color != Theme.dim, 200);
+            verify(label.color != Theme.fg, "Color jumped: " + label.color);
+            tryCompare(label, "color", Theme.fg);
+        }
+
         function test_password_row_closes_after_a_connection() {
             const cafe = network({ name: "Cafe" });
             wifi.networks = { values: [cafe] };
