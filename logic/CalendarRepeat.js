@@ -173,10 +173,10 @@ function clockOfDate(date) {
     return Times.pad(date.getHours()) + ":" + Times.pad(date.getMinutes());
 }
 
-/** The repeat rule of a zoned series as it runs on source-zone days. The end bound gets one more day: a shown day can be a day earlier. */
+/** The repeat rule of a zoned series as it runs on source-zone days. The end bound allows two extra source days: the source and display zones can differ by 26 hours. */
 function zonedRule(item) {
     return { date: item.zoned.date, repeat: item.repeat, interval: item.interval, byDay: item.byDay,
-        monthWeekday: item.monthWeekday, count: item.count, until: item.until ? Times.addDays(item.until, 1) : null };
+        monthWeekday: item.monthWeekday, count: item.count, until: item.until ? Times.addDays(item.until, 2) : null };
 }
 
 /** A copy of a zoned item whose date, time, end and endDate are the shown ones of the occurrence on source-zone day wallN. */

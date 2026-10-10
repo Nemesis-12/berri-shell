@@ -182,3 +182,9 @@ test("both readers pass unsupported recurrence properties to the existing source
   assert.deepEqual(Array.from(Queries.projectStoredCalendars(calendars).calendars, row => row.error),
     ["RDATE and EXRULE are not supported", "RDATE and EXRULE are not supported"]);
 });
+
+test("both readers include the final UNTIL start across a two-day date difference", () => {
+  everyReader("zoned-until-date-boundary.ics", 2026, 10, "Etc/GMT+12", days => {
+    assert.deepEqual(days, { "2026-10-03": ["22:30 Date boundary"], "2026-10-10": ["22:30 Date boundary"] });
+  });
+});
