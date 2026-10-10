@@ -179,7 +179,7 @@ test("both readers pass unsupported recurrence properties to the existing source
     { id: "file", kind: "file", document: { items: editable } },
     { id: "feed", kind: "link", records: subscribed },
   ];
-  assert.deepEqual(Array.from(Queries.projectStoredCalendars(calendars).calendars, row => row.error),
+  assert.deepEqual(Array.from(Queries.projectStoredCalendars(calendars).calendars, row => row.note),
     ["RDATE and EXRULE are not supported", "RDATE and EXRULE are not supported"]);
 });
 

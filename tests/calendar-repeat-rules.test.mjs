@@ -111,7 +111,8 @@ test("unsupported RDATE and EXRULE keep their raw lines and use the calendar sou
   for (const read of [doc, Format.readCalendar(text)]) {
     const source = { id: "repeat", name: "Repeat", kind: "file", document: read };
     const rows = Queries.projectStoredCalendars([source]).calendars;
-    assert.equal(rows[0].error, "RDATE and EXRULE are not supported");
+    assert.equal(rows[0].note, "RDATE and EXRULE are not supported");
+    assert.equal(rows[0].error, "");
     assert.equal(Queries.projectStoredCalendars([{ ...source, error: "Cannot read file" }]).calendars[0].error, "Cannot read file");
   }
 });
