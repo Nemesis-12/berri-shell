@@ -150,3 +150,21 @@ test("a zoned UNTIL includes the last start when source and display dates differ
     process.env.TZ = "America/Chicago";
   }
 });
+
+for (const freq of ["DAILY", "WEEKLY", "MONTHLY", "YEARLY", "HOURLY", "MINUTELY", "SECONDLY"]) {
+  test(`${freq} keeps all imported rule parts after a title edit and read-save-read`, () => {
+    // COUNT and UNTIL are separate because RFC 5545 does not allow both in one rule.
+    for (const end of ["COUNT=6", "UNTIL=20271103T090000"]) {
+      const rule = `FREQ=${freq};INTERVAL=2;BYDAY=MO,TU;BYMONTH=10;BYMONTHDAY=1,2,3;BYSETPOS=-1;WKST=SU;${end}`;
+      const doc = calendar("DTSTART:20261005T090000", `RRULE:${rule}`);
+      doc.items[0] = Items.applyChanges(doc.items[0], { title: "Edited title" });
+      const text = Format.writeCalendar(doc).replace(/\r\n[ \t]/g, "");
+      const writtenRule = /^RRULE:(.*)$/m.exec(text)[1].trim();
+      assert.deepEqual(writtenRule.split(";").sort(), rule.split(";").sort());
+      const reread = Format.readCalendar(text);
+      assert.equal(reread.items[0].title, "Edited title");
+      assert.deepEqual(JSON.parse(JSON.stringify(reread.items[0].byDay)),
+        JSON.parse(JSON.stringify(doc.items[0].byDay)));
+    }
+  });
+}
