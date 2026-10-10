@@ -32,7 +32,7 @@ test("hidden views stop work, shared requests wait for the last owner, and the s
   }
   cpSync(path.join(root, "services/CachedSource.qml"), path.join(imports, "qs/services/CachedSource.qml"));
   writeFileSync(path.join(imports, "qs/services/qmldir"),
-    "module qs.services\nsingleton Theme 1.0 Theme.qml\nsingleton SystemStats 1.0 SystemStats.qml\nCachedSource 1.0 CachedSource.qml\n" +
+    "module qs.services\nsingleton Theme 1.0 Theme.qml\nsingleton SystemStats 1.0 SystemStats.qml\nsingleton CpuLoad 1.0 CpuLoad.qml\nsingleton SystemUsage 1.0 SystemUsage.qml\nCachedSource 1.0 CachedSource.qml\n" +
     services.map(name => `singleton ${name} 1.0 ${name}.qml\n`).join(""));
   // The services import "../logic/...", so the logic folder sits next to them.
   cpSync(path.join(root, "logic"), path.join(imports, "qs/logic"), { recursive: true });
