@@ -46,3 +46,12 @@ test("monthly BYDAY lists select every matching weekday and survive save and edi
   assert.match(Format.writeCalendar(doc), /BYDAY=MO,WE/);
   assert.deepEqual(monthDates(saved(doc).items[0]), expected);
 });
+
+test("UTC weekly repeats keep their instant across local DST and a save", () => {
+  const doc = calendar("DTSTART:20261026T140000Z", "DTEND:20261026T150000Z", "RRULE:FREQ=WEEKLY;COUNT=2");
+  for (const read of [doc, saved(doc)]) {
+    const days = Queries.itemsInMonth(read.items, 2026, 11);
+    assert.deepEqual(Array.from(days["2026-11-02"], o => [o.time, o.end]), [["08:00", "09:00"]]);
+  }
+  assert.match(Format.writeCalendar(doc), /DTSTART:20261026T140000Z/);
+});

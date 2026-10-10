@@ -239,3 +239,10 @@ fn changed_occurrences_and_zone_data() {
     assert!(json.contains("\"changedOccurrences\":[{\"from\":\"2026-10-12\",\"cancelled\":false,\"title\":\"Moved\",\"date\":\"2026-10-13\",\"time\":\"13:00\",\"end\":null,\"endDate\":null},{\"from\":\"2026-10-19\",\"cancelled\":true,\"title\":null,\"date\":null,\"time\":null,\"end\":null,\"endDate\":null}]"), "{json}");
     assert!(json.contains("\"zoned\":{\"date\":\"2026-10-05\",\"time\":\"09:00\",\"length\":60,\"offsets\":[[\"2026-10-05\",7200],[\"2026-10-25\",3600],"), "{json}");
 }
+
+// UTC repeats need a zero-offset source clock so local DST cannot change their instant.
+#[test]
+fn utc_repeat_keeps_its_source_clock() {
+    let json = convert_text("utc-repeat", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:utc\nDTSTART:20261026T140000Z\nDTEND:20261026T150000Z\nRRULE:FREQ=WEEKLY;COUNT=2\nEND:VEVENT\nEND:VCALENDAR\n");
+    assert!(json.contains("\"zoned\":{\"date\":\"2026-10-26\",\"time\":\"14:00\",\"length\":60,\"offsets\":[[\"2026-10-26\",0]]}"), "{json}");
+}
