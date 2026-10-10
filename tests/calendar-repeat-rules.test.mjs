@@ -115,3 +115,16 @@ test("unsupported RDATE and EXRULE keep their raw lines and use the calendar sou
     assert.equal(Queries.projectStoredCalendars([{ ...source, error: "Cannot read file" }]).calendars[0].error, "Cannot read file");
   }
 });
+
+for (const [name, start, before, equal] of [
+  ["floating", "DTSTART:20261008T090030", "20261009T090015", "20261009T090030"],
+  ["UTC", "DTSTART:20261008T140030Z", "20261009T140015Z", "20261009T140030Z"],
+  ["Berlin", "DTSTART;TZID=Europe/Berlin:20261008T090030", "20261009T070015Z", "20261009T070030Z"],
+]) {
+  test(`${name} UNTIL uses the original start seconds at the final bound`, () => {
+    for (const [until, expected] of [[before, ["2026-10-08"]], [equal, ["2026-10-08", "2026-10-09"]]]) {
+      const doc = calendar(start, `RRULE:FREQ=DAILY;UNTIL=${until}`);
+      for (const read of [doc, saved(doc)]) assert.deepEqual(monthDates(read.items[0]), expected);
+    }
+  });
+}

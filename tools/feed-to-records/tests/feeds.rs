@@ -260,3 +260,10 @@ fn unsupported_recurrence_lines_reach_the_source_note() {
     let json = convert_text("unsupported-repeat", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:unsupported\nDTSTART:20261008T090000\nRDATE:20261012T090000\nEXRULE:FREQ=WEEKLY;BYDAY=MO\nEND:VEVENT\nEND:VCALENDAR\n");
     assert!(json.contains("\"raw\":[\"RDATE:20261012T090000\",\"EXRULE:FREQ=WEEKLY;BYDAY=MO\"]"), "{json}");
 }
+
+// UNTIL comparisons must use DTSTART seconds even though the view shows minutes.
+#[test]
+fn timed_until_keeps_start_seconds() {
+    let json = convert_text("start-seconds", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:seconds\nDTSTART:20261008T140030Z\nRRULE:FREQ=DAILY;UNTIL=20261009T140015Z\nEND:VEVENT\nEND:VCALENDAR\n");
+    assert!(json.contains("\"startSecond\":30"), "{json}");
+}
