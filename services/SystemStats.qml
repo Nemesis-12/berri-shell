@@ -68,6 +68,8 @@ Singleton {
     // Previous network counters for rate calculation.
     property var prevNet: null
     property var prevProcessSample: null
+    // False until two process samples exist, so the second one comes after 1 s.
+    property bool processCpuKnown: false
 
     onActiveChanged: {
         if (active) {
@@ -83,6 +85,7 @@ Singleton {
             downMiBs = 0;
             upMiBs = 0;
             prevProcessSample = null;
+            processCpuKnown = false;
             processes = [];
         }
     }
@@ -232,9 +235,9 @@ Singleton {
         onTriggered: root.reloadFast()
     }
 
-    // The first sample has no CPU delta, so the second one comes after 1 s.
+    // The first sample has no CPU delta, so the second one comes within 1 s.
     Timer {
-        interval: root.prevProcessSample ? 5000 : 1000
+        interval: root.processCpuKnown ? 5000 : 1000
         running: root.active
         repeat: true
         onTriggered: if (!processReader.running) processReader.running = true
@@ -250,6 +253,7 @@ Singleton {
     // Publishes process rows from one completed sample.
     function readProcessSample(text) {
         var result = Readings.readProcesses(text, prevProcessSample);
+        if (prevProcessSample && result.sample) processCpuKnown = true;
         prevProcessSample = result.sample;
         processes = result.rows;
     }

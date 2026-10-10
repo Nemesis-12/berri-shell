@@ -100,6 +100,15 @@ test("network rates fall to zero when the route disappears and after a reopen", 
   assert.deepEqual([stats.downMiBs, stats.upMiBs, stats.netName, stats.prevNet], [0, 0, "", null]);
 });
 
+test("the process sampler stays fast until a CPU number exists", () => {
+  const stats = systemService("SystemStats", { prevProcessSample: null, processes: [], processCpuKnown: false });
+  const line = (ticks) => `101\t1.0\tfirefox\t${procLine(101, "firefox", ticks, 1000)}\n`;
+  stats.readProcessSample("cpu 100 0 0 900\n" + line(100));
+  assert.equal(stats.processCpuKnown, false);
+  stats.readProcessSample("cpu 500 0 0 1500\n" + line(200));
+  assert.equal(stats.processCpuKnown, true);
+});
+
 test("the process service keeps null CPU for the first sample and numbers after", () => {
   const stats = systemService("SystemStats", { prevProcessSample: null, processes: [] });
   const line = (ticks) => `101\t1.0\tfirefox\t${procLine(101, "firefox", ticks, 1000)}\n`;
