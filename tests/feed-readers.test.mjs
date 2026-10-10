@@ -200,3 +200,12 @@ test("both readers apply monthly day limits and positions before COUNT", () => {
     assert.deepEqual(days, { "2026-12-01": ["09:00 First days"] });
   });
 });
+
+test("both readers start alternate weeks on the retained WKST day", () => {
+  everyReader("weekly-week-start.ics", 2026, 10, zone, days => {
+    assert.deepEqual(days, { "2026-10-05": ["09:00 Sunday week"], "2026-10-18": ["09:00 Sunday week"], "2026-10-19": ["09:00 Sunday week"] });
+  });
+  everyReader("weekly-week-start.ics", 2026, 11, zone, days => {
+    assert.deepEqual(days, { "2026-11-01": ["08:00 Sunday week"], "2026-11-02": ["08:00 Sunday week"] });
+  });
+});

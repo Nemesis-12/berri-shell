@@ -193,3 +193,20 @@ test("monthly rules limit month days before selecting positions in the complete 
   assert.deepEqual(monthDates(counted.items[0], 2026, 11), ["2026-11-30"]);
   assert.deepEqual(monthDates(counted.items[0], 2026, 12), []);
 });
+
+test("weekly INTERVAL uses WKST before BYDAY ordering and COUNT", () => {
+  for (const [weekStart, expected] of [
+    ["SU", ["2026-10-05", "2026-10-18", "2026-10-19", "2026-11-01", "2026-11-02"]],
+    ["MO", ["2026-10-05", "2026-10-11", "2026-10-19", "2026-10-25", "2026-11-02"]],
+    ["TU", ["2026-10-05", "2026-10-18", "2026-10-19", "2026-11-01", "2026-11-02"]],
+  ]) {
+    for (const start of ["DTSTART:20261005T090000", "DTSTART:20261005T140000Z"]) {
+      const doc = calendar(start, `RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=SU,MO;WKST=${weekStart};COUNT=5`);
+      doc.items[0] = Items.applyChanges(doc.items[0], { title: "Edited" });
+      for (const read of [doc, saved(doc)]) {
+        const dates = [...monthDates(read.items[0]), ...monthDates(read.items[0], 2026, 11)];
+        assert.deepEqual(dates, expected, weekStart);
+      }
+    }
+  }
+});
