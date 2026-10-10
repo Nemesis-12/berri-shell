@@ -99,3 +99,19 @@ test("an edited UTC series writes an excluded winter occurrence at its UTC clock
   assert.match(Format.writeCalendar(doc), /EXDATE:20261102T150000Z/);
   assert.deepEqual(monthDates(saved(doc).items[0], 2026, 11), ["2026-11-09"]);
 });
+
+test("unsupported RDATE and EXRULE keep their raw lines and use the calendar source note", () => {
+  const extra = "RDATE;TZID=Europe/Berlin:20261012T090000,20261013T090000";
+  const exclusion = "EXRULE:FREQ=WEEKLY;BYDAY=MO";
+  const doc = calendar("DTSTART:20261008T090000", "RRULE:FREQ=DAILY;COUNT=3", extra, exclusion);
+  doc.items[0] = Items.applyChanges(doc.items[0], { title: "Edited" });
+  const text = Format.writeCalendar(doc);
+  assert.ok(text.includes(extra));
+  assert.ok(text.includes(exclusion));
+  for (const read of [doc, Format.readCalendar(text)]) {
+    const source = { id: "repeat", name: "Repeat", kind: "file", document: read };
+    const rows = Queries.projectStoredCalendars([source]).calendars;
+    assert.equal(rows[0].error, "RDATE and EXRULE are not supported");
+    assert.equal(Queries.projectStoredCalendars([{ ...source, error: "Cannot read file" }]).calendars[0].error, "Cannot read file");
+  }
+});

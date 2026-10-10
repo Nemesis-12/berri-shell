@@ -253,3 +253,10 @@ fn timed_until_keeps_its_inclusive_instant() {
     let json = convert_text("timed-until", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:until\nDTSTART:20261008T140000Z\nRRULE:FREQ=DAILY;UNTIL=20261009T135959Z\nEND:VEVENT\nEND:VCALENDAR\n");
     assert!(json.contains("\"untilMs\":1791554399000"), "{json}");
 }
+
+// Unsupported recurrence lines remain in compact records for the source note.
+#[test]
+fn unsupported_recurrence_lines_reach_the_source_note() {
+    let json = convert_text("unsupported-repeat", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:unsupported\nDTSTART:20261008T090000\nRDATE:20261012T090000\nEXRULE:FREQ=WEEKLY;BYDAY=MO\nEND:VEVENT\nEND:VCALENDAR\n");
+    assert!(json.contains("\"raw\":[\"RDATE:20261012T090000\",\"EXRULE:FREQ=WEEKLY;BYDAY=MO\"]"), "{json}");
+}
