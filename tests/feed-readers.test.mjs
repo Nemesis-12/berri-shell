@@ -166,3 +166,9 @@ test("both readers keep UTC repeats at 14:00Z through local DST", () => {
     assert.deepEqual(days, { "2026-11-02": ["08:00 UTC weekly"] });
   });
 });
+
+test("both readers stop floating, UTC and zoned series before a timed UNTIL", () => {
+  everyReader("timed-until.ics", 2026, 10, zone, days => {
+    assert.deepEqual(days, { "2026-10-08": ["02:00 Berlin until", "09:00 Floating until", "09:00 UTC until"] });
+  });
+});

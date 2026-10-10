@@ -151,6 +151,7 @@ function readRepeatRule(read, p, localZone) {
     item.byDay = repeatRule.byDay;
     item.monthWeekday = repeatRule.monthWeekday;
     item.until = repeatRule.until;
+    item.untilMs = repeatRule.untilSource ? repeatRule.untilSource.instantMs : null;
     read.sourceDates.until = repeatRule.untilSource || null;
     item.count = repeatRule.count;
     item.ruleRest = rule.rest.length ? rule.rest.join(";") : null; // rule parts berri ignores, written back as they were

@@ -188,6 +188,7 @@ function zonedVariant(item, wallN) {
     var start = new Date(startMs);
     var shown = {};
     for (var k in item) shown[k] = item[k];
+    shown.startMs = startMs;
     shown.date = Times.dayKey(start);
     shown.time = clockOfDate(start);
     shown.end = null;
@@ -249,6 +250,12 @@ function addShownDays(scan, variant, startN) {
 function addStart(scan, variant, startN) {
     var item = scan.item;
     var key = Times.keyOfDayNum(startN);
+    if (item.untilMs !== null && item.untilMs !== undefined && variant.time !== null) {
+        var startMs = variant.startMs !== undefined ? variant.startMs :
+            new Date(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10),
+                +variant.time.slice(0, 2), +variant.time.slice(3, 5)).getTime();
+        if (startMs > item.untilMs) return;
+    }
     if (item.exdates.indexOf(key) >= 0) return;
     var change = changeFor(item, key);
     if (change && (change.cancelled || change.date !== null)) return;

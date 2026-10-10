@@ -36,24 +36,25 @@ function dateProp(name, key, time, source, localZone) {
 }
 
 /** The UNTIL value: the source text when unchanged, else a date or an end-of-day clock in the source form. */
-function untilValue(item) {
+function untilValue(item, localZone) {
     var source = item.sourceDates && item.sourceDates.until;
     var start = item.sourceDates && item.sourceDates.start;
     if (source && source.date === item.until) return source.value;
     if (item.time === null) return icsDate(item.until);
     var inUtc = (source && source.form === "utc") || (start && (start.form === "utc" || start.form === "zone"));
     if (!inUtc) return icsDate(item.until) + "T235959";
-    var end = new Date(+item.until.slice(0, 4), +item.until.slice(5, 7) - 1, +item.until.slice(8, 10), 23, 59, 59);
-    return Zones.utcClock(end.getTime()) + "Z";
+    var wall = icsDate(item.until) + "T235959";
+    var endMs = start && start.form === "zone" ? Zones.zoneInstant(wall, start.tzid, localZone) : Zones.clockMs(wall);
+    return Zones.utcClock(endMs) + "Z";
 }
 
-function ruleText(item) {
+function ruleText(item, localZone) {
     var parts = ["FREQ=" + item.repeat.toUpperCase()];
     if (item.interval > 1) parts.push("INTERVAL=" + item.interval);
     if (item.byDay.length) parts.push("BYDAY=" + item.byDay.map(function (d) { return Text.weekdays[d]; }).join(","));
     if (item.repeat === "monthly" && item.monthWeekday) parts.push("BYDAY=" + item.monthWeekday.nth + Text.weekdays[item.monthWeekday.day]);
     if (item.count) parts.push("COUNT=" + item.count);
-    else if (item.until) parts.push("UNTIL=" + untilValue(item));
+    else if (item.until) parts.push("UNTIL=" + untilValue(item, localZone));
     if (item.ruleRest) parts.push(item.ruleRest);
     return parts.join(";");
 }
@@ -123,7 +124,7 @@ function itemLines(item, localZone) {
     var recurring = item.repeat !== "none";
     var lines = ["BEGIN:" + name, "UID:" + item.uid, "DTSTAMP:" + (item.stamp || Items.stampNow()), "SUMMARY:" + Text.escapeText(item.title)];
     appendLines(lines, dateLines(item, isTodo, localZone));
-    if (recurring) lines.push("RRULE:" + ruleText(item));
+    if (recurring) lines.push("RRULE:" + ruleText(item, localZone));
     else if (item.ruleRest) lines.push("RRULE:" + item.ruleRest);
     if (item.exdates.length) appendLines(lines, exdateLines(item, localZone));
     if (item.color !== "accent") lines.push("X-BERRI-COLOR:" + item.color);

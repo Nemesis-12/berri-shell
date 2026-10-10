@@ -19,7 +19,7 @@
  *   or a custom "#rrggbb"; stored as X-BERRI-COLOR, "accent" is not written),
  *   repeat ("none" | "daily" | "weekly" | "monthly" | "yearly"), interval,
  *   byDay (daily, weekly or monthly, 0 = Sunday), monthWeekday (monthly only: { nth, day }, nth 1 to 5 or -1 for the last,
- *   day 0 = Sunday; from BYDAY=2TU), until, count,
+ *   day 0 = Sunday; from BYDAY=2TU), until, untilMs (inclusive timed bound), count,
  *   exdates (skipped occurrence dates), doneDates (occurrence dates ticked off),
  *   alarmMinutes (VALARM minutes before start, null = none), status, stamp,
  *   ruleRest (RRULE parts berri ignores, written back unchanged),
@@ -166,7 +166,7 @@ function normalize(item) {
         if (item.alarmMinutes === null) item.alarmMinutes = 0;
     }
     if (item.repeat === "none") {
-        item.interval = 1; item.byDay = []; item.until = null; item.count = null; item.exdates = []; item.ruleRest = null;
+        item.interval = 1; item.byDay = []; item.until = null; item.untilMs = null; item.count = null; item.exdates = []; item.ruleRest = null;
         item.zoned = null; item.changedOccurrences = [];
     }
     if (["daily", "weekly", "monthly"].indexOf(item.repeat) < 0) item.byDay = [];
@@ -213,6 +213,7 @@ var fieldChecks = {
         return { nth: v.nth, day: v.day };
     },
     until: function (v) { return v === null || isDayKey(v) ? v : undefined; },
+    untilMs: function (v) { return v === null || typeof v === "number" && isFinite(v) ? v : undefined; },
     count: function (v) { return v === null || isWhole(v, 1) ? v : undefined; },
     exdates: listOf(isDayKey),
     doneDates: listOf(isDayKey),
@@ -258,7 +259,7 @@ function blankItem() {
     return {
         uid: "", kind: "event", title: "",
         date: null, time: null, end: null, endDate: null,
-        color: "accent", repeat: "none", interval: 1, byDay: [], monthWeekday: null, until: null, count: null,
+        color: "accent", repeat: "none", interval: 1, byDay: [], monthWeekday: null, until: null, untilMs: null, count: null,
         exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: null, ruleRest: null,
         zoned: null, changedOccurrences: [],
         raw: [], rawChildren: []
@@ -304,6 +305,7 @@ function applyChanges(item, changes) {
         next.ruleRest = null;
         if (next.repeat === "none") next.exdates = [];
     }
+    if (next.until !== item.until) next.untilMs = null;
     // The zone data describes the imported start; a new start or repeat makes it wrong.
     if (next.date !== item.date || next.time !== item.time || next.end !== item.end || next.repeat !== item.repeat) next.zoned = null;
     next.stamp = stampNow();
