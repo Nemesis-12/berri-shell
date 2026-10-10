@@ -267,3 +267,11 @@ fn timed_until_keeps_start_seconds() {
     let json = convert_text("start-seconds", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:seconds\nDTSTART:20261008T140030Z\nRRULE:FREQ=DAILY;UNTIL=20261009T140015Z\nEND:VEVENT\nEND:VCALENDAR\n");
     assert!(json.contains("\"startSecond\":30"), "{json}");
 }
+
+// Monthly date limits and positions must reach the same expansion used by editable files.
+#[test]
+fn monthly_limits_reach_the_occurrence_query() {
+    let json = convert_text("monthly-limits", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:limits\nDTSTART:20261001T090000\nRRULE:FREQ=MONTHLY;BYDAY=MO,TU;BYMONTH=10;BYMONTHDAY=1,2,3;BYSETPOS=-1;WKST=SU\nEND:VEVENT\nEND:VCALENDAR\n");
+    assert!(json.contains("\"byDay\":[1,2]"), "{json}");
+    assert!(json.contains("\"ruleRest\":\"BYMONTH=10;BYMONTHDAY=1,2,3;BYSETPOS=-1;WKST=SU\""), "{json}");
+}

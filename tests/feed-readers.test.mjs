@@ -188,3 +188,15 @@ test("both readers include the final UNTIL start across a two-day date differenc
     assert.deepEqual(days, { "2026-10-03": ["22:30 Date boundary"], "2026-10-10": ["22:30 Date boundary"] });
   });
 });
+
+test("both readers apply monthly day limits and positions before COUNT", () => {
+  everyReader("monthly-set-limits.ics", 2026, 10, zone, days => {
+    assert.deepEqual(days, { "2026-10-30": ["09:00 Last workday"] });
+  });
+  everyReader("monthly-set-limits.ics", 2026, 11, zone, days => {
+    assert.deepEqual(days, { "2026-11-03": ["09:00 First days"], "2026-11-30": ["08:00 Last workday"] });
+  });
+  everyReader("monthly-set-limits.ics", 2026, 12, zone, days => {
+    assert.deepEqual(days, { "2026-12-01": ["09:00 First days"] });
+  });
+});

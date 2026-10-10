@@ -168,3 +168,27 @@ for (const freq of ["DAILY", "WEEKLY", "MONTHLY", "YEARLY", "HOURLY", "MINUTELY"
     }
   });
 }
+
+test("monthly rules limit month days before selecting positions in the complete month", () => {
+  for (const [start, parts, october, november] of [
+    ["01", "BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1", ["30"], ["30"]],
+    ["01", "BYDAY=MO,TU;BYMONTHDAY=1,2,3", [], ["02", "03"]],
+    ["01", "BYDAY=MO,TU;BYMONTHDAY=1,2,3;BYSETPOS=-1", [], ["03"]],
+    ["01", "BYMONTHDAY=1,-1;BYSETPOS=-1", ["31"], ["30"]],
+    ["01", "BYDAY=MO,WE;BYSETPOS=1,-1,1,99", ["05", "28"], ["02", "30"]],
+    ["12", "BYDAY=MO,TU;BYSETPOS=1", [], ["02"]],
+    ["01", "BYDAY=-1FR;BYMONTHDAY=30,31;BYSETPOS=1", ["30"], []],
+    ["01", "BYDAY=MO,TU,WE,TH,FR;BYMONTH=10;BYSETPOS=-1", ["30"], []],
+  ]) {
+    const doc = calendar(`DTSTART:202610${start}T090000`, `RRULE:FREQ=MONTHLY;${parts}`);
+    doc.items[0] = Items.applyChanges(doc.items[0], { title: "Edited" });
+    for (const read of [doc, saved(doc)]) {
+      assert.deepEqual(monthDates(read.items[0]), october.map(day => `2026-10-${day}`), parts);
+      assert.deepEqual(monthDates(read.items[0], 2026, 11), november.map(day => `2026-11-${day}`), parts);
+    }
+  }
+  const counted = calendar("DTSTART:20261001T090000", "RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;COUNT=2");
+  assert.deepEqual(monthDates(counted.items[0]), ["2026-10-30"]);
+  assert.deepEqual(monthDates(counted.items[0], 2026, 11), ["2026-11-30"]);
+  assert.deepEqual(monthDates(counted.items[0], 2026, 12), []);
+});
