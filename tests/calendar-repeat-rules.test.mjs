@@ -55,3 +55,25 @@ test("UTC weekly repeats keep their instant across local DST and a save", () => 
   }
   assert.match(Format.writeCalendar(doc), /DTSTART:20261026T140000Z/);
 });
+
+for (const [name, start, before, equal] of [
+  ["floating", "DTSTART:20261008T090000", "20261009T085959", "20261009T090000"],
+  ["UTC", "DTSTART:20261008T140000Z", "20261009T135959Z", "20261009T140000Z"],
+  ["Berlin", "DTSTART;TZID=Europe/Berlin:20261008T090000", "20261009T065959Z", "20261009T070000Z"],
+]) {
+  test(`${name} UNTIL excludes later instants and includes its exact bound after saving`, () => {
+    for (const [until, expected] of [[before, ["2026-10-08"]], [equal, ["2026-10-08", "2026-10-09"]]]) {
+      const doc = calendar(start, `RRULE:FREQ=DAILY;UNTIL=${until}`);
+      for (const read of [doc, saved(doc)]) assert.deepEqual(monthDates(read.items[0]), expected);
+      assert.match(Format.writeCalendar(doc), new RegExp(`UNTIL=${until}`));
+    }
+  });
+}
+
+test("changing a zoned UNTIL day writes the end of that day in the source zone", () => {
+  const doc = calendar("DTSTART;TZID=Europe/Berlin:20261008T090000", "RRULE:FREQ=DAILY;UNTIL=20261009T215959Z");
+  doc.items[0] = Items.applyChanges(doc.items[0], { until: "2026-10-10" });
+  const text = Format.writeCalendar(doc);
+  assert.match(text, /UNTIL=20261010T215959Z/);
+  assert.deepEqual(monthDates(saved(doc).items[0]), ["2026-10-08", "2026-10-09", "2026-10-10"]);
+});

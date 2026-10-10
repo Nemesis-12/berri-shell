@@ -246,3 +246,10 @@ fn utc_repeat_keeps_its_source_clock() {
     let json = convert_text("utc-repeat", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:utc\nDTSTART:20261026T140000Z\nDTEND:20261026T150000Z\nRRULE:FREQ=WEEKLY;COUNT=2\nEND:VEVENT\nEND:VCALENDAR\n");
     assert!(json.contains("\"zoned\":{\"date\":\"2026-10-26\",\"time\":\"14:00\",\"length\":60,\"offsets\":[[\"2026-10-26\",0]]}"), "{json}");
 }
+
+// Compact records must keep a timed UNTIL instant for the occurrence query.
+#[test]
+fn timed_until_keeps_its_inclusive_instant() {
+    let json = convert_text("timed-until", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:until\nDTSTART:20261008T140000Z\nRRULE:FREQ=DAILY;UNTIL=20261009T135959Z\nEND:VEVENT\nEND:VCALENDAR\n");
+    assert!(json.contains("\"untilMs\":1791554399000"), "{json}");
+}
