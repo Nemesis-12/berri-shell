@@ -172,3 +172,13 @@ test("both readers stop floating, UTC and zoned series before a timed UNTIL", ()
     assert.deepEqual(days, { "2026-10-08": ["02:00 Berlin until", "09:00 Floating until", "09:00 UTC until"] });
   });
 });
+
+test("both readers pass unsupported recurrence properties to the existing source note", () => {
+  const { editable, subscribed } = readLists(path.join(feedsDir, "unsupported-repeat.ics"), zone);
+  const calendars = [
+    { id: "file", kind: "file", document: { items: editable } },
+    { id: "feed", kind: "link", records: subscribed },
+  ];
+  assert.deepEqual(Array.from(Queries.projectStoredCalendars(calendars).calendars, row => row.error),
+    ["RDATE and EXRULE are not supported", "RDATE and EXRULE are not supported"]);
+});

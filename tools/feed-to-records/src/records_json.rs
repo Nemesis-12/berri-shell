@@ -59,14 +59,6 @@ fn record_json(output: &mut String, record: &Record) {
     number(output, "interval", Some(record.interval));
     number_list(output, "byDay", &record.by_day);
     field(output, "until", until.as_deref());
-    let until_ms = match &record.until {
-        Some(CalendarDate::DateTime { value, zone, utc }) =>
-            instant_of(value, source_zone(zone.as_deref(), *utc)).map(|seconds| seconds * 1000),
-        _ => None,
-    };
-    output.push_str("\"untilMs\":");
-    output.push_str(&until_ms.map_or_else(|| "null".to_owned(), |ms| ms.to_string()));
-    output.push(',');
     number(output, "count", record.count);
     string_list(output, "exdates", &local_days(&record.exdates));
     string_list(output, "doneDates", &done_dates);
@@ -75,6 +67,15 @@ fn record_json(output: &mut String, record: &Record) {
     month_weekday_json(output, record.month_weekday);
     zoned_json(output, zoned_series(record).as_ref());
     changed_json(output, &record.changed);
+    let until_ms = match &record.until {
+        Some(CalendarDate::DateTime { value, zone, utc }) =>
+            instant_of(value, source_zone(zone.as_deref(), *utc)).map(|seconds| seconds * 1000),
+        _ => None,
+    };
+    output.push_str("\"untilMs\":");
+    output.push_str(&until_ms.map_or_else(|| "null".to_owned(), |ms| ms.to_string()));
+    output.push(',');
+    string_list(output, "raw", &record.raw);
     output.pop();
     output.push('}');
 }

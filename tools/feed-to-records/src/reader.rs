@@ -68,7 +68,7 @@ impl Reader {
         match name.as_str() {
             "BEGIN" => self.begin(value),
             "END" => self.end(),
-            _ => self.read_property(&name, &params, value),
+            _ => self.read_property(&name, &params, value, line),
         }
     }
 
@@ -117,7 +117,7 @@ impl Reader {
     }
 
     // Reads one property in the calendar, in an alarm, or in an event or a task.
-    fn read_property(&mut self, name: &str, params: &Params, value: &str) {
+    fn read_property(&mut self, name: &str, params: &Params, value: &str, raw: &str) {
         if self.nesting.in_calendar() && name == "X-WR-CALNAME" && self.feed.name.is_empty() {
             self.feed.name = text_value(value).trim().to_owned();
         }
@@ -128,6 +128,9 @@ impl Reader {
             return;
         }
         if let Some(record) = self.item.as_mut() {
+            if matches!(name, "RDATE" | "EXRULE") {
+                record.raw.push(raw.to_owned());
+            }
             read_item_property(record, name, params, value);
         }
     }
