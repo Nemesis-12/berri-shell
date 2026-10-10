@@ -154,7 +154,7 @@ function readRepeatRule(read, p, localZone) {
     item.untilMs = repeatRule.untilSource ? repeatRule.untilSource.instantMs : null;
     read.sourceDates.until = repeatRule.untilSource || null;
     item.count = repeatRule.count;
-    item.ruleRest = rule.rest.length ? rule.rest.join(";") : null; // rule parts berri ignores, written back as they were
+    item.ruleRest = rule.rest.length ? rule.rest.join(";") : null; // retained rule parts, written back as they were
 }
 
 function readExdates(read, p, localZone) {

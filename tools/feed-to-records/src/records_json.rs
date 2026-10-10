@@ -64,6 +64,7 @@ fn record_json(output: &mut String, record: &Record) {
     string_list(output, "doneDates", &done_dates);
     number(output, "alarmMinutes", record.alarm_minutes);
     field(output, "status", record.status.as_ref().and_then(Status::shown));
+    field(output, "ruleRest", record.rule_rest.as_deref());
     month_weekday_json(output, record.month_weekday);
     zoned_json(output, zoned_series(record).as_ref());
     changed_json(output, &record.changed);

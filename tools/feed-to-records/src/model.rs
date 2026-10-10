@@ -104,6 +104,8 @@ pub struct Record {
     pub month_weekday: Option<(i32, usize)>,
     pub until: Option<CalendarDate>,
     pub count: Option<usize>,
+    // Retained RRULE parts used by the shared occurrence query.
+    pub rule_rest: Option<String>,
     pub exdates: Vec<CalendarDate>,
     pub done_dates: Vec<CalendarDate>,
     pub alarm_minutes: Option<usize>,

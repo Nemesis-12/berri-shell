@@ -45,11 +45,25 @@ function spend(budget, n) {
     return false;
 }
 
+/** Reads retained RRULE parts once for a series query. Their text stays unchanged on save. */
+function retainedRuleParts(item) {
+    var parts = {};
+    (item.ruleRest || "").split(";").forEach(function (part) {
+        var eq = part.indexOf("=");
+        if (eq > 0) parts[part.slice(0, eq).toUpperCase()] = part.slice(eq + 1);
+    });
+    return parts;
+}
+
 /** The fixed numbers of a repeating series: its first day, step size, first week and month. */
 function seriesOf(item) {
     var s = Times.dayNum(item.date);
+    var parts = retainedRuleParts(item);
     return {
         s: s,
+        months: parts.BYMONTH ? parts.BYMONTH.split(",").map(Number) : [],
+        monthDays: parts.BYMONTHDAY ? parts.BYMONTHDAY.split(",").map(Number) : [],
+        positions: parts.BYSETPOS ? parts.BYSETPOS.split(",").map(Number) : [],
         iv: Math.max(1, item.interval || 1),
         sy: +item.date.slice(0, 4), sm: +item.date.slice(5, 7), sd: +item.date.slice(8, 10),
         monthIndex: +item.date.slice(0, 4) * 12 + +item.date.slice(5, 7) - 1,
@@ -87,18 +101,23 @@ function monthlyStep(item, c, k) {
     var idx = c.monthIndex + k * c.iv;
     var y = Math.floor(idx / 12), mo = idx % 12 + 1;
     var base = dayOfUtc(y, mo, 1);
-    if (item.monthWeekday) {
-        var weekday = weekdayInMonth(y, mo, item.monthWeekday.nth, item.monthWeekday.day);
-        return { base: base, list: weekday === null ? [] : [weekday] };
+    var last = daysInMonth(y, mo);
+    if (c.months.length && c.months.indexOf(mo) < 0) return { base: base, list: [] };
+    var ordinal = item.monthWeekday ? weekdayInMonth(y, mo, item.monthWeekday.nth, item.monthWeekday.day) : null;
+    var days = [];
+    for (var d = 1; d <= last; d++) {
+        var n = base + d - 1;
+        if (c.monthDays.length && c.monthDays.indexOf(d) < 0 && c.monthDays.indexOf(d - last - 1) < 0) continue;
+        if (item.monthWeekday && n !== ordinal) continue;
+        if (item.byDay.length && item.byDay.indexOf(weekdayOf(n)) < 0) continue;
+        if (!c.monthDays.length && !item.monthWeekday && !item.byDay.length && d !== c.sd) continue;
+        days.push(n);
     }
-    if (item.byDay.length) {
-        var days = [];
-        for (var d = 0; d < daysInMonth(y, mo); d++)
-            if (item.byDay.indexOf(weekdayOf(base + d)) >= 0) days.push(base + d);
-        return { base: base, list: days };
-    }
-    // No such day this month: skipped, as RFC 5545 says.
-    return { base: base, list: c.sd <= daysInMonth(y, mo) ? [base + c.sd - 1] : [] };
+    // Select positions in the complete month before DTSTART, COUNT and query bounds limit it.
+    if (c.positions.length) days = days.filter(function (n, i) {
+        return c.positions.indexOf(i + 1) >= 0 || c.positions.indexOf(i - days.length) >= 0;
+    });
+    return { base: base, list: days };
 }
 
 function yearlyStep(c, k) {
@@ -176,7 +195,7 @@ function clockOfDate(date) {
 /** The repeat rule of a zoned series as it runs on source-zone days. The end bound allows two extra source days: the source and display zones can differ by 26 hours. */
 function zonedRule(item) {
     return { date: item.zoned.date, repeat: item.repeat, interval: item.interval, byDay: item.byDay,
-        monthWeekday: item.monthWeekday, count: item.count, until: item.until ? Times.addDays(item.until, 2) : null };
+        monthWeekday: item.monthWeekday, ruleRest: item.ruleRest, count: item.count, until: item.until ? Times.addDays(item.until, 2) : null };
 }
 
 /** A copy of a zoned item whose date, time, end and endDate are the shown ones of the occurrence on source-zone day wallN. */

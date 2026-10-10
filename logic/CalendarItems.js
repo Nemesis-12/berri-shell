@@ -22,7 +22,7 @@
  *   day 0 = Sunday; from BYDAY=2TU), until, untilMs (inclusive timed bound), count,
  *   exdates (skipped occurrence dates), doneDates (occurrence dates ticked off),
  *   alarmMinutes (VALARM minutes before start, null = none), status, stamp,
- *   ruleRest (RRULE parts berri ignores, written back unchanged),
+ *   ruleRest (retained RRULE parts, written back unchanged),
  *   zoned (repeating event in UTC or a named time zone: { date, time, length, offsets }, the first source clock,
  *   the length in minutes and the [first day, UTC offset in seconds] changes of that zone, so each
  *   occurrence follows the daylight-saving changes of the zone; null otherwise),
@@ -58,7 +58,8 @@
  * A zoned series follows its zone for ten years from its first day.
  * A moved occurrence without DTEND has no end time. Deleting a moved occurrence of an editable calendar
  * leaves its RECURRENCE-ID component in the file.
- * BYMONTHDAY, BYSETPOS, a BYDAY list with week numbers and other rule parts stay raw but are ignored.
+ * Monthly BYMONTH, BYMONTHDAY and BYSETPOS use retained rule parts.
+ * A BYDAY list with week numbers and other retained rule parts are ignored.
  * RDATE and EXRULE stay raw and are not applied. The calendar source row shows a note.
  * A cancelled item (STATUS:CANCELLED) has no occurrences, also in an editable calendar.
  */
