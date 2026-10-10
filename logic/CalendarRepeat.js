@@ -183,7 +183,7 @@ function zonedRule(item) {
 function zonedVariant(item, wallN) {
     var zoned = item.zoned;
     var wall = Times.keyOfDayNum(wallN);
-    var startMs = Date.UTC(+wall.slice(0, 4), +wall.slice(5, 7) - 1, +wall.slice(8, 10), +zoned.time.slice(0, 2), +zoned.time.slice(3, 5)) -
+    var startMs = Date.UTC(+wall.slice(0, 4), +wall.slice(5, 7) - 1, +wall.slice(8, 10), +zoned.time.slice(0, 2), +zoned.time.slice(3, 5), item.startSecond || 0) -
         zoneOffsetOn(zoned.offsets, wall) * 1000;
     var start = new Date(startMs);
     var shown = {};
@@ -253,7 +253,7 @@ function addStart(scan, variant, startN) {
     if (item.untilMs !== null && item.untilMs !== undefined && variant.time !== null) {
         var startMs = variant.startMs !== undefined ? variant.startMs :
             new Date(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10),
-                +variant.time.slice(0, 2), +variant.time.slice(3, 5)).getTime();
+                +variant.time.slice(0, 2), +variant.time.slice(3, 5), item.startSecond || 0).getTime();
         if (startMs > item.untilMs) return;
     }
     if (item.exdates.indexOf(key) >= 0) return;

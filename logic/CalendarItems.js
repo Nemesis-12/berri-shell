@@ -13,7 +13,7 @@
  *
  * Item shape (all dates "YYYY-MM-DD", all times "HH:MM", local display time):
  *   uid, kind ("event" | "task" | "reminder"), title,
- *   date, time (null = all-day / no time), end (end time, events only),
+ *   date, time (null = all-day / no time), startSecond (precision for timed bounds), end (end time, events only),
  *   endDate (last day of a multi-day all-day event, else null),
  *   color (preset key "accent" | "blue" | "green" | "yellow" | "red" | "cyan" | "magenta" | "orange",
  *   or a custom "#rrggbb"; stored as X-BERRI-COLOR, "accent" is not written),
@@ -201,6 +201,7 @@ var fieldChecks = {
     kind: function (v) { return KINDS.indexOf(v) >= 0 ? v : undefined; },
     title: function (v) { return isText(v) ? v : undefined; },
     date: function (v) { return v === null || isDayKey(v) ? v : undefined; },
+    startSecond: function (v) { return isWhole(v, 0) && v < 60 ? v : undefined; },
     time: function (v) { return v === null || isClock(v) ? v : undefined; },
     end: function (v) { return v === null || isClock(v) ? v : undefined; },
     endDate: function (v) { return v === null || isDayKey(v) ? v : undefined; },
@@ -259,7 +260,7 @@ function takeCheckedFields(item, fields) {
 function blankItem() {
     return {
         uid: "", kind: "event", title: "",
-        date: null, time: null, end: null, endDate: null,
+        date: null, time: null, startSecond: 0, end: null, endDate: null,
         color: "accent", repeat: "none", interval: 1, byDay: [], monthWeekday: null, until: null, untilMs: null, count: null,
         exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: null, ruleRest: null,
         zoned: null, changedOccurrences: [],
@@ -306,6 +307,7 @@ function applyChanges(item, changes) {
         next.ruleRest = null;
         if (next.repeat === "none") next.exdates = [];
     }
+    if (next.date !== item.date || next.time !== item.time) next.startSecond = 0;
     if (next.until !== item.until) next.untilMs = null;
     // The zone data describes the imported start; a new start or repeat makes it wrong.
     if (next.date !== item.date || next.time !== item.time || next.end !== item.end || next.repeat !== item.repeat) next.zoned = null;

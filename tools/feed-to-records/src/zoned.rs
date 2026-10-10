@@ -1,4 +1,4 @@
-//! Daylight-saving data of a repeating event in a named zone.
+//! Source-clock data of a repeating event in UTC or a named zone.
 
 use crate::date::{civil_from_days, day_key, days_from_civil, CalendarDate};
 use crate::model::Record;
@@ -78,7 +78,7 @@ fn series_length(record: &Record, start: i64) -> Option<i64> {
     }
 }
 
-// The source-zone data of a repeating event with a named zone (see zonedSeries in CalendarFormat.js).
+// The source-clock data of a repeating event in UTC or a named zone (see zonedSeries in IcsRead.js).
 // Returns None for other events and for an unknown zone.
 pub fn zoned_series(record: &Record) -> Option<ZonedSeries> {
     let Some(CalendarDate::DateTime {

@@ -89,7 +89,7 @@ var ZONE_SCAN_DAYS = 3660; // a zoned series is followed for ten years
 var ZONE_SCAN_STEP = 21;
 
 /**
- * The source-zone data of a repeating event with a named zone: its first source clock, its length in
+ * The source-clock data of a repeating event in UTC or a named zone: its first source clock, its length in
  * minutes, and the offset from UTC (seconds) at that clock on each source day, as a list of
  * [first day, offset] changes. A repeat takes its time from the source zone, so the shown time
  * follows the daylight-saving changes of that zone. Null when the zone is unknown.
@@ -205,6 +205,7 @@ function setItemDates(item, start, endValue, isTodo) {
     if (first) {
         item.date = first.date;
         item.time = first.time;
+        item.startSecond = first.time === null ? 0 : (+first.value.slice(13, 15) || 0);
     }
     if (!start || !endValue) return;
     if (start.time === null) {

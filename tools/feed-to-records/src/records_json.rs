@@ -1,10 +1,10 @@
 //! The compact JSON of a feed, with the field names used by CalendarFormat.js.
 
+use crate::date::CalendarDate;
 use crate::json::{field, json_string, list, number, number_list, string_list};
 use crate::model::{Feed, Record, Status};
 use crate::overrides::ChangedOccurrence;
 use crate::timing::{timing, Timing};
-use crate::date::CalendarDate;
 use crate::zone::{instant_of, local_day, source_zone};
 use crate::zoned::{zoned_series, ZonedSeries};
 
@@ -75,6 +75,11 @@ fn record_json(output: &mut String, record: &Record) {
     output.push_str("\"untilMs\":");
     output.push_str(&until_ms.map_or_else(|| "null".to_owned(), |ms| ms.to_string()));
     output.push(',');
+    let start_second = match record.start.as_ref().or(record.end_value.as_ref()) {
+        Some(CalendarDate::DateTime { value, .. }) => value[13..15].parse().ok(),
+        _ => Some(0),
+    };
+    number(output, "startSecond", start_second);
     string_list(output, "raw", &record.raw);
     output.pop();
     output.push('}');
