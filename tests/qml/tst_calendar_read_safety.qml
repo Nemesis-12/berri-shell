@@ -143,17 +143,14 @@ TestCase {
         compare(TestIo.writes.length, 0);
     }
 
-    // A missing file for a known calendar is a failed read, even with no cached items.
+    // A missing non-local file is a failed read, even with no cached items.
     function test_missing_known_calendar_is_never_empty_and_writable_data() {
-        return [{ tag: "loaded local", kind: "local", loaded: true },
-            { tag: "unread file", kind: "file", loaded: false },
-            { tag: "loaded file", kind: "file", loaded: true },
-            { tag: "restored local", kind: "restored", loaded: false }];
+        return [{ tag: "unread file", loaded: false },
+            { tag: "loaded file", loaded: true }];
     }
 
     function test_missing_known_calendar_is_never_empty_and_writable(data) {
-        if (data.kind === "restored") Calendar._loadState({ calendars: [{ id: "berri", file: "berri.ics" }] });
-        const meta = data.kind === "file" ? Calendar._addCalendar("work", "file", "Work", "work.ics", "", "blue") : Calendar._calendars.berri;
+        const meta = Calendar._addCalendar("work", "file", "Work", "work.ics", "", "blue");
         if (data.loaded) {
             TestIo.texts[meta.path] = savedText();
             startReading();
@@ -224,6 +221,19 @@ TestCase {
         startReading();
         compare(Calendar.add({ title: "First", date: "2026-10-06" }), true);
         compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title), ["First"]);
+    }
+
+    // Deleting the local file starts an empty calendar even after a successful read.
+    function test_deleted_local_file_accepts_a_new_event() {
+        TestIo.texts[berriPath] = savedText();
+        startReading();
+        delete TestIo.texts[berriPath];
+        TestIo.readers[berriPath].fileChanged();
+        compare(Calendar.calendars[0].error, "");
+        compare(Calendar.itemsOn("2026-10-05"), []);
+        compare(Calendar.add({ title: "After deletion", date: "2026-10-06" }), true);
+        compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title), ["After deletion"]);
+        compare(TestIo.writes, [berriPath]);
     }
 
     // Each replacement keeps exactly one previous version beside the calendar.

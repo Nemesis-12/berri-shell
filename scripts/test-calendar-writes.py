@@ -27,6 +27,8 @@ class CalendarWriteTests(unittest.TestCase):
         (self.root / "services").mkdir()
         for name in ("Calendar", "CalendarDisk", "CalendarFiles", "CalendarLinks", "SavedState", "FolderRoots"):
             shutil.copy(REPO / f"services/{name}.qml", self.root / f"services/{name}.qml")
+        (self.root / "scripts").mkdir()
+        shutil.copy(REPO / "scripts/backup-saved.sh", self.root / "scripts/backup-saved.sh")
         self.test_home = self.folder / "home"
         self.calendar = self.test_home / ".local/share/berri-shell/calendar"
         self.calendar.mkdir(parents=True)
@@ -43,13 +45,14 @@ class CalendarWriteTests(unittest.TestCase):
         self.env["XDG_RUNTIME_DIR"] = "/proc/self/cwd/runtime"
 
     # Start only this isolated fixture and stop after the checks, never the desktop shell.
-    def run_qml(self, body):
+    def run_qml(self, body, finish_after_ms=0):
         qml = self.root / "shell.qml"
         qml.write_text('''import QtQuick
 import Quickshell
 import qs.services
 import "logic/CalendarItems.js" as Items
 Scope {
+    Timer { interval: ''' + str(finish_after_ms) + '''; running: interval > 0; onTriggered: { console.log("TEST PASS"); Qt.quit(); } }
     function check(ok, message) {
         if (!ok) { console.error("TEST FAIL", message); Qt.quit(); }
         return ok;
@@ -109,6 +112,22 @@ Scope {
             console.log("TEST PASS"); Qt.quit();
 ''')
         self.assertIn(b"SUMMARY:First", self.path.read_bytes())
+        self.assertFalse(self.path.with_name("berri.ics.bak").exists())
+
+    # Saved settings must not prevent the first local event after a restart.
+    def test_saved_color_without_local_file_allows_first_event_after_restart(self):
+        self.path.unlink()
+        self.run_qml(''' 
+            Calendar.setCalendarColor("berri", "blue");
+''', finish_after_ms=500)
+        settings = self.test_home / ".local/state/berri-shell/calendars.json"
+        self.assertTrue(settings.exists())
+        self.assertFalse(self.path.exists())
+        self.run_qml('''
+            if (!check(Calendar.add({ title: "After restart", date: "2026-10-06" }), "saved state blocked the local calendar")) return;
+            console.log("TEST PASS"); Qt.quit();
+''')
+        self.assertIn(b"SUMMARY:After restart", self.path.read_bytes())
         self.assertFalse(self.path.with_name("berri.ics.bak").exists())
 
     def test_whole_calendar_color_save_keeps_the_previous_file(self):
