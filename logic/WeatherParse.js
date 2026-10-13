@@ -220,9 +220,14 @@ function hoursFor(model, index) {
     return out;
 }
 
-// Hours for the hour strip of day `index`: for today the next 24 hours (they cross midnight), else that day's hours.
+// Strip hours: today continues across midnight; later days sample the mock's daytime hours.
 function stripHours(model, index) {
-    return index === 0 ? nextHours(model) : hoursFor(model, index);
+    if (index === 0) return nextHours(model);
+    // Mock 5C uses six samples: 06, 09, 12, 15, 18 and 21.
+    return hoursFor(model, index).filter(function(hour) {
+        var clockHour = parseInt(hour.time.slice(11, 13));
+        return clockHour >= 6 && clockHour <= 21 && (clockHour - 6) % 3 === 0;
+    });
 }
 
 // Picks "City, CC" from Open-Meteo geocoding results: the hit nearest to the coordinates.

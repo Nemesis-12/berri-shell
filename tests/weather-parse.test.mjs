@@ -71,7 +71,7 @@ test("hours strip for today keeps going after midnight", () => {
   assert.equal(strip.length, 24);
   assert.deepEqual(Array.from(strip.slice(0, 6), (h) => Number(format.hourLabel(h.time, true))), [23, 0, 1, 2, 3, 4]);
   const tomorrow = lib.stripHours(model, 1);
-  assert.equal(tomorrow.length, 24); // other days: whole day
+  assert.equal(tomorrow.length, 6); // other days: the mock's six daytime samples
   assert.ok(tomorrow.every((h) => h.time.startsWith("2026-10-01")));
 });
 
