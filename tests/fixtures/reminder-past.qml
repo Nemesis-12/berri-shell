@@ -55,4 +55,12 @@ TestCase {
         compare(TestIo.downloads.length, 1);
         compare(TestIo.downloads[0].slice(-2), ["Past reminder", Calendar.allItems()[0].time]);
     }
+    // A saved check time must not hide an overdue reminder added while the shell was off.
+    function test_past_reminder_with_saved_check() {
+        seed();
+        ReminderNotifier._stateRead = true;
+        Calendar.ready = true;
+        compare(TestIo.downloads.length, 1);
+        compare(TestIo.downloads[0].slice(-2), ["Past reminder", Calendar.allItems()[0].time]);
+    }
 }
