@@ -44,7 +44,7 @@ Item {
     // Fails the first location read and its IP fallback.
     function readLocation(file) {
         locationReads++;
-        if (!allowed && ["location", "invalid-location"].indexOf(config.scenario) >= 0) file.loadFailed();
+        if (!allowed && ["location", "invalid-location", "portal"].indexOf(config.scenario) >= 0) file.loadFailed();
         else {
             file.contents = JSON.stringify(moved
                 ? { latitude: 38.7, longitude: -9.1, name: "Lisbon, PT" }
@@ -70,10 +70,11 @@ Item {
         process.stdout.text = allowed && isForecast ? JSON.stringify(response) : "";
         if (!allowed && config.scenario === "invalid-location")
             process.stdout.text = JSON.stringify({ nearest_area: [{ latitude: "bad", longitude: "-8.6" }] });
+        if (!allowed && config.scenario === "portal") process.stdout.text = "<html>Sign in to the network</html>";
         process.stdout.streamFinished();
-        process.exited(allowed || ["bad-data", "invalid-location"].indexOf(config.scenario) >= 0 ? 0 : 22);
-        if (!allowed && (["location", "invalid-location"].indexOf(config.scenario) >= 0 || isForecast)) {
-            var expectedError = config.scenario === "bad-data" ? "Bad data"
+        process.exited(allowed || ["bad-data", "invalid-location", "portal"].indexOf(config.scenario) >= 0 ? 0 : 22);
+        if (!allowed && (["location", "invalid-location", "portal"].indexOf(config.scenario) >= 0 || isForecast)) {
+            var expectedError = config.scenario === "bad-data" || config.scenario === "portal" ? "Bad data"
                 : isForecast || config.scenario === "location" ? "Offline" : "No location";
             check(service.error === expectedError, "Failure must keep the existing error value " + expectedError);
             allowed = true;

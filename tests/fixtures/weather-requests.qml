@@ -84,6 +84,25 @@ Item {
 
     // Exercises publication after a move while the old forecast is in flight.
     function advance() {
+        if (config.scenario === "backoff") {
+            // Each bad reply doubles the retry wait up to 15 minutes; a good reply starts again at 45 seconds.
+            var wait = service.resources.concat(service.children).filter(child => child.objectName === "retryTimer")[0];
+            var expected = [45, 90, 180, 360, 720, 900, 900];
+            var failures = stage;
+            finish(requests.shift(), failures < expected.length ? "not JSON" : forecast(18));
+            if (failures < expected.length) {
+                if (!check(wait.running && wait.interval === expected[failures] * 1000,
+                           "Failure " + (failures + 1) + " must wait " + expected[failures] + " s, got " + wait.interval / 1000)) return;
+                stage++;
+                Qt.callLater(service.fetchWeather);
+                return;
+            }
+            if (!check(!wait.running && wait.interval === 45000 && service.error === "",
+                       "A good reply must stop the retry and reset the wait to 45 s")) return;
+            console.log("Weather checks passed for retry backoff");
+            Qt.exit(0);
+            return;
+        }
         if (config.scenario === "forecast-race") {
             if (stage === 0) {
                 stage = 1;

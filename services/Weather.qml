@@ -9,7 +9,8 @@ import "../logic/SourceFailures.js" as SourceFailures
  * Weather data for the pill, the Home cell and the Weather tab. Location comes from Omarchy's own weather
  * settings file; if that is missing or invalid, falls back to wttr.in's IP
  * lookup. Actual conditions come from Open-Meteo. Refreshes every 15 min,
- * resolves location each hour, and retries failed calls after 45 seconds.
+ * resolves location each hour, and retries failed calls after 45 seconds. Each further
+ * failure doubles the wait, up to 15 minutes; a good forecast resets it.
  * One Open-Meteo request per refresh gives current values, 7 days and hourly data.
  * On failure the last good data stays and `error` holds a short text: "Offline",
  * "Bad data" or "No location". The views dim the readout and show the age of the
@@ -17,7 +18,8 @@ import "../logic/SourceFailures.js" as SourceFailures
  * (name and fixed reason only). The next line comes at the earliest one hour
  * later (SourceFailures.PERIOD_MS), however many retries fail.
  * Temperatures are in Celsius.
- * Times: `sunrise`, `sunset` are local "HH:MM" strings; `hours[].time` and `days[].date` are API wall-time text.
+ * Times: `sunrise`, `sunset` are local "HH:MM" strings; `hours[].time` and `days[].date` are wall-time text
+ * of the location; `hours[].timeMs` is the exact instant (the request uses unix seconds).
  */
 Singleton {
     id: root
@@ -88,7 +90,7 @@ Singleton {
     function dayDetail(index) {
         // Bind the caller to successful forecast changes, including changes inside the model.
         void root.updatedAt;
-        return model ? WeatherParse.dayDetail(model, index) : null;
+        return model ? WeatherParse.dayDetail(model, index, Clock.minute.getTime()) : null;
     }
 
     /** Hours for the strip of day `index`; for 0, the next 24 hours (they cross midnight). */
@@ -203,7 +205,7 @@ Singleton {
             + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,weather_code,is_day,wind_speed_10m,wind_direction_10m,wind_gusts_10m,surface_pressure"
             + "&hourly=temperature_2m,weather_code,is_day,precipitation_probability,uv_index"
             + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset,daylight_duration,uv_index_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,surface_pressure_mean,apparent_temperature_max,relative_humidity_2m_mean,dew_point_2m_mean"
-            + "&timezone=auto&forecast_days=7"];
+            + "&timezone=auto&timeformat=unixtime&forecast_days=7"];
         weatherProc.running = true;
     }
 
@@ -234,15 +236,25 @@ Singleton {
         stdout: StdioCollector { waitForEnd: true }
         onExited: (code) => {
             if (locationRevision !== root.locationRevision || !root.locationPending) return;
+            var reply;
             try {
                 if (code !== 0) throw new Error("Offline");
-                var area = JSON.parse(stdout.text).nearest_area[0];
+                reply = JSON.parse(stdout.text);
+            } catch (e) {
+                // A page that is not JSON (for example a captive portal) is bad data, not a missing place.
+                root.error = code !== 0 ? "Offline" : "Bad data";
+                root.logFailure(code !== 0 ? "offline" : "bad data");
+                root.scheduleRetry();
+                return;
+            }
+            try {
+                var area = reply.nearest_area[0];
                 if (!root.useCoords(parseFloat(area.latitude), parseFloat(area.longitude)))
                     throw new Error("No coordinates");
             } catch (e) {
-                root.error = code !== 0 ? "Offline" : "No location";
-                root.logFailure(code !== 0 ? "offline" : "no location");
-                retryTimer.restart();
+                root.error = "No location";
+                root.logFailure("no location");
+                root.scheduleRetry();
             }
         }
     }
@@ -305,11 +317,11 @@ Singleton {
                     root.model = WeatherParse.parse(JSON.parse(stdout.text));
                     root.updatedAt = Date.now();
                     root.error = "";
-                    retryTimer.stop();
+                    root.clearRetry();
                 } catch (e) {
                     root.error = code !== 0 ? "Offline" : "Bad data";
                     root.logFailure(code !== 0 ? "offline" : "bad data");
-                    retryTimer.restart();
+                    root.scheduleRetry();
                 }
                 root.loading = false;
             }
@@ -320,9 +332,29 @@ Singleton {
 
     Component.onCompleted: resolveLocation()
 
+    // Waits longer after each failure in a row: the first retry follows the failure by 45 seconds.
+    function scheduleRetry() {
+        var firstWait = retryTimer.interval / retryTimer.factor;
+        retryTimer.factor = WeatherParse.retryFactor(retryTimer.failures++);
+        retryTimer.interval = firstWait * retryTimer.factor;
+        retryTimer.restart();
+    }
+
+    // Stops the retries and returns to the first wait.
+    function clearRetry() {
+        retryTimer.stop();
+        retryTimer.interval /= retryTimer.factor;
+        retryTimer.factor = 1;
+        retryTimer.failures = 0;
+    }
+
     // Leaves time for a location call and a forecast call within 70 seconds.
     Timer {
         id: retryTimer
+        objectName: "retryTimer"
+        // Multiple of the first wait now in `interval`, and the failures counted so far.
+        property int factor: 1
+        property int failures: 0
         interval: 45 * 1000
         onTriggered: root.locationPending || !root.hasCoords() ? root.resolveLocation() : root.fetchWeather()
     }

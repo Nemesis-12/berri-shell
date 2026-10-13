@@ -44,7 +44,7 @@ function runWeather(scenario) {
         if (field !== "time") response.hourly[field].push(response.hourly[field][0]);
     }
     const config = { scenario, forecast: response, timeScale: Number(process.env.WEATHER_TEST_TIME_SCALE || 0.01) };
-    const runner = fs.readFileSync(path.join(fixture, scenario.endsWith("-race") || scenario.endsWith("-failure") ? "weather-requests.qml" : "weather-recovery.qml"), "utf8")
+    const runner = fs.readFileSync(path.join(fixture, scenario.endsWith("-race") || scenario.endsWith("-failure") || scenario === "backoff" ? "weather-requests.qml" : "weather-recovery.qml"), "utf8")
       .replace("TEST_CONFIG", JSON.stringify(config));
     const entry = path.join(folder, "test.qml");
     fs.writeFileSync(entry, runner);
@@ -123,4 +123,12 @@ test("a missing primary reading preserves the last good service model and timest
 
 test("a missing current hour preserves the last good service model and timestamp", () => {
   runWeather("missing-hour");
+});
+
+test("weather doubles the retry wait for repeated bad data and resets it after a good reply", () => {
+  runWeather("backoff");
+});
+
+test("weather reports a non-JSON location reply as bad data, not a missing place", () => {
+  runWeather("portal");
 });
