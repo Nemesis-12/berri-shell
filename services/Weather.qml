@@ -51,8 +51,8 @@ Singleton {
     property var lastLogged: ({})
 
     /** Writes the failure line unless one was written in this period. */
-    function logFailure(reason) {
-        var line = SourceFailures.report(root.lastLogged, "weather", reason, Date.now());
+    function logFailure(reason, source) {
+        var line = SourceFailures.report(root.lastLogged, source || "weather", reason, Date.now());
         if (line !== "") console.warn(line);
     }
 
@@ -251,21 +251,22 @@ Singleton {
     Process {
         id: nameProc
         property int locationRevision: -1
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                if (nameProc.locationRevision !== root.locationRevision) return;
+        stdout: StdioCollector { waitForEnd: true }
+        onExited: (code) => {
+            if (locationRevision === root.locationRevision) {
                 try {
-                    var area = JSON.parse(text).nearest_area[0];
+                    if (code !== 0) throw new Error("Offline");
+                    var area = JSON.parse(stdout.text).nearest_area[0];
                     var city = area.areaName[0].value;
-                    root.locationName = city + ", " + area.country[0].value;
-                    root.lookupCountry(city, nameProc.locationRevision);
+                    var country = area.country[0].value;
+                    if (typeof city !== "string" || city === "" || typeof country !== "string")
+                        throw new Error("Bad name");
+                    root.locationName = city + (country ? ", " + country : "");
+                    root.lookupCountry(city, locationRevision);
                 } catch (e) {
-                    // Keep the name empty; the tab hides it.
+                    root.logFailure(code !== 0 ? "offline" : "bad data", "weather name");
                 }
             }
-        }
-        onExited: {
             if (root.namePending && root.locationName === "") Qt.callLater(root.lookupName);
             root.namePending = false;
         }
