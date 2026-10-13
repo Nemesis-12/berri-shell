@@ -162,3 +162,33 @@ test("remote clock text and instants use the API offset across host DST", () => 
     else process.env.TZ = previousZone;
   }
 });
+
+test("missing current, hourly and daily readings stay missing while zero stays zero", () => {
+  const missing = structuredClone(sample);
+  for (const field of ["relative_humidity_2m", "dew_point_2m", "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m", "surface_pressure", "apparent_temperature"])
+    missing.current[field] = null;
+  for (const field of ["temperature_2m", "precipitation_probability", "uv_index", "weather_code", "is_day"])
+    missing.hourly[field][6] = null;
+  for (const field of Object.keys(missing.daily))
+    if (field !== "time") missing.daily[field][1] = null;
+  const model = lib.parse(missing);
+  const current = model.current;
+  for (const field of ["humidity", "dewPointC", "windKmh", "gustKmh", "pressureHpa", "feelsLikeC", "uvIndex"])
+    assert.equal(current[field], null, field);
+  assert.equal(current.windDirection, "");
+  assert.equal(current.uvLabel, "");
+  assert.equal(model.hoursAll[6].tempC, null);
+  assert.equal(model.hoursAll[6].precipProbability, null);
+  assert.equal(model.hoursAll[6].isDay, null);
+  assert.equal(model.hoursAll[6].code, null);
+  const tomorrow = lib.dayDetail(model, 1);
+  for (const field of ["tempC", "minC", "maxC", "precipMm", "humidity", "pressureHpa", "uvIndex"])
+    assert.equal(tomorrow[field], null, field);
+  assert.equal(tomorrow.sunrise, "");
+  assert.equal(tomorrow.daylight, "");
+  assert.equal(format.number(current.humidity), "-");
+  assert.equal(format.millimetres(tomorrow.precipMm), "-");
+  assert.equal(format.compass(null), "");
+  assert.equal(format.number(0), "0");
+  assert.equal(format.millimetres(0), "0");
+});
