@@ -25,7 +25,6 @@ Item {
     readonly property string titleText: MediaPlayer.titleText
     readonly property string artistText: activePlayer ? activePlayer.trackArtist.toUpperCase() : ""
     readonly property string artUrl: ArtUrl.safeArtUrl(activePlayer ? activePlayer.trackArtUrl : "")
-    readonly property real length: MediaPlayer.length
 
     // --- Album art, flush and square at the top. ---
     Item {

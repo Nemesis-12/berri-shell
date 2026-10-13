@@ -45,6 +45,15 @@ Item {
 
     MediaTab { id: media; width: 1000; height: 430 }
     Media { id: homeMedia; width: 233; height: 430 }
+    MediaTimeCard {
+        id: timeCard
+        width: 400
+        displayPosition: -1
+        length: 180
+        progress: 0
+        isPlaying: false
+        canSeek: false
+    }
     AlbumArt { id: art; x: 400; y: 450; width: 100; height: 100; dpr: 1 }
 
     TestCase {
@@ -93,6 +102,18 @@ Item {
             const label = find(homeMedia, "timeLabel");
             const buttons = find(homeMedia, "transport");
             verify(label.mapToItem(homeMedia, label.width, 0).x <= buttons.mapToItem(homeMedia, 0, 0).x);
+        }
+
+        // With an unknown position the card shows no total, even when the length is known.
+        function test_total_needs_a_known_position() {
+            const total = find(timeCard, "total");
+            timeCard.displayPosition = -1;
+            timeCard.length = 180;
+            compare(total.visible, false);
+            timeCard.displayPosition = 5;
+            compare(total.visible, true);
+            timeCard.length = 0;
+            compare(total.visible, false);
         }
 
         // Seek is off, and does nothing, when the length is zero.

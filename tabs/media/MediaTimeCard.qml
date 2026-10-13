@@ -47,7 +47,7 @@ Rectangle {
         Text {
             textFormat: Text.PlainText
             id: elapsed
-            width: Math.min(implicitWidth, readout.width - (total.visible ? total.width + 8 : 0))
+            width: Math.min(implicitWidth, Math.max(0, readout.width - (total.visible ? total.width + 8 : 0)))
             elide: Text.ElideRight
             height: 61
             text: root.displayPosition >= 0 ? Times.minutesSeconds(root.displayPosition) : ""
@@ -63,7 +63,8 @@ Rectangle {
 
         MonoText {
             id: total
-            visible: root.length > 0
+            objectName: "total"
+            visible: root.displayPosition >= 0 && root.length > 0
             x: elapsed.width + 8
             anchors.baseline: elapsed.baseline
             anchors.baselineOffset: -19
