@@ -2,7 +2,7 @@
 
 /** Pure rules for how a due reminder reaches the notification server and what happens when that fails. */
 
-/** The pop-up shows at most this many action buttons (see pill/PillPopup.qml). */
+/** The pop-up shows at most this many action buttons (see notifications/NotificationPopup.qml). */
 var popupActionLimit = 2;
 
 /** The actions a reminder sends. Each one is shown by the pop-up and handled by ReminderNotifier.applyAction. */

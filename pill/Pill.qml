@@ -59,8 +59,11 @@ Item {
     property bool suppressed: false
     onSuppressedChanged: if (suppressed) trayLayers.closeAll()
 
-    /** Set by PillPopup while a notification card covers the pill; fades the clock group out. */
+    /** Set by shell.qml while a notification card covers the pill; fades the clock group out. */
     property bool popupActive: false
+
+    /** Rest shape for notification cards, in the parent's coordinates. Uses rest height during dashboard motion. */
+    readonly property rect popupAnchor: Qt.rect(root.x + pillRect.x, root.y, pillRect.width, root.pillHeight)
 
     /** Set by shell.qml (modelData.name); keys this monitor's PanelCoordinator entry. */
     property string screenName: ""

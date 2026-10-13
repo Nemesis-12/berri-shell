@@ -4,7 +4,6 @@ import "../logic/Times.js" as Times
 import "../logic/PixelGrid.js" as PixelGrid
 import "../logic/NotificationLogic.js" as NotificationLogic
 import qs.common
-import qs.notifications
 import qs.services
 
 /**
@@ -20,13 +19,20 @@ import qs.services
  * close after 5 s (hover pauses unless the sender timeout ends first), critical
  * ones stay until dismissed.
  * A click on the card opens the Alerts tab. Place this item above the Pill
- * in the same window and add cardX/cardY/cardWidth/cardHeight to the mask.
+ * in the same window. Pass its anchor in this item's coordinates and add
+ * cardX/cardY/cardWidth/cardHeight to the mask.
  */
 Item {
     id: root
 
-    /** The Pill of this monitor: start rectangle, dashboard state, tab list. */
-    required property var pill
+    /** Rest shape to grow from, in this item's coordinates. Its width is captured at the start. */
+    required property rect anchorRect
+    /** Monitor scale used to round card sizes to device pixels. */
+    required property real dpr
+    /** True while the dashboard is open, opening or closing. */
+    required property bool dashboardOpen
+    /** The host opens Alerts after the pop-up has marked its item read and hidden. */
+    signal openAlertsRequested()
     property string screenName: ""
     /** True while a real fullscreen window (not maximized) covers this monitor; holds back non-critical items. */
     property bool blocked: false
@@ -42,8 +48,6 @@ Item {
     readonly property real cardY: card.visible ? card.y : 0
     readonly property real cardWidth: card.visible ? card.width : 0
     readonly property real cardHeight: card.visible ? card.height : 0
-
-    readonly property real dpr: pill.dpr
 
     property var current: null
     property bool open: false
@@ -69,6 +73,7 @@ Item {
         onFinished: if (!root.open && root.current !== null) root.showNext()
     }
 
+    /** Starts or redirects the existing card motion. */
     function slideTo(to: real): void {
         slide.stop();
         slide.to = to;
@@ -77,7 +82,7 @@ Item {
 
     /** Takes a new notification from the store. */
     function receive(item) {
-        if (root.pill.panelOpen || (root.blocked && item.urgency !== "critical") || !root.focusedHere) return;
+        if (root.dashboardOpen || (root.blocked && item.urgency !== "critical") || !root.focusedHere) return;
         if (root.current === null) {
             root.showNow(item);
         } else if (root.open) {
@@ -97,8 +102,9 @@ Item {
         root.queue = root.queue.map(function (n) { return n.id === item.id ? item : n; });
     }
 
+    /** Shows one snapshot and keeps the captured rest width until the shrink ends. */
     function showNow(item) {
-        if (!root.open) root.startWidth = root.pill.maskWidth;
+        if (!root.open) root.startWidth = root.anchorRect.width;
         root.current = item;
         root.clock = Date.now();
         root.open = true;
@@ -126,6 +132,7 @@ Item {
         root.current = null;
     }
 
+    /** Restarts the normal-item timeout when the card is open and not hovered. */
     function armTimer() {
         dismissTimer.stop();
         if (root.open && !root.critical && !root.hovered) dismissTimer.start();
@@ -150,12 +157,12 @@ Item {
         onTriggered: root.clock = Date.now()
     }
 
+    /** Marks the current item read, hides the card, then asks the host to open Alerts. */
     function openAlerts() {
         if (root.current === null) return;
         Notifications.markRead(root.current.id);
         root.hideNow();
-        root.pill.activeTab = root.pill.tabIds.indexOf("alerts");
-        root.pill.openPanel();
+        root.openAlertsRequested();
     }
 
     Connections {
@@ -165,10 +172,7 @@ Item {
         function onRemoved(id) { root.drop(id); }
     }
 
-    Connections {
-        target: root.pill
-        function onPanelOpenChanged() { if (root.pill.panelOpen) root.hideNow(); }
-    }
+    onDashboardOpenChanged: if (dashboardOpen) hideNow()
 
     onBlockedChanged: if (blocked && !critical) hideNow()
 
@@ -213,13 +217,13 @@ Item {
 
         // Fixed rounded center, so both edges land on whole device pixels.
         readonly property real halfWidth: PixelGrid.snap((root.startWidth + (root.cardMaxWidth - root.startWidth) * root.progress) / 2, root.dpr)
-        readonly property real centerX: root.pill.x + PixelGrid.snap(root.pill.width / 2, root.dpr)
+        readonly property real centerX: root.anchorRect.x + root.anchorRect.width / 2
 
         visible: root.current !== null
         width: halfWidth * 2
         x: centerX - halfWidth
-        y: root.pill.y
-        height: PixelGrid.snap(root.pill.pillHeight + (root.fullHeight - root.pill.pillHeight) * root.progress, root.dpr)
+        y: root.anchorRect.y
+        height: PixelGrid.snap(root.anchorRect.height + (root.fullHeight - root.anchorRect.height) * root.progress, root.dpr)
         radius: 8
         color: Theme.shell
         border.width: 1
