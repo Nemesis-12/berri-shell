@@ -217,6 +217,30 @@ TestCase {
         compare(saved, ["After read", "Kept"]);
     }
 
+    // Deletion before the watch arrives must recover without a later watch event.
+    function test_local_deletion_before_watch_allows_the_next_edit() {
+        TestIo.texts[berriPath] = savedText();
+        startReading();
+        delete TestIo.texts[berriPath];
+        compare(Calendar.add({ title: "Refused stale edit", date: "2026-10-06" }), false);
+        compare(Calendar.calendars[0].error, "");
+        compare(Calendar.itemsOn("2026-10-05"), []);
+        compare(Calendar.add({ title: "After deletion", date: "2026-10-06" }), true);
+        compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title), ["After deletion"]);
+        compare(TestIo.texts[berriPath + ".bak"], undefined);
+    }
+
+    // A local retry distinguishes a missing file from a denied read.
+    function test_missing_local_file_recovers_after_a_failed_read() {
+        TestIo.deniedReads[berriPath] = true;
+        startReading();
+        compare(Calendar.add({ title: "Denied", date: "2026-10-06" }), false);
+        TestIo.deniedReads = ({});
+        compare(Calendar.add({ title: "Recovered", date: "2026-10-06" }), true);
+        compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title), ["Recovered"]);
+        compare(Calendar.calendars[0].error, "");
+    }
+
     function test_a_missing_calendar_starts_empty_and_accepts_an_edit() {
         startReading();
         compare(Calendar.add({ title: "First", date: "2026-10-06" }), true);

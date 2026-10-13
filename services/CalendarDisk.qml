@@ -25,7 +25,7 @@ QtObject {
         var from = String(path).replace(/^file:\/\//, "");
         if (!/\.ics$/i.test(from)) return fail("Not an .ics file");
         var text = files.readNow(from);
-        if (text === null) return fail("Cannot read the file");
+        if (text == null) return fail("Cannot read the file");
         if (!Format.isCompleteCalendar(text)) return fail("Not a calendar file");
         var prepared = store.prepareCalendarImport(from, text);
         if (prepared.existingId) return prepared.existingId;
@@ -63,11 +63,13 @@ QtObject {
         if (!prepared) return false;
         // Refuse stale edits before either write, then show the current disk text.
         var currentText = files.readNow(path);
-        if (currentText !== prepared.previousText) {
-            var error = currentText === null ? "Could not read the file" : "File changed on disk. Check the calendar and try again";
+        var missingLocal = currentText === undefined && path === files.folder + "/berri.ics";
+        if (currentText !== prepared.previousText && !(missingLocal && prepared.previousText === null)) {
+            var error = currentText == null && !missingLocal ? "Could not read the file" : "File changed on disk. Check the calendar and try again";
             var refused = Save.writeOutcome(false, error, prepared.failurePrefix, prepared.previousText, prepared.nextText);
             store.acceptCalendarWrite(path, refused, uids);
-            store.acceptCalendarRead(path, currentText === null ? "" : currentText, currentText === null);
+            if (currentText === undefined) store.acceptCalendarMissing(path);
+            else store.acceptCalendarRead(path, currentText === null ? "" : currentText, currentText === null);
             return false;
         }
         // One atomic backup must finish before the calendar is replaced. A new

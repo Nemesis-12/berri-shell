@@ -31,14 +31,14 @@ Scope {
     /** The parser ran on a saved subscription and failed. The old records file may still be read. */
     signal convertFailed(string jsonPath)
 
-    /** Reads a file once and releases the reader. Null means the read failed. */
+    /** Reads a file once and releases the reader. Undefined means missing; null means another read failure. */
     function readNow(path: string): var {
         var reader = importReader.createObject(root, { path: path });
         var text = null;
         try {
             text = reader.text();
-            if (reader.readFailed) text = null;
-        } catch (e) { text = null; }
+            if (reader.readFailed) text = reader.missing ? undefined : null;
+        } catch (e) { text = reader.missing ? undefined : null; }
         reader.destroy();
         return text;
     }
@@ -138,9 +138,10 @@ Scope {
         id: importReader
         FileView {
             property bool readFailed: false
+            property bool missing: false
             blockLoading: true
             printErrors: false
-            onLoadFailed: readFailed = true
+            onLoadFailed: error => { readFailed = true; missing = error === FileViewError.FileNotFound; }
         }
     }
     Component {
@@ -170,7 +171,7 @@ Scope {
             Component.onCompleted: if (isLink) readLink()
             function readLink(): void {
                 var content = root.readNow(filePath);
-                root.read(filePath, content === null ? "" : content, content === null || content === "");
+                root.read(filePath, content == null ? "" : content, content == null || content === "");
             }
             onLoaded: root.read(filePath, text(), false)
             // Calendar starts a missing local file empty and refuses missing imported files.

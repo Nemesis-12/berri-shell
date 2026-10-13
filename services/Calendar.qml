@@ -309,7 +309,10 @@ Singleton {
         }
         if (!calendar.readFailed) return true;
         var text = calendarFiles.readNow(calendar.path);
-        if (text !== null) {
+        if (text === undefined) {
+            acceptCalendarMissing(calendar.path);
+            if (!calendar.readFailed) return true;
+        } else if (text !== null) {
             acceptCalendarRead(calendar.path, text, false);
             if (!calendar.readFailed) return true;
         }
