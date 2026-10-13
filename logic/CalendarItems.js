@@ -21,7 +21,7 @@
  *   byDay (plain weekdays, 0 = Sunday), monthWeekday (monthly only: { nth, day }, nth 1 to 5 or -1 for the last,
  *   day 0 = Sunday; from BYDAY=2TU), until, untilMs (inclusive timed bound), count,
  *   exdates (skipped occurrence dates), doneDates (occurrence dates ticked off),
- *   alarmMinutes (VALARM minutes before start, null = none), status, stamp,
+ *   alarmMinutes (VALARM minutes before start, including fractional minutes for seconds; null = none), status, stamp,
  *   ruleRest (retained RRULE parts, written back unchanged),
  *   zoned (repeating event in UTC or a named time zone: { date, time, length, offsets }, the first source clock,
  *   the length in minutes and the [first day, UTC offset in seconds] changes of that zone, so each
@@ -221,7 +221,10 @@ var fieldChecks = {
     count: function (v) { return v === null || isWhole(v, 1) ? v : undefined; },
     exdates: listOf(isDayKey),
     doneDates: listOf(isDayKey),
-    alarmMinutes: function (v) { return v === null || isWhole(v, 0) ? v : undefined; },
+    alarmMinutes: function (v) {
+        return v === null || typeof v === "number" && isFinite(v) && v >= 0 &&
+            v * 60 <= 9007199254740991 ? v : undefined;
+    },
     status: function (v) { return v === null || isText(v) ? v : undefined; },
     stamp: function (v) { return v === null || isText(v) ? v : undefined; },
     ruleRest: function (v) { return v === null || isText(v) ? v : undefined; },
@@ -400,7 +403,7 @@ function dueBetween(items, fromMs, toMs) {
             var occ = list[j];
             if (occ.done) continue;
             var dueMs = new Date(+occ.date.slice(0, 4), +occ.date.slice(5, 7) - 1, +occ.date.slice(8, 10),
-                +occ.time.slice(0, 2), +occ.time.slice(3, 5)).getTime() - alarm * 60000;
+                +occ.time.slice(0, 2), +occ.time.slice(3, 5), item.startSecond || 0).getTime() - Math.round(alarm * 60000);
             if (dueMs > fromMs && dueMs <= toMs)
                 out.push({ calendarId: occ.calendarId, uid: occ.uid, occurrenceDate: occ.occurrenceDate,
                     title: occ.title, time: occ.time, dueMs: dueMs });

@@ -109,7 +109,7 @@ pub struct Record {
     pub rule_rest: Option<String>,
     pub exdates: Vec<CalendarDate>,
     pub done_dates: Vec<CalendarDate>,
-    pub alarm_minutes: Option<usize>,
+    pub alarm_minutes: Option<f64>,
     pub status: Option<Status>,
     // Set on a RECURRENCE-ID component: the start of the occurrence it replaces.
     pub recurrence_id: Option<CalendarDate>,

@@ -139,8 +139,10 @@ function statusLines(item, isTodo, recurring) {
 
 function alarmLines(item) {
     if (item.alarmMinutes === null) return [];
+    var seconds = Math.round(item.alarmMinutes * 60);
+    var trigger = seconds === 0 ? "PT0S" : seconds % 60 === 0 ? "-PT" + seconds / 60 + "M" : "-PT" + seconds + "S";
     return ["BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + Text.escapeText(item.title),
-        "TRIGGER:" + (item.alarmMinutes > 0 ? "-PT" + item.alarmMinutes + "M" : "PT0S"), "END:VALARM"];
+        "TRIGGER:" + trigger, "END:VALARM"];
 }
 
 function itemLines(item, localZone) {

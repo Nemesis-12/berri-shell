@@ -62,7 +62,9 @@ fn record_json(output: &mut String, record: &Record) {
     number(output, "count", record.count);
     string_list(output, "exdates", &local_days(&record.exdates));
     string_list(output, "doneDates", &done_dates);
-    number(output, "alarmMinutes", record.alarm_minutes);
+    output.push_str("\"alarmMinutes\":");
+    output.push_str(&record.alarm_minutes.map_or_else(|| "null".to_owned(), |minutes| minutes.to_string()));
+    output.push(',');
     field(output, "status", record.status.as_ref().and_then(Status::shown));
     field(output, "ruleRest", record.rule_rest.as_deref());
     month_weekday_json(output, record.month_weekday);

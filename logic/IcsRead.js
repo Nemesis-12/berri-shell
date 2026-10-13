@@ -78,12 +78,11 @@ function parseAlarm(node) {
     if (extra || node.children.length || action !== "DISPLAY" || !trigger) return null;
     if (trigger.params.VALUE && trigger.params.VALUE.toUpperCase() !== "DURATION") return null;
     if (trigger.params.RELATED && trigger.params.RELATED.toUpperCase() !== "START") return null;
-    var m = /^(-?)P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(trigger.value.trim());
-    if (!m) return null;
-    var minutes = (+m[2] || 0) * 10080 + (+m[3] || 0) * 1440 + (+m[4] || 0) * 60 + (+m[5] || 0);
-    if (!(minutes <= 9007199254740991)) return null; // too large to count exactly
-    if (m[1] !== "-" && minutes > 0) return null; // alarm after the start
-    return minutes;
+    var duration = Duration.readDuration(trigger.value);
+    if (!duration) return null;
+    var seconds = duration.days * 86400 + duration.seconds;
+    if (!duration.negative && seconds > 0) return null; // alarm after the start stays raw
+    return seconds / 60;
 }
 
 var ZONE_SCAN_DAYS = 3660; // a zoned series is followed for ten years
