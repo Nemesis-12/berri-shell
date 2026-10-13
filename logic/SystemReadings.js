@@ -204,10 +204,12 @@ function processCounters(text, pid) {
 function readProcesses(text, previous) {
     var lines = text.split("\n");
     var totals = cpuCounters(lines[0]);
-    if (!totals) return { sample: null, rows: [] };
+    if (!totals) return { sample: null, rows: [], cpuKnown: false };
     var current = { total: totals[0].total, processes: Object.create(null) };
     var combined = Object.create(null);
     var elapsed = previous ? current.total - previous.total : 0;
+    // Without a total that advanced, no process load can be compared.
+    var cpuKnown = elapsed > 0;
     for (var i = 1; i < lines.length; i++) {
         var fields = /^(\d+)\t([^\t]+)\t([^\t]+)\t(.+)$/.exec(lines[i]);
         if (!fields) continue;
@@ -216,15 +218,15 @@ function readProcesses(text, previous) {
         if (!counters || !isFinite(mem) || mem < 0) continue;
         current.processes[pid] = { name: name, ticks: counters.ticks, started: counters.started };
         var before = previous && previous.processes[pid];
-        // The first sample has no earlier ticks: the load is unknown (null), not zero.
-        var row = combined[name] || { name: name, cpu: previous ? 0 : null, mem: 0 };
+        // Unknown (null), not zero, until the total CPU counter advances.
+        var row = combined[name] || { name: name, cpu: cpuKnown ? 0 : null, mem: 0 };
         if (before && before.name === name && before.started === counters.started
-                && elapsed > 0 && counters.ticks >= before.ticks)
+                && cpuKnown && counters.ticks >= before.ticks)
             row.cpu += 100 * (counters.ticks - before.ticks) / elapsed;
         row.mem += mem;
         combined[name] = row;
     }
-    return { sample: current, rows: Object.keys(combined).map(function (name) { return combined[name]; })
+    return { sample: current, cpuKnown: cpuKnown, rows: Object.keys(combined).map(function (name) { return combined[name]; })
         .sort(function (a, b) { return (b.cpu || 0) - (a.cpu || 0) || b.mem - a.mem; }).slice(0, 8) };
 }
 

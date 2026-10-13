@@ -253,7 +253,7 @@ Singleton {
     // Publishes process rows from one completed sample.
     function readProcessSample(text) {
         var result = Readings.readProcesses(text, prevProcessSample);
-        if (prevProcessSample && result.sample) processCpuKnown = true;
+        if (result.cpuKnown) processCpuKnown = true;
         prevProcessSample = result.sample;
         processes = result.rows;
     }

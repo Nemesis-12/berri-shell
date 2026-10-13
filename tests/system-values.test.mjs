@@ -126,3 +126,22 @@ test("a thread whose counters did not advance stays unknown and is left out of t
   const groups = readings.readCoreGroups("0 0 0\n1 0 0");
   assert.deepEqual(Array.from(readings.readCpuLoad(after, first.counters, groups).coreLoads), [100]);
 });
+
+test("a process sample whose total did not advance keeps CPU unknown until a comparable total arrives", () => {
+  const line = (ticks) => `101\t1.0\tfirefox\t${procLine(101, "firefox", ticks, 1000)}\n`;
+  const first = readings.readProcesses("cpu 100 0 0 900\n" + line(100), null);
+  const same = readings.readProcesses("cpu 100 0 0 900\n" + line(100), first.sample);
+  assert.equal(same.rows[0].cpu, null);
+  assert.equal(same.cpuKnown, false);
+  const next = readings.readProcesses("cpu 500 0 0 1500\n" + line(200), same.sample);
+  assert.equal(next.rows[0].cpu, 10);
+  assert.equal(next.cpuKnown, true);
+
+  const stats = systemService("SystemStats", { prevProcessSample: null, processes: [], processCpuKnown: false });
+  stats.readProcessSample("cpu 100 0 0 900\n" + line(100));
+  stats.readProcessSample("cpu 100 0 0 900\n" + line(100));
+  assert.equal(stats.processCpuKnown, false);
+  assert.equal(stats.processes[0].cpu, null);
+  stats.readProcessSample("cpu 500 0 0 1500\n" + line(200));
+  assert.equal(stats.processCpuKnown, true);
+});
