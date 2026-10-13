@@ -17,7 +17,7 @@ import "../logic/SourceFailures.js" as SourceFailures
  * (name and fixed reason only). The next line comes at the earliest one hour
  * later (SourceFailures.PERIOD_MS), however many retries fail.
  * Temperatures are in Celsius.
- * Times: `sunrise`, `sunset` are local "HH:MM" strings; `hours[].time` and `days[].date` are Dates.
+ * Times: `sunrise`, `sunset` are local "HH:MM" strings; `hours[].time` and `days[].date` are API wall-time text.
  */
 Singleton {
     id: root
@@ -74,7 +74,7 @@ Singleton {
     readonly property string daylight: current ? current.daylight : ""
 
     /** Next 24 hours from the current hour: { time, code, isDay, tempC, precipProbability }. */
-    readonly property var hours: model ? WeatherParse.nextHours(model) : []
+    readonly property var hours: model ? WeatherParse.nextHours(model, Clock.minute.getTime()) : []
     /** 7 days: { date, code, minC, maxC, precipProbability, precipMm, sunrise, sunset, uvMax,
      *  windMaxKmh, gustMaxKmh, humidityMean, dewPointMean, feelsLikeMax }. */
     readonly property var days: model ? model.days : []
@@ -92,10 +92,10 @@ Singleton {
     }
 
     /** Hours for the strip of day `index`; for 0, the next 24 hours (they cross midnight). */
-    function stripHours(index) {
+    function stripHours(index, now) {
         // Use the same forecast dependency as dayDetail().
         void root.updatedAt;
-        return model ? WeatherParse.stripHours(model, index) : [];
+        return model ? WeatherParse.stripHours(model, index, now === undefined ? Clock.minute.getTime() : now) : [];
     }
 
     /** Fetch now and restart the 15-minute timer. */

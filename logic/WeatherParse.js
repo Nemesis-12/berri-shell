@@ -166,9 +166,20 @@ function parse(data) {
     };
 }
 
-// Next 24 hours starting at the current hour.
-function nextHours(model) {
-    return model.hoursAll.slice(model.nowIndex, model.nowIndex + 24);
+// Finds the location's current hour from an absolute clock instant.
+function hourIndexAt(model, now) {
+    for (var i = 0; i < model.hoursAll.length; i++) {
+        var start = model.hoursAll[i].timeMs;
+        if (now >= start && now < start + 60 * 60 * 1000) return i;
+    }
+    return -1;
+}
+
+// Next 24 hours at the supplied clock instant, or the response time in parser callers.
+function nextHours(model, now) {
+    var index = now === undefined ? model.nowIndex : hourIndexAt(model, now);
+    if (index < 0) return [];
+    return model.hoursAll.slice(index, index + 24);
 }
 
 // Detail for day `index`; index 0 is today and uses current values. Other days use their summaries.
@@ -221,8 +232,8 @@ function hoursFor(model, index) {
 }
 
 // Strip hours: today continues across midnight; later days sample the mock's daytime hours.
-function stripHours(model, index) {
-    if (index === 0) return nextHours(model);
+function stripHours(model, index, now) {
+    if (index === 0) return nextHours(model, now);
     // Mock 5C uses six samples: 06, 09, 12, 15, 18 and 21.
     return hoursFor(model, index).filter(function(hour) {
         var clockHour = parseInt(hour.time.slice(11, 13));

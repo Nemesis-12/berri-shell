@@ -18,7 +18,9 @@ Item {
     /** Number of hour columns. */
     readonly property int columns: 6
 
-    readonly property var hours: (Weather.stripHours(root.day) || []).slice(0, root.columns)
+    readonly property var hours: (Weather.stripHours(root.day, Clock.minute.getTime()) || []).slice(0, root.columns)
+    WhileVisible { service: Clock }
+
     readonly property bool isNow: root.day === 0
 
     Rectangle {

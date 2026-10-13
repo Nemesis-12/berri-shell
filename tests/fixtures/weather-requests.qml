@@ -4,6 +4,7 @@ import QtQuick
 Item {
     id: test
     property var config: TEST_CONFIG
+    property real now: Date.parse(config.forecast.current.time + "Z") - config.forecast.utc_offset_seconds * 1000
     property var service
     property var requests: []
     property int stage: 0
