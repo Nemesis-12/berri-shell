@@ -236,6 +236,40 @@ TestCase {
         compare(TestIo.writes, [berriPath]);
     }
 
+    // The disk can change before its watch notification reaches Calendar.
+    function test_external_change_refuses_edits_and_shows_current_content_data() {
+        return [
+            { tag: "add", edit: () => Calendar.add({ title: "Lost", date: "2026-10-06" }) },
+            { tag: "update", edit: () => Calendar.update(Items.itemKey("work", "kept"), { title: "Lost" }) },
+            { tag: "move", edit: () => Calendar.move(Items.itemKey("work", "kept"), "2026-10-05", "2026-10-06", {}) },
+            { tag: "remove", edit: () => Calendar.remove(Items.itemKey("work", "kept")) },
+            { tag: "color", edit: () => Calendar.applyColorToCalendar("work", "green") },
+            { tag: "helper", edit: () => helperDisk.commitCalendar(Calendar.dir + "/work.ics") }
+        ];
+    }
+
+    function test_external_change_refuses_edits_and_shows_current_content(data) {
+        const meta = Calendar._addCalendar("work", "file", "Work", "work.ics", "", "blue");
+        const original = savedText().replace("END:VEVENT", "X-BERRI-COLOR:red\r\nEND:VEVENT");
+        TestIo.texts[meta.path] = original;
+        TestIo.texts[berriPath] = original;
+        startReading();
+        const path = data.tag === "add" ? berriPath : meta.path;
+        const current = original.replace("SUMMARY:Kept", "SUMMARY:External");
+        TestIo.texts[path] = current;
+        compare(data.edit(), false);
+        compare(TestIo.texts[path], current);
+        compare(TestIo.writes, []);
+        compare(Calendar.getItem(Items.itemKey(data.tag === "add" ? "berri" : "work", "kept")).title, "External");
+        compare(Calendar.itemsOn("2026-10-06"), []);
+        compare(failureSpy.count, 1);
+        verify(Calendar.lastError.includes("changed"));
+        compare(Calendar.calendars.find(calendar => calendar.id === "work").color, "blue");
+        compare(Calendar.add({ title: "After reload", date: "2026-10-06", calendarId: data.tag === "add" ? "berri" : "work" }), true);
+        compare(TestIo.texts[path + ".bak"], current);
+        compare(Format.readCalendar(TestIo.texts[path]).items.map(item => item.title).sort(), ["After reload", "External"]);
+    }
+
     // Each replacement keeps exactly one previous version beside the calendar.
     function test_saves_keep_one_backup_before_each_replacement() {
         const original = savedText();

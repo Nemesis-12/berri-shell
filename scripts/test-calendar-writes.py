@@ -1,4 +1,5 @@
 """Calendar save checks use native FileView and files inside scratchpad only."""
+import json
 import os
 from pathlib import Path
 import shutil
@@ -49,9 +50,11 @@ class CalendarWriteTests(unittest.TestCase):
         qml = self.root / "shell.qml"
         qml.write_text('''import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs.services
 import "logic/CalendarItems.js" as Items
 Scope {
+    FileView { id: externalWriter; blockWrites: true; atomicWrites: true }
     Timer { interval: ''' + str(finish_after_ms) + '''; running: interval > 0; onTriggered: { console.log("TEST PASS"); Qt.quit(); } }
     function check(ok, message) {
         if (!ok) { console.error("TEST FAIL", message); Qt.quit(); }
@@ -128,6 +131,19 @@ Scope {
             console.log("TEST PASS"); Qt.quit();
 ''')
         self.assertIn(b"SUMMARY:After restart", self.path.read_bytes())
+        self.assertFalse(self.path.with_name("berri.ics.bak").exists())
+
+    # An external write before the watch reload must survive a refused edit.
+    def test_external_change_before_reload_refuses_edit_and_preserves_disk(self):
+        current = ORIGINAL.replace("SUMMARY:Kept café", "SUMMARY:External café")
+        self.run_qml('''
+            externalWriter.path = Calendar.defaultPath;
+            externalWriter.setText(CURRENT_TEXT);
+            if (!check(!Calendar.update(Items.itemKey("berri", "kept"), { title: "Lost" }), "external edit was overwritten")) return;
+            if (!check(Calendar.getItem(Items.itemKey("berri", "kept")).title === "External café", "external edit was not reloaded")) return;
+            console.log("TEST PASS"); Qt.quit();
+'''.replace("CURRENT_TEXT", json.dumps(current)))
+        self.assertEqual(self.path.read_bytes(), current.encode())
         self.assertFalse(self.path.with_name("berri.ics.bak").exists())
 
     def test_whole_calendar_color_save_keeps_the_previous_file(self):
