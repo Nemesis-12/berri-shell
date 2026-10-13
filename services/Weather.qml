@@ -30,6 +30,7 @@ Singleton {
     // Each coordinate change makes all earlier request replies obsolete.
     property int locationRevision: 0
     property bool forecastPending: false
+    property bool namePending: false
 
     /** True once a real reading has been received at least once. */
     readonly property bool ready: current !== null
@@ -153,6 +154,12 @@ Singleton {
 
     /** Name lookup for coordinates: wttr.in gives the area, Open-Meteo geocoding adds the country code. */
     function lookupName() {
+        if (nameProc.running) {
+            root.namePending = true;
+            return;
+        }
+        root.namePending = false;
+        nameProc.locationRevision = root.locationRevision;
         nameProc.command = ["curl", "-fsS", "--max-time", "10",
             "https://wttr.in/" + root.latitude + "," + root.longitude + "?format=j1"];
         nameProc.running = true;
@@ -222,9 +229,11 @@ Singleton {
     /** Area name from wttr.in, then geocoding for "City, CC". */
     Process {
         id: nameProc
+        property int locationRevision: -1
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
+                if (nameProc.locationRevision !== root.locationRevision) return;
                 try {
                     var area = JSON.parse(text).nearest_area[0];
                     var city = area.areaName[0].value;
@@ -236,6 +245,10 @@ Singleton {
                     // Keep the name empty; the tab hides it.
                 }
             }
+        }
+        onExited: {
+            if (root.namePending && root.locationName === "") Qt.callLater(root.lookupName);
+            root.namePending = false;
         }
     }
 
