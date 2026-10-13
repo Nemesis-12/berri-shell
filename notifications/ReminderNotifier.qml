@@ -20,7 +20,8 @@ import qs.services
  *
  * ~/.local/state/berri-shell/reminders.json keeps the time of the last check
  * and the alerts already shown ({ lastCheck, shown: [key] }). Reminders that
- * fell due while the shell was off show once at start (up to a week back).
+ * fell due while the shell was off, or were saved late, show once (up to a
+ * week back). Older reminders stay visible in the calendar.
  */
 Singleton {
     id: root
@@ -46,16 +47,16 @@ Singleton {
         if (_started || !_stateRead || !Calendar.ready) return;
         _started = true;
         var now = Date.now();
-        // First run: nothing to catch up. Later runs: from the last check.
-        var from = _lastCheck > 0 ? Math.max(_lastCheck, now - missedWindowMs) : now;
+        // First run also catches unshown reminders from the past week.
+        var from = _lastCheck > 0 ? Math.max(_lastCheck, now - missedWindowMs) : now - missedWindowMs;
         _sweep(from, now);
     }
 
-    // The calendar changed: alerts that are just due show now, then wait for the next one.
+    // The calendar changed: also catch newly saved past alerts. Shown keys prevent repeats.
     function _onCalendarChanged(): void {
         if (!_started) return;
         var now = Date.now();
-        _sweep(Math.max(_lastCheck, now - 60000), now);
+        _sweep(now - missedWindowMs, now);
     }
 
     // Shows every unshown alert due in (from, now], saves the state, waits for the next.
