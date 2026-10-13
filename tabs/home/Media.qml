@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Window
 import "../../logic/ArtUrl.js" as ArtUrl
-import "../../logic/Times.js" as Times
 import "../../logic/PixelGrid.js" as PixelGrid
 import qs.common
 import qs.services
@@ -20,14 +19,12 @@ Item {
 
     // The player and its play position come from MediaPlayer; this view only reads them.
     readonly property var activePlayer: MediaPlayer.activePlayer
-    readonly property real displayPosition: MediaPlayer.displayPosition
     WhileVisible { service: MediaPlayer }
 
     readonly property bool isPlaying: MediaPlayer.isPlaying
     readonly property string titleText: MediaPlayer.titleText
     readonly property string artistText: activePlayer ? activePlayer.trackArtist.toUpperCase() : ""
     readonly property string artUrl: ArtUrl.safeArtUrl(activePlayer ? activePlayer.trackArtUrl : "")
-    readonly property real length: activePlayer ? activePlayer.length : 0
 
     // --- Album art, flush and square at the top. ---
     Item {
@@ -48,10 +45,13 @@ Item {
             size: 28
             strokeWidth: 1.5
             color: Theme.dim
-            visible: root.artUrl === ""
+            opacity: art.showFallback ? 1 : 0
+
+            Fade on opacity { duration: Theme.stateMs }
         }
 
         AlbumArt {
+            id: art
             anchors.fill: parent
             artUrl: root.artUrl
             dpr: root.dpr
@@ -125,7 +125,7 @@ Item {
                 height: parent.height
                 // Snapped to device pixels, no animation.
                 // Redraws only when the snapped width changes.
-                width: PixelGrid.snap(parent.width * (root.length > 0 ? Math.min(1, root.displayPosition / root.length) : 0), root.dpr)
+                width: PixelGrid.snap(parent.width * MediaPlayer.progress, root.dpr)
                 color: Theme.accent
             }
         }
@@ -138,14 +138,20 @@ Item {
             height: 28
 
             MonoText {
+                objectName: "timeLabel"
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                text: Times.minutesSeconds(root.displayPosition) + " / " + Times.minutesSeconds(root.length)
+                anchors.right: transportRow.left
+                anchors.rightMargin: 8
+                text: MediaPlayer.timeText
+                elide: Text.ElideRight
                 font.pixelSize: 10
                 color: Theme.dim
             }
 
             Row {
+                id: transportRow
+                objectName: "transport"
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 4
@@ -153,23 +159,23 @@ Item {
                 MediaButton {
                     id: prevButton
                     icon: "skip-back"
-                    enabled: root.activePlayer !== null && root.activePlayer.canGoPrevious
-                    onActivated: root.activePlayer.previous()
+                    enabled: MediaPlayer.canPrevious
+                    onActivated: MediaPlayer.previous()
                 }
 
                 MediaButton {
                     id: playButton
                     icon: root.isPlaying ? "pause" : "play"
                     filled: true
-                    enabled: root.activePlayer !== null && root.activePlayer.canTogglePlaying
-                    onActivated: root.activePlayer.togglePlaying()
+                    enabled: MediaPlayer.canTogglePlay
+                    onActivated: MediaPlayer.togglePlay()
                 }
 
                 MediaButton {
                     id: nextButton
                     icon: "skip-forward"
-                    enabled: root.activePlayer !== null && root.activePlayer.canGoNext
-                    onActivated: root.activePlayer.next()
+                    enabled: MediaPlayer.canNext
+                    onActivated: MediaPlayer.next()
                 }
             }
         }
