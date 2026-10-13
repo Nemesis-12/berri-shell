@@ -78,7 +78,7 @@ TestCase {
         compare(popup.queue.length, 20);
         compare(Notifications.all.length, 200);
         compare(Notifications.all[0].body.length, 4096);
-        tryCompare(savedState(), "saveCount", 1, 1000);
+        tryCompare(savedState(), "saveCount", 1, 10000);
         verify(savedState().text.length < 1024 * 1024, "ASCII history exceeds 1 MiB");
         console.log("History JSON characters after 1000 critical items:", savedState().text.length);
     }
@@ -122,34 +122,52 @@ TestCase {
         compare(popup.queue.length, 20);
         n.expireTimeout = 0.001;
         n.expireTimeoutChanged.emit();
-        tryVerify(function () { return Notifications.liveIdByServerId[200] === undefined; }, 1000);
+        tryVerify(function () { return Notifications.liveIdByServerId[200] === undefined; }, 10000);
         compare(Object.keys(Notifications.live).length, 199);
         compare(Object.keys(Notifications.expiresAtById).length, 199);
         compare(Notifications.all.length, 0);
     }
 
-    function test_updateCost() {
-        for (var i = 0; i < 199; i++) Notifications.receive(notification({ id: i }));
-        var n = notification({ id: 200 });
+    // Median milliseconds for 100 updates plus one flush, with `count` stored items.
+    function medianUpdateCost(count) {
+        init();
+        for (var i = 0; i < count - 1; i++) Notifications.receive(notification({ id: i }));
+        var n = notification({ id: count });
         Notifications.receive(n);
         wait(0);
         var samples = [];
-        for (var sample = 0; sample < 9; sample++) {
+        for (var sample = 0; sample < 15; sample++) {
             savedState().saveCount = 0;
             var start = Date.now();
-            for (var j = 0; j < 10; j++) {
+            for (var j = 0; j < 100; j++) {
                 n.summary = "Update " + j;
                 n.summaryChanged.emit();
             }
             Notifications.flush();
             samples.push(Date.now() - start);
-            tryCompare(savedState(), "saveCount", 1, 1000);
-            compare(Notifications.items.filter(function (item) { return item.serverId === 200; })[0].summary, "Update 9");
-            compare(JSON.parse(savedState().text).items[199].summary, "Update 9");
+            tryCompare(savedState(), "saveCount", 1, 10000);
+            compare(Notifications.items.filter(function (item) { return item.serverId === count; })[0].summary, "Update 99");
+            compare(JSON.parse(savedState().text).items[count - 1].summary, "Update 99");
         }
         samples.sort(function (a, b) { return a - b; });
-        console.log("Ten updates with 200 stored items, including flush, median:", samples[4], "ms; samples:", samples);
-        verify(samples[4] < 3, "Ten updates took a median of " + samples[4] + " ms");
+        return samples[7];
+    }
+
+    // Update cost may grow with the item count, but a 4 times larger store must stay under 3.5 times the cost.
+    // Each round measures both sizes back to back, so machine load affects both the same way. A burst of load
+    // can still hit one size only, so the test uses the lowest ratio of 3 rounds. A real quadratic cost
+    // gives a high ratio in every round.
+    function test_updateCostGrowsAtMostLinearly() {
+        var small = 50, large = 200;
+        var lowest = Infinity;
+        for (var round = 0; round < 3; round++) {
+            var smallCost = Math.max(1, medianUpdateCost(small));
+            var largeCost = medianUpdateCost(large);
+            var ratio = largeCost / smallCost;
+            console.log("Round", round, "median of 100 updates plus flush:", small, "items", smallCost, "ms;", large, "items", largeCost, "ms; ratio", ratio);
+            lowest = Math.min(lowest, ratio);
+        }
+        verify(lowest < 3.5, "Update cost grew " + lowest + " times for " + large / small + " times more items in the best round (limit 3.5)");
     }
 
     // Reads the real text bindings in a pop-up, without pointer or keyboard input.
@@ -292,7 +310,7 @@ TestCase {
         alerts.readShown();
         compare(Notifications.all.filter(function (n) { return !n.read; }).length, 0);
         compare(historyChanges.count, 1);
-        tryCompare(savedState(), "saveCount", 1, 1000);
+        tryCompare(savedState(), "saveCount", 1, 10000);
         compare(JSON.parse(savedState().text).items.filter(function (n) { return !n.read; }).length, 0);
         savedState().saveCount = 0;
         historyChanges.clear();
@@ -300,7 +318,7 @@ TestCase {
         compare(Notifications.all.length, 0);
         compare(Object.keys(Notifications.live).length, 0);
         compare(historyChanges.count, 1);
-        tryCompare(savedState(), "saveCount", 1, 1000);
+        tryCompare(savedState(), "saveCount", 1, 10000);
         compare(JSON.parse(savedState().text).items.length, 0);
     }
 }

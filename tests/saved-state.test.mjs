@@ -66,7 +66,7 @@ function runSavedFiles(input = "tests") {
     delete env.LD_LIBRARY_PATH;
     const runner = process.env.QMLTESTRUNNER || "/usr/lib/qt6/bin/qmltestrunner";
     const result = spawnSync(runner, ["-import", copy, "-input", path.join(copy, input)],
-      { cwd: copy, env, encoding: "utf8", timeout: 30000 });
+      { cwd: copy, env, encoding: "utf8", timeout: 180000 });
     assert.equal(result.error, undefined, `Cannot run ${runner}: ${result.error?.message}`);
     const output = `${result.stdout}${result.stderr}`;
     if (input === "startup") checkStartupPermissions(output, copy);

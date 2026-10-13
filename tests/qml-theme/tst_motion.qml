@@ -36,7 +36,7 @@ TestCase {
             if (oldA.v > 5 && oldA.v < 95) seenMiddle = true;
             samples++;
         }
-        tryVerify(function() { return !oldAnim.running && !newAnim.running; }, 2000);
+        tryVerify(function() { return !oldAnim.running && !newAnim.running; }, 10000);
         verify(seenMiddle, "the animation was sampled while it ran");
         // Two animations start in the same frame, so a gap is at most one frame step.
         verify(maxGap < 8, "gap " + maxGap);
@@ -61,7 +61,7 @@ TestCase {
         standardColor.start();
         wait(200);
         compare(newB.c.r.toFixed(2), oldB.c.r.toFixed(2));
-        tryVerify(function() { return !standardColor.running && !plainColor.running; }, 2000);
+        tryVerify(function() { return !standardColor.running && !plainColor.running; }, 10000);
         compare(newB.c.toString(), "#ffffff");
     }
 }

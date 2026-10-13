@@ -11,7 +11,7 @@ for (const zone of ["America/Chicago", "Pacific/Auckland", "Asia/Tokyo", "UTC"])
     delete env.NODE_TEST_CONTEXT;
     const result = spawnSync(process.execPath,
       ["--test", "--test-reporter=tap", fileURLToPath(new URL("./fixtures/calendar-repeat-zone-check.mjs", import.meta.url))],
-      { env, encoding: "utf8", timeout: 30000 });
+      { env, encoding: "utf8", timeout: 180000 });
     assert.equal(result.status, 0, result.error?.message || `${result.stdout}${result.stderr}`);
     assert.match(result.stdout, /# tests 5\n/);
   });

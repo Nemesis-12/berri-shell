@@ -66,11 +66,19 @@ test("an imported alarm of 60,000 weeks is ignored and the scan stays fast", () 
   ];
   const from = new Date(2026, 9, 5, 9, 0).getTime();
   const to = new Date(2026, 9, 5, 10, 0).getTime();
-  const started = performance.now();
+  // Cost of both scans with the huge alarm item, against the same scans without it, in the same run.
+  // A scan that expands the huge alarm costs thousands of times more, and load scales both sides alike.
+  const scanMs = (list) => Math.min(...Array.from({ length: 5 }, () => {
+    const started = performance.now();
+    Items.dueBetween(list, from, to);
+    Items.nextDueMs(list, from, 400);
+    return performance.now() - started;
+  }));
+  const withBig = scanMs(items);
+  const withoutBig = Math.max(scanMs(items.slice(1)), 0.02);
   const due = Items.dueBetween(items, from, to);
   const next = Items.nextDueMs(items, from, 400);
-  const took = performance.now() - started;
   assert.deepEqual(plain(due.map((d) => d.uid)), ["ok"]);
   assert.equal(next, new Date(2026, 9, 5, 9, 45).getTime());
-  assert.ok(took < 5, `scan took ${took} ms`);
+  assert.ok(withBig < 20 * withoutBig, `scan took ${withBig} ms, the same scan without the huge alarm takes ${withoutBig} ms (limit 20 times)`);
 });

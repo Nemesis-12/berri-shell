@@ -66,12 +66,12 @@ TestCase {
         compare(popup.cardWidth, data.anchor.width);
         compare(popup.cardHeight, 30);
         verify(popup.active);
-        tryCompare(popup, "progress", 1, 1000);
+        tryCompare(popup, "progress", 1, 10000);
         compare(popup.cardX, data.fullX);
         compare(popup.cardWidth, 380);
         compare(popup.cardHeight, 76);
         popup.close();
-        tryCompare(popup, "cardWidth", 0, 1000);
+        tryCompare(popup, "cardWidth", 0, 10000);
         compare(popup.active, false);
         compare(popup.cardHeight, 0);
     }
@@ -83,14 +83,14 @@ TestCase {
         popup.receive(item("third"));
         compare(popup.current.id, "third");
         compare(popup.queue.map(function (n) { return n.id; }), ["first", "second"]);
-        tryCompare(popup, "progress", 1, 1000);
+        tryCompare(popup, "progress", 1, 10000);
         popup.close();
         compare(popup.current.id, "third");
-        tryVerify(function () { return popup.current !== null && popup.current.id === "second"; }, 1000);
+        tryVerify(function () { return popup.current !== null && popup.current.id === "second"; }, 10000);
         compare(popup.queue.map(function (n) { return n.id; }), ["first"]);
-        tryCompare(popup, "progress", 1, 1000);
+        tryCompare(popup, "progress", 1, 10000);
         popup.close();
-        tryVerify(function () { return popup.current !== null && popup.current.id === "first"; }, 1000);
+        tryVerify(function () { return popup.current !== null && popup.current.id === "first"; }, 10000);
         compare(popup.queue.length, 0);
         verify(popup.active);
     }

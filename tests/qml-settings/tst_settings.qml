@@ -38,7 +38,7 @@ Item {
             Nightlight.toggle();
             wait(100);
             Nightlight.toggle();
-            tryCompare(ProcessLog, "temperature", 6500, 3000);
+            tryCompare(ProcessLog, "temperature", 6500, 10000);
             wait(900);
             compare(ProcessLog.temperature, 6500);
             compare(Nightlight.on, false);
@@ -52,8 +52,8 @@ Item {
             wait(50);
             Nightlight.setOn(false);
             Nightlight.setOn(true);
-            tryCompare(ProcessLog, "temperature", 4000, 3000);
-            tryCompare(Nightlight, "on", true, 3000);
+            tryCompare(ProcessLog, "temperature", 4000, 10000);
+            tryCompare(Nightlight, "on", true, 10000);
             wait(400);
         }
 

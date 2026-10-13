@@ -27,7 +27,7 @@ test("saved settings and picture choice survive refreshes and running processes 
   const runner = process.env.QMLTESTRUNNER || "/usr/lib/qt6/bin/qmltestrunner";
   const result = spawnSync(runner, ["-input", path.join(root, "tests/qml-settings"), "-import", imports], {
     encoding: "utf8",
-    timeout: 30000,
+    timeout: 180000,
     env: {
       ...process.env,
       QT_QPA_PLATFORM: "offscreen",

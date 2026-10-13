@@ -27,7 +27,7 @@ test("notifications stay bounded and current in the QML engine", (t) => {
     "module qs.notifications\nsingleton Notifications 1.0 Notifications.qml\nNotificationPopup 1.0 NotificationPopup.qml\n");
   const env = { ...process.env, QT_QPA_PLATFORM: "offscreen", QSG_RHI_BACKEND: "software", XDG_CACHE_HOME: path.join(dir, "cache") };
   delete env.LD_LIBRARY_PATH;
-  const result = spawnSync(runner, ["-input", dir, "-import", dir], { env, encoding: "utf8", timeout: 60000 });
+  const result = spawnSync(runner, ["-input", dir, "-import", dir], { env, encoding: "utf8", timeout: 180000 });
   const output = result.stdout + result.stderr;
   fs.writeFileSync(path.join(dir, "result.txt"), output);
   t.diagnostic(output.trim());

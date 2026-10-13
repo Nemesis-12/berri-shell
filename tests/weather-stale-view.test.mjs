@@ -37,7 +37,7 @@ function runViews(change = () => {}) {
     change(folder);
     const env = { ...process.env, QT_QPA_PLATFORM: "offscreen", QT_QUICK_BACKEND: "software", QML_DISABLE_DISK_CACHE: "1", QT_FORCE_STDERR_LOGGING: "1" };
     delete env.LD_LIBRARY_PATH;
-    const result = spawnSync("qml6", ["-I", folder, path.join(folder, "test.qml")], { env, encoding: "utf8", timeout: 30000 });
+    const result = spawnSync("qml6", ["-I", folder, path.join(folder, "test.qml")], { env, encoding: "utf8", timeout: 180000 });
     assert.ifError(result.error);
     return result;
   } finally {

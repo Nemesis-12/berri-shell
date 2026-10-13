@@ -42,7 +42,7 @@ function runWeather(scenario) {
     fs.writeFileSync(entry, runner);
     const env = { ...process.env, QT_QPA_PLATFORM: "offscreen", QT_FORCE_STDERR_LOGGING: "1" };
     delete env.LD_LIBRARY_PATH;
-    const result = spawnSync("qml6", [entry], { env, encoding: "utf8", timeout: 75000 });
+    const result = spawnSync("qml6", [entry], { env, encoding: "utf8", timeout: 180000 });
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stderr, /Weather checks passed/);

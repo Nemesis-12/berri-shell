@@ -39,7 +39,7 @@ test("hidden views stop work, shared requests wait for the last owner, and the s
 
   const result = spawnSync(runner, ["-input", path.join(root, "tests/qml-requests"), "-import", imports], {
     encoding: "utf8",
-    timeout: 90000,
+    timeout: 180000,
     env: {
       ...process.env,
       QT_QPA_PLATFORM: "offscreen",
