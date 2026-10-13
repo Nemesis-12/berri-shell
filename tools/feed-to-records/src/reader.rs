@@ -111,6 +111,7 @@ impl Reader {
         if record.uid.is_empty() {
             record.uid = format!("missing-{}", self.feed.records.len());
         }
+        self.feed.errors.extend(record.errors.iter().map(|error| format!("{}: {error}", record.uid)));
         if !record.repeats() {
             record.interval = 1;
             record.by_day.clear();
@@ -158,7 +159,11 @@ fn read_item_property(record: &mut Record, name: &str, params: &Params, value: &
         "DTEND" if !record.is_todo => record.end_value = calendar_date(value, params),
         "DUE" if record.is_todo => record.end_value = calendar_date(value, params),
         "DURATION" => record.duration = read_duration(value),
-        "RRULE" => repeat_rule(record, value),
+        "RRULE" => {
+            if let Err(error) = repeat_rule(record, value) {
+                record.errors.push(error);
+            }
+        }
         "EXDATE" => record
             .exdates
             .extend(value.split(',').filter_map(|date| calendar_date(date, params))),

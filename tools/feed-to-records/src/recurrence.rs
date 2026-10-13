@@ -21,7 +21,14 @@ fn plain_weekdays(value: &str) -> Option<Vec<usize>> {
 }
 
 // Reads one repeat rule into the fields that berri uses.
-pub fn repeat_rule(record: &mut Record, value: &str) {
+pub fn repeat_rule(record: &mut Record, value: &str) -> Result<(), String> {
+    for part in value.split(';') {
+        if let Some((key, day)) = part.split_once('=') {
+            if key.eq_ignore_ascii_case("BYDAY") && !day.is_ascii() {
+                return Err(format!("non-ASCII BYDAY value: {day}"));
+            }
+        }
+    }
     let mut ordinal_day = None;
     let mut ordinal_part = None;
     let mut rest = Vec::new();
@@ -56,11 +63,13 @@ pub fn repeat_rule(record: &mut Record, value: &str) {
         rest.push(part);
     }
     record.rule_rest = (record.repeats() && !rest.is_empty()).then(|| rest.join(";"));
+    Ok(())
 }
 
 // Reads one BYDAY value with a week number, such as 2TU or -1FR.
 fn ordinal_weekday(value: &str) -> Option<(i32, usize)> {
-    let (week, day) = value.split_at(value.len().checked_sub(2)?);
+    let at = value.len().checked_sub(2)?;
+    let (week, day) = (value.get(..at)?, value.get(at..)?);
     let nth: i32 = week.parse().ok()?;
     let digits = week.trim_start_matches(['+', '-']);
     if digits.len() != 1 || !(1..=5).contains(&nth.abs()) {

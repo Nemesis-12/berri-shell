@@ -140,9 +140,23 @@ function readCategory(read, p) {
     else read.item.raw.push(p.raw);
 }
 
+/** Reports an invalid weekday before interpreting any part of its repeat rule. */
+function repeatRuleError(value) {
+    var parts = value.split(";");
+    for (var i = 0; i < parts.length; i++) {
+        var eq = parts[i].indexOf("=");
+        if (parts[i].slice(0, eq).toUpperCase() === "BYDAY") {
+            var day = parts[i].slice(eq + 1);
+            if (/[^\x00-\x7F]/.test(day)) return "non-ASCII BYDAY value: " + day;
+        }
+    }
+    return null;
+}
+
 /** The first usable RRULE fills the repeat fields. A second or unusable one stays raw. */
 function readRepeatRule(read, p, localZone) {
     var item = read.item;
+    if (repeatRuleError(p.value)) { item.raw.push(p.raw); return; }
     var repeatRule = { interval: 1, byDay: [], monthWeekday: null, until: null, count: null };
     var rule = parseRule(p.value, repeatRule, localZone);
     if (!rule.freq || item.repeat !== "none") { item.raw.push(p.raw); return; }
@@ -324,7 +338,17 @@ function readCalendar(text, localZone) {
         for (var c = 0; c < root.children.length; c++) {
             var node = root.children[c];
             var hasOverride = node.props.some(function (q) { return q.name === "RECURRENCE-ID"; });
-            if ((node.name === "VEVENT" || node.name === "VTODO") && !hasOverride) cal.items.push(parseItem(node, localZone));
+            if ((node.name === "VEVENT" || node.name === "VTODO") && !hasOverride) {
+                var item = parseItem(node, localZone);
+                cal.items.push(item);
+                node.props.forEach(function (property) {
+                    var error = property.name === "RRULE" ? repeatRuleError(property.value) : null;
+                    if (error) {
+                        if (!cal.errors) cal.errors = [];
+                        cal.errors.push(item.uid + ": " + error);
+                    }
+                });
+            }
             else cal.rawComponents.push(node.lines);
         }
         // The changed occurrences stay in rawComponents as they were; the series also gets a short form of each.

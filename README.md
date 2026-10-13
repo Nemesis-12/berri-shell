@@ -83,6 +83,8 @@ Local commit discovery uses `~/Programming` by default. Set `BERRI_PROGRAMMING_R
 
 An unknown TZID keeps its source clock and zone name when read or edited. The calendar source note marks the unknown zone. berri does not assign a UTC offset to it. An edited repeat end that needs this conversion is refused by the writer.
 
+A non-ASCII BYDAY value gives a converter error in stderr and the JSON `errors` list. Only that repeat rule is ignored. The event and other events still convert. Editable calendars keep the rejected source rule on save.
+
 Unshown reminders from the past seven days are delivered once on startup or a calendar change. Older reminders stay visible in the calendar.
 
 ## Saved data

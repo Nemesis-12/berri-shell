@@ -160,6 +160,12 @@ pub fn feed_json(feed: &Feed) -> String {
         }
         record_json(&mut output, record);
     }
-    output.push_str("]}");
+    output.push(']');
+    if !feed.errors.is_empty() {
+        output.push(',');
+        string_list(&mut output, "errors", &feed.errors);
+        output.pop();
+    }
+    output.push('}');
     output
 }

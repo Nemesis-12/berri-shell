@@ -42,6 +42,9 @@ fn convert(input: &Path, output: &Path) -> io::Result<()> {
         ));
     }
     let feed = read_feed(text);
+    for error in &feed.errors {
+        eprintln!("feed-to-records: {error}");
+    }
     let temporary = output.with_extension(format!("json.tmp.{}", std::process::id()));
     // The records file is owner-only, whatever the creation mask is.
     let mut file = fs::OpenOptions::new()

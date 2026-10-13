@@ -117,6 +117,8 @@ pub struct Record {
     pub changed: Vec<ChangedOccurrence>,
     // Unsupported RDATE and EXRULE source lines for the calendar source note.
     pub raw: Vec<String>,
+    // Property errors reported after the UID has been read.
+    pub errors: Vec<String>,
 }
 
 impl Record {
@@ -140,6 +142,7 @@ impl Record {
 #[derive(Default)]
 pub struct Feed {
     pub name: String,
+    pub errors: Vec<String>,
     pub records: Vec<Record>,
     // RECURRENCE-ID components, until they are attached to their repeating event.
     pub overrides: Vec<Record>,
