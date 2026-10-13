@@ -112,12 +112,46 @@ function readCurrent(cur, today, uv) {
     };
 }
 
+// Checks the requested API arrays before any readings enter the model.
+function checkArrays(section, fields, dateOnly) {
+    if (!section || !Array.isArray(section.time) || section.time.length === 0)
+        throw new Error("Missing forecast array");
+    for (var field of fields) {
+        if (!Array.isArray(section[field]) || section[field].length !== section.time.length)
+            throw new Error("Mismatched forecast array");
+    }
+    for (var time of section.time) {
+        var pattern = dateOnly ? /^\d{4}-\d{2}-\d{2}$/ : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+        var date = WeatherFormat.toDate(time);
+        if (typeof time !== "string" || !pattern.test(time) || isNaN(date.getTime())
+            || date.toISOString().slice(0, time.length) !== time)
+            throw new Error("Invalid forecast time");
+    }
+}
+
+// Rejects responses that cannot supply current conditions or a time basis.
+function checkForecast(data) {
+    if (reading(data.utc_offset_seconds) === null) throw new Error("Missing UTC offset");
+    var cur = data.current;
+    if (!cur || reading(cur.temperature_2m) === null || reading(cur.weather_code) === null
+        || (cur.is_day !== 0 && cur.is_day !== 1))
+        throw new Error("Missing current reading");
+    if (typeof cur.time !== "string" || isNaN(WeatherFormat.toDate(cur.time).getTime()))
+        throw new Error("Invalid current time");
+    checkArrays(data.hourly, ["weather_code", "is_day", "temperature_2m", "precipitation_probability", "uv_index"], false);
+    checkArrays(data.daily, ["weather_code", "temperature_2m_min", "temperature_2m_max", "precipitation_probability_max",
+        "precipitation_sum", "sunrise", "sunset", "uv_index_max", "wind_speed_10m_max", "wind_gusts_10m_max",
+        "relative_humidity_2m_mean", "dew_point_2m_mean", "apparent_temperature_max", "wind_direction_10m_dominant",
+        "surface_pressure_mean", "daylight_duration"], true);
+}
+
 // Builds the whole model from one Open-Meteo response.
 // Returns { current, hoursAll, days, nowIndex } where `current` is a detail object (see below).
 // Detail objects share these fields: code, tempC, minC, maxC, feelsLikeC, humidity, dewPointC,
 // windKmh, windDirection, gustKmh, precipMm, precipProbability, uvIndex, uvLabel, pressureHpa,
 // sunrise ("HH:MM"), sunset ("HH:MM"), daylight ("12h 13m"), isDay.
 function parse(data) {
+    checkForecast(data);
     var utcOffsetSeconds = data.utc_offset_seconds;
     var days = readDays(data.daily);
     var nowIndex = currentHourIndex(data.current.time, data.hourly.time);
