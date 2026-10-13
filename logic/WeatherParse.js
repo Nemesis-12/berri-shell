@@ -84,7 +84,7 @@ function currentHourIndex(currentTime, hourTimes) {
     for (var k = 0; k < hourTimes.length; k++) {
         if (hourTimes[k].substring(0, 13) === nowKey) return k;
     }
-    return 0;
+    return -1;
 }
 
 // Current readings from the response, with today's range, rain, sun and daylight from the day summary.
@@ -121,6 +121,7 @@ function parse(data) {
     var utcOffsetSeconds = data.utc_offset_seconds;
     var days = readDays(data.daily);
     var nowIndex = currentHourIndex(data.current.time, data.hourly.time);
+    if (nowIndex < 0) throw new Error("Missing current hour");
     var uv = reading(data.hourly.uv_index[nowIndex]);
     return {
         current: readCurrent(data.current, days[0], uv),
