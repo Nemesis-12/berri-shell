@@ -146,6 +146,18 @@ Scope {
         self.assertEqual(self.path.read_bytes(), current.encode())
         self.assertFalse(self.path.with_name("berri.ics.bak").exists())
 
+    # A readable zero-byte file reports its cause and cannot be overwritten.
+    def test_empty_existing_file_reports_empty_and_refuses_add(self):
+        self.path.write_bytes(b"")
+        self.run_qml('''
+            if (!check(Calendar.calendars[0].error === "Calendar file is empty: berri", "empty file error was not shown")) return;
+            if (!check(!Calendar.add({ title: "Lost", date: "2026-10-06" }), "empty file allowed a save")) return;
+            if (!check(Calendar.lastError === "Calendar file is empty: berri", "save did not explain the empty file")) return;
+            console.log("TEST PASS"); Qt.quit();
+''')
+        self.assertEqual(self.path.read_bytes(), b"")
+        self.assertFalse(self.path.with_name("berri.ics.bak").exists())
+
     def test_whole_calendar_color_save_keeps_the_previous_file(self):
         work = self.calendar / "work.ics"
         work.write_bytes(ORIGINAL.encode())

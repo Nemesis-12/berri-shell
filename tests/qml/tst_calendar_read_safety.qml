@@ -113,7 +113,7 @@ TestCase {
         startReading();
         TestIo.texts[berriPath] = data.text;
         calendarFiles().read(berriPath, data.text, false);
-        compare(Calendar.calendars[0].error, "Could not read berri");
+        compare(Calendar.calendars[0].error, data.text === "" ? "Calendar file is empty: berri" : "Could not read berri");
         compare(Calendar.itemsOn("2026-10-05").map(item => item.title), ["Kept"]);
         const uid = Items.itemKey("berri", "kept");
         compare(Calendar.add({ title: "New", date: "2026-10-06" }), false);
