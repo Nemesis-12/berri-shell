@@ -230,6 +230,18 @@ TestCase {
         compare(TestIo.texts[berriPath + ".bak"], undefined);
     }
 
+    // A known missing local file must still refuse a later permission failure.
+    function test_new_local_calendar_refuses_a_denied_read_before_save() {
+        startReading();
+        TestIo.deniedReads[berriPath] = true;
+        compare(Calendar.add({ title: "Denied", date: "2026-10-06" }), false);
+        compare(TestIo.texts[berriPath], undefined);
+        compare(Calendar.calendars[0].error, "Could not read berri");
+        TestIo.deniedReads = ({});
+        compare(Calendar.add({ title: "Recovered", date: "2026-10-06" }), true);
+        compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title), ["Recovered"]);
+    }
+
     // A local retry distinguishes a missing file from a denied read.
     function test_missing_local_file_recovers_after_a_failed_read() {
         TestIo.deniedReads[berriPath] = true;

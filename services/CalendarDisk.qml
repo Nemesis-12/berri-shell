@@ -61,7 +61,7 @@ QtObject {
     function checkCurrent(path: string, prepared: var, uids): bool {
         var currentText = files.readNow(path);
         var missingLocal = currentText === undefined && path === files.folder + "/berri.ics";
-        if (currentText !== prepared.previousText && !(missingLocal && prepared.previousText === null)) {
+        if (currentText === null || currentText !== prepared.previousText && !(missingLocal && prepared.previousText === null)) {
             var error = currentText == null && !missingLocal ? "Could not read the file" : "File changed on disk. Check the calendar and try again";
             var refused = Save.writeOutcome(false, error, prepared.failurePrefix, prepared.previousText, prepared.nextText);
             store.acceptCalendarWrite(path, refused, uids);
