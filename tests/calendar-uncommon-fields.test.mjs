@@ -123,3 +123,11 @@ test("snoozing a seconds alarm saves a valid minute clock at or after the reques
   assert.equal(saved(document).items[0].time, "09:15");
   assert.equal(saved(document).items[0].alarmMinutes, 0);
 });
+
+test("a zoned duration keeps nominal days on later repeat dates across DST", () => {
+  const document = calendar("DTSTART;TZID=Europe/Berlin:20261024T090000", "DURATION:P1D", "RRULE:FREQ=DAILY;COUNT=3");
+  for (const read of [document, saved(document)]) {
+    const days = Queries.itemsInMonth(read.items, 2026, 10);
+    assert.deepEqual(Array.from(days["2026-10-26"]).filter(item => item.occurrenceDate === "2026-10-26").map(item => [item.time, item.end]), [["08:00", "08:00"]]);
+  }
+});

@@ -243,3 +243,15 @@ test("the converter returns a BYDAY error and still converts items before and af
   assert.deepEqual(feed.records.map(item => [item.uid, item.repeat]),
     [["good-before", "daily"], ["bad-day", "none"], ["good-after", "weekly"]]);
 });
+
+
+test("both readers keep nominal duration days on later zoned repeats", () => {
+  const { editable, subscribed } = readLists(path.join(feedsDir, "duration.ics"), "UTC");
+  process.env.TZ = "UTC";
+  for (const list of [editable, subscribed]) {
+    const item = list.find(item => item.uid === "repeat-days");
+    const days = Queries.itemsInMonth([item], 2026, 10);
+    assert.deepEqual(Array.from(days["2026-10-26"]).filter(item => item.occurrenceDate === "2026-10-26").map(item => [item.time, item.end]), [["08:00", "08:00"]]);
+  }
+  process.env.TZ = zone;
+});
