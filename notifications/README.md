@@ -37,6 +37,24 @@ Serialization and the atomic file write run after 300 ms without a save request.
 READ ALL and CLEAR each use one history operation. Snooze uses
 `Notifications.defaultSnoozeMinutes`.
 
+## Pop-up interface
+
+`notifications/NotificationPopup.qml` owns each monitor's current pop-up,
+waiting queue, timer and show/hide rules. It receives `anchorRect` in its own
+coordinates, `dpr`, `dashboardOpen`, `screenName` and `blocked`. It reads no Pill
+object. Pill publishes `popupAnchor`; shell.qml passes the inputs.
+
+The host reads `active` to cover the pill clock and
+`cardX/cardY/cardWidth/cardHeight` for the input mask. The pop-up marks the
+current item read and hides before it emits `openAlertsRequested`. shell.qml
+then selects Alerts and opens the dashboard.
+
+Issue #130 changes ownership only. Dashboard arrivals, queue clearing,
+fullscreen and focused-monitor rules keep their previous behavior. Issue #131
+changes those rules. After the QML file move, the maintainer must restart the
+main-checkout shell before checking open, stack, close and Alerts navigation on
+both monitors.
+
 ## Repeat the checks
 
 Run `node --test tests/notification-logic.test.mjs tests/notification-qml.test.mjs`.
