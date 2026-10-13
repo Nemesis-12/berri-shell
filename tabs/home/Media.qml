@@ -126,7 +126,7 @@ Item {
                 height: parent.height
                 // Snapped to device pixels, no animation.
                 // Redraws only when the snapped width changes.
-                width: PixelGrid.snap(parent.width * (root.length > 0 ? Math.min(1, Math.max(0, MediaPlayer.shownPosition) / root.length) : 0), root.dpr)
+                width: PixelGrid.snap(parent.width * MediaPlayer.progress, root.dpr)
                 color: Theme.accent
             }
         }

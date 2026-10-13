@@ -27,7 +27,6 @@ Item {
 
     // The player and its play position come from MediaPlayer; this view only reads them.
     readonly property var activePlayer: MediaPlayer.activePlayer
-    readonly property real displayPosition: MediaPlayer.displayPosition
     WhileVisible { service: MediaPlayer }
 
     // While the seek bar is dragged, the shown position is not overwritten.
@@ -45,8 +44,6 @@ Item {
     }
     readonly property string artUrl: ArtUrl.safeArtUrl(hasPlayer ? activePlayer.trackArtUrl : "")
     readonly property real length: MediaPlayer.length
-
-    readonly property real progress: length > 0 ? Math.max(0, Math.min(1, displayPosition / length)) : 0
 
     Rectangle {
         anchors.fill: parent
@@ -137,7 +134,7 @@ Item {
         width: root.middleWidth
         displayPosition: MediaPlayer.shownPosition
         length: root.length
-        progress: root.progress
+        progress: MediaPlayer.progress
         isPlaying: root.isPlaying
         canSeek: MediaPlayer.canSeek
         onSeekRequested: ratio => MediaPlayer.seekToRatio(ratio)

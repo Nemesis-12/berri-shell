@@ -43,6 +43,9 @@ Singleton {
     /** Shown play position in seconds; -1 when the player does not report one. */
     readonly property real shownPosition: MediaRules.knownPosition(activePlayer, displayPosition)
 
+    /** How far the track has played, 0 to 1; 0 when the position or length is unknown. */
+    readonly property real progress: MediaRules.progress(shownPosition, length)
+
     /** "1:00 / 3:00", "1:00" when the length is unknown, "" when nothing is known. */
     readonly property string timeText: MediaRules.timeText(shownPosition, length)
 

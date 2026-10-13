@@ -48,6 +48,21 @@ test("time text shows both times, only the elapsed time, or nothing", () => {
   assert.equal(lib.timeText(-1, 180), "");
 });
 
+test("progress is 0 with an unknown position or length, and stays between 0 and 1", () => {
+  assert.equal(lib.progress(60, 180), 1 / 3);
+  assert.equal(lib.progress(-1, 180), 0);
+  assert.equal(lib.progress(60, 0), 0);
+  assert.equal(lib.progress(200, 180), 1);
+});
+
+test("a length of exactly 100 hours counts, a little more does not", () => {
+  const limit = 100 * 3600;
+  assert.equal(lib.knownLength(player({ length: limit })), limit);
+  assert.equal(lib.knownLength(player({ length: limit + 1 })), 0);
+  assert.equal(lib.knownPosition(player(), limit), limit);
+  assert.equal(lib.knownPosition(player(), limit + 1), -1);
+});
+
 test("shuffle and repeat need support and control permission", () => {
   assert.equal(lib.canShuffle({ shuffleSupported: true, canControl: true }), true);
   assert.equal(lib.canShuffle({ shuffleSupported: true, canControl: false }), false);

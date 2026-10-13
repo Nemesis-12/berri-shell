@@ -22,6 +22,12 @@ function knownPosition(player, seconds) {
     return player && player.positionSupported && usable(seconds) ? seconds : -1;
 }
 
+/** How far the track has played, from 0 to 1. 0 when the position or the length is unknown. */
+function progress(position, length) {
+    if (position < 0 || length <= 0) return 0;
+    return Math.max(0, Math.min(1, position / length));
+}
+
 /** A seek bar works only with a known length. */
 function canSeek(player) {
     return !!player && player.canSeek && player.positionSupported && knownLength(player) > 0;
