@@ -200,3 +200,27 @@ test("a missing current hour fails instead of borrowing midnight UV and hours", 
   assert.throws(() => lib.parse(missing), /current hour/);
   assert.equal(lib.parse(sample).current.uvIndex, 6.4);
 });
+
+test("forecasts require real current conditions, an offset and matching arrays", () => {
+  for (const field of ["temperature_2m", "weather_code", "is_day"])
+    for (const value of [null, undefined, "0", NaN, Infinity]) {
+      const bad = structuredClone(sample);
+      bad.current[field] = value;
+      assert.throws(() => lib.parse(bad), /current reading/, field);
+    }
+  for (const offset of [undefined, null, "0", NaN, Infinity]) {
+    const bad = structuredClone(sample);
+    bad.utc_offset_seconds = offset;
+    assert.throws(() => lib.parse(bad), /offset/);
+  }
+  for (const section of ["hourly", "daily"])
+    for (const field of Object.keys(sample[section])) {
+      const bad = structuredClone(sample);
+      bad[section][field].pop();
+      assert.throws(() => lib.parse(bad), /forecast array/, `${section}.${field}`);
+    }
+  const badTime = structuredClone(sample);
+  badTime.hourly.time[2] = "not a time";
+  assert.throws(() => lib.parse(badTime), /time/);
+  assert.equal(lib.parse(sample).current.tempC, 18);
+});
