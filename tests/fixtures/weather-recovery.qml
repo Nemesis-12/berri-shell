@@ -66,7 +66,7 @@ Item {
         process.exited(allowed || ["bad-data", "invalid-location"].indexOf(config.scenario) >= 0 ? 0 : 22);
         if (!allowed && (["location", "invalid-location"].indexOf(config.scenario) >= 0 || isForecast)) {
             var expectedError = config.scenario === "bad-data" ? "Bad data"
-                : isForecast ? "Offline" : "No location";
+                : isForecast || config.scenario === "location" ? "Offline" : "No location";
             check(service.error === expectedError, "Failure must keep the existing error value " + expectedError);
             allowed = true;
             allowedAt = Date.now();
