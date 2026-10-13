@@ -52,3 +52,23 @@ test("a failed refresh dims the readout and shows the data age on Home and in th
   assert.match(out, /Weather stale checks passed/);
   assert.doesNotMatch(out, /Warning|Error|ReferenceError|TypeError/i);
 });
+
+test("the weather day rows and crossfade keep the selected date across midnight and a shorter forecast", () => {
+  const result = runViews(folder => {
+    fs.copyFileSync(path.join(repo, "tests/fixtures/weather-selection.qml"), path.join(folder, "test.qml"));
+    const weather = path.join(folder, "services/Weather.qml");
+    fs.writeFileSync(weather, fs.readFileSync(weather, "utf8")
+      .replace("readonly property var days: []", "property var days: []")
+      .replace("    function refresh()", "    function stripHours(i, now) { return []; }\n    function refresh()"));
+    const theme = path.join(folder, "services/Theme.qml");
+    fs.writeFileSync(theme, fs.readFileSync(theme, "utf8").replace("QtObject {", `QtObject {
+    readonly property color border: "#332f3b"
+    readonly property color card: "#211d28"
+    readonly property color sunk: "#17141d"
+    readonly property color selectionSoft: "#342417"`));
+  });
+  const output = result.stdout + result.stderr;
+  assert.equal(result.status, 0, output);
+  assert.match(output, /Weather selection checks passed/);
+  assert.doesNotMatch(output, /Warning|Error|ReferenceError|TypeError/i);
+});
