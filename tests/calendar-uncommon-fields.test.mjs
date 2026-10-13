@@ -101,3 +101,14 @@ test("an edited repeat end refuses UTC conversion when its start zone is unknown
   known.items[0] = Items.applyChanges(known.items[0], { until: "2026-10-07" });
   assert.equal(saved(known).items[0].until, "2026-10-07");
 });
+
+test("a non-ASCII BYDAY reports its error, keeps source text and reads the other events", () => {
+  const document = Format.readCalendar(fs.readFileSync(new URL("./fixtures/feeds/non-ascii-byday.ics", import.meta.url), "utf8"));
+  document.items[0] = Items.applyChanges(document.items[0], { title: "Edited" });
+  assert.match(Format.writeCalendar(document), /RRULE:FREQ=MONTHLY;BYDAY=éA/);
+  for (const read of [document, saved(document)]) {
+    assert.deepEqual(Array.from(read.errors), ["bad-day: non-ASCII BYDAY value: éA"]);
+    assert.deepEqual(Array.from(read.items, item => [item.uid, item.repeat]),
+      [["good-before", "daily"], ["bad-day", "none"], ["good-after", "weekly"]]);
+  }
+});

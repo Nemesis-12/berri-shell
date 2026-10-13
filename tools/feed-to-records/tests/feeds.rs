@@ -327,3 +327,14 @@ fn alarm_seconds_keep_their_sign_and_offset() {
         assert_eq!(alarm_field(trigger, &[&alarm]), expected);
     }
 }
+
+// A malformed Unicode weekday reports an item error, without aborting conversion.
+#[test]
+fn non_ascii_byday_reports_error_and_keeps_other_items() {
+    let path = format!("{}/../../tests/fixtures/feeds/non-ascii-byday.ics", env!("CARGO_MANIFEST_DIR"));
+    let json = convert(&path);
+    assert!(json.contains("\"errors\":[\"bad-day: non-ASCII BYDAY value: éA\"]"), "{json}");
+    assert_eq!(json.matches("\"uid\":").count(), 3);
+    assert!(json.contains("\"uid\":\"good-before\""));
+    assert!(json.contains("\"uid\":\"good-after\""));
+}

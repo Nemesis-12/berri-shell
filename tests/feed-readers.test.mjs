@@ -231,3 +231,15 @@ test("both readers keep and mark an unknown zone without a UTC instant", () => {
     assert.equal(reader.unknown.zoned, null);
   }
 });
+
+test("the converter returns a BYDAY error and still converts items before and after it", () => {
+  const file = path.join(feedsDir, "non-ascii-byday.ics");
+  const output = path.join(scratch, "bad-byday-errors.json");
+  const run = spawnSync(converter, [file, output], { encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  const feed = JSON.parse(fs.readFileSync(output, "utf8"));
+  assert.deepEqual(feed.errors, ["bad-day: non-ASCII BYDAY value: éA"]);
+  assert.match(run.stderr, /bad-day: non-ASCII BYDAY value: éA/);
+  assert.deepEqual(feed.records.map(item => [item.uid, item.repeat]),
+    [["good-before", "daily"], ["bad-day", "none"], ["good-after", "weekly"]]);
+});
