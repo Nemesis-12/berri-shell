@@ -30,3 +30,11 @@ The call-order check (`tst_calendar_order.qml`) reads `TestIo.events`. The fake 
 view logs each write there, and the check logs each `revisionChanged` and `saveFailed`
 signal with the titles the views read at that moment. It proves the order: save,
 rebuild, signal. A failed save is undone and rebuilt before `saveFailed`.
+
+The helper interface check (`tst_calendar_interface.qml`) calls Calendar's named
+read, write preparation, import, and link result operations. It checks the file
+text prepared for a save, import identity and duplicate counts, and the items
+shown after failed and successful refreshes. The helpers receive file access
+separately and never receive a stored calendar entry. `canWriteCalendar(id)`
+keeps the existing failed-read retry decision in Calendar; it does not add the
+unread-file protection planned in issue #124.
