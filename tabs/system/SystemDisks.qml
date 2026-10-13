@@ -38,6 +38,9 @@ Rectangle {
                 x: 33
                 lineTop: disk.rowY
                 font.pixelSize: 15
+                // A long mount path gives way before the size text.
+                width: Math.min(implicitWidth, Math.max(0, diskSize.x - x - 10))
+                elide: Text.ElideMiddle
                 text: disk.modelData.mount + " "
             }
 

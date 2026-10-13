@@ -8,7 +8,7 @@ import path from "node:path";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
-test("hidden views stop work and shared requests wait for the last owner", t => {
+test("hidden views stop work, shared requests wait for the last owner, and the system lists keep their rules", t => {
   const runner = process.env.QMLTESTRUNNER || "/usr/lib/qt6/bin/qmltestrunner";
   mkdirSync(path.join(root, "scratchpad"), { recursive: true });
   const run = mkdtempSync(path.join(root, "scratchpad/qml-hidden-"));
@@ -26,13 +26,13 @@ test("hidden views stop work and shared requests wait for the last owner", t => 
       `module qs.${folder.replaceAll("/", ".")}\n` +
       types.map(name => `${name.slice(0, -4)} 1.0 ${name}\n`).join(""));
   }
-  const services = ["MediaPlayer", "Brightness", "AgentUsage", "CodeData", "RadioRequests"];
+  const services = ["MediaPlayer", "Brightness", "AgentUsage", "CodeData", "RadioRequests", "BluetoothPairing"];
   for (const name of services) {
     cpSync(path.join(root, `services/${name}.qml`), path.join(imports, `qs/services/${name}.qml`));
   }
   cpSync(path.join(root, "services/CachedSource.qml"), path.join(imports, "qs/services/CachedSource.qml"));
   writeFileSync(path.join(imports, "qs/services/qmldir"),
-    "module qs.services\nsingleton Theme 1.0 Theme.qml\nCachedSource 1.0 CachedSource.qml\n" +
+    "module qs.services\nsingleton Theme 1.0 Theme.qml\nsingleton SystemStats 1.0 SystemStats.qml\nsingleton CpuLoad 1.0 CpuLoad.qml\nsingleton SystemUsage 1.0 SystemUsage.qml\nCachedSource 1.0 CachedSource.qml\n" +
     services.map(name => `singleton ${name} 1.0 ${name}.qml\n`).join(""));
   // The services import "../logic/...", so the logic folder sits next to them.
   cpSync(path.join(root, "logic"), path.join(imports, "qs/logic"), { recursive: true });

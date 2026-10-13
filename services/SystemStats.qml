@@ -19,7 +19,8 @@ Singleton {
     readonly property bool active: viewers > 0
 
     // CPU: total percent, per-core percent (SMT threads merged), average GHz, temperature.
-    readonly property real cpuPercent: CpuLoad.percent
+    /** Total load in percent, or null until two samples exist. */
+    readonly property var cpuPercent: CpuLoad.ready ? CpuLoad.percent : null
     readonly property var coreLoads: CpuLoad.coreLoads
     readonly property int threadCount: CpuLoad.threadCount
     property var cpuGhz: null
@@ -36,17 +37,17 @@ Singleton {
     readonly property real swapUsedGb: SystemUsage.swapUsedGb
     readonly property real swapTotalGb: SystemUsage.swapTotalGb
 
-    // Network: default-route interface, MB/s.
+    // Network: default-route interface, MiB/s.
     property string netName: ""
-    property real downMBs: 0
-    property real upMBs: 0
+    property real downMiBs: 0
+    property real upMiBs: 0
 
     /** [{ mount, device, usedGb, totalGb }] for up to two big disks. */
     readonly property var disks: SystemUsage.disks.filter(function (disk) {
         return disk.mount === "/" || disk.totalGb >= 20;
     }).slice(0, 2)
 
-    /** [{ name, cpu, mem }] up to 8 rows, busiest first. */
+    /** [{ name, cpu, mem }] up to 8 rows, busiest first. cpu is null until two samples exist. */
     property var processes: []
 
     property string hostName: ""
@@ -67,6 +68,8 @@ Singleton {
     // Previous network counters for rate calculation.
     property var prevNet: null
     property var prevProcessSample: null
+    // False until two process samples exist, so the second one comes after 1 s.
+    property bool processCpuKnown: false
 
     onActiveChanged: {
         if (active) {
@@ -79,7 +82,10 @@ Singleton {
             processReader.running = false;
             gpuReader.running = false;
             prevNet = null;
+            downMiBs = 0;
+            upMiBs = 0;
             prevProcessSample = null;
+            processCpuKnown = false;
             processes = [];
         }
     }
@@ -195,12 +201,7 @@ Singleton {
             + "printf '%s\t%s\t%s\t%s\n' \"$pid\" \"$mem\" \"$name\" \"$stat\"; done"]
         stdout: StdioCollector {
             waitForEnd: true
-            onStreamFinished: {
-                if (!root.active) return;
-                var result = Readings.readProcesses(text, root.prevProcessSample);
-                root.prevProcessSample = result.sample;
-                root.processes = result.rows;
-            }
+            onStreamFinished: if (root.active) root.readProcessSample(text)
         }
     }
 
@@ -234,8 +235,9 @@ Singleton {
         onTriggered: root.reloadFast()
     }
 
+    // The first sample has no CPU delta, so the second one comes within 1 s.
     Timer {
-        interval: 5000
+        interval: root.processCpuKnown ? 5000 : 1000
         running: root.active
         repeat: true
         onTriggered: if (!processReader.running) processReader.running = true
@@ -248,17 +250,32 @@ Singleton {
         onTriggered: runtimeStatus.reload()
     }
 
+    // Publishes process rows from one completed sample.
+    function readProcessSample(text) {
+        var result = Readings.readProcesses(text, prevProcessSample);
+        if (result.cpuKnown) processCpuKnown = true;
+        prevProcessSample = result.sample;
+        processes = result.rows;
+    }
+
     // Derives transfer rates from consecutive byte counters for the same interface.
+    // Without a comparable pair (no route, other interface, first reading) both are zero.
+    // Without a route the name and the baseline are cleared, so the first reading after recovery starts a new one.
     function readNetwork() {
         var next = Readings.readNetwork(routeFile.text(), networkFile.text());
-        var now = Date.now();
-        netName = next.name;
-        if (prevNet && prevNet.name === next.name && next.rx >= 0 && now > prevNet.time) {
-            var seconds = (now - prevNet.time) / 1000;
-            downMBs = Math.max(0, (next.rx - prevNet.rx) / seconds / 1048576);
-            upMBs = Math.max(0, (next.tx - prevNet.tx) / seconds / 1048576);
+        if (!next.routed) {
+            netName = "";
+            downMiBs = 0;
+            upMiBs = 0;
+            prevNet = null;
+            return;
         }
-        if (next.rx >= 0) prevNet = { name: next.name, rx: next.rx, tx: next.tx, time: now };
+        var now = Date.now();
+        var rates = Readings.networkRates(prevNet, next, now);
+        netName = next.name;
+        downMiBs = rates.down;
+        upMiBs = rates.up;
+        prevNet = next.rx >= 0 ? { name: next.name, rx: next.rx, tx: next.tx, time: now } : null;
     }
 
     // Called once after all thread frequency files have been read.

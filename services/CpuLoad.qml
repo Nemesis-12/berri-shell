@@ -8,7 +8,8 @@ import "../logic/SystemReadings.js" as Readings
  * Total and per-core CPU load from one /proc/stat read. It samples while a visible
  * view (`viewers` > 0) or the auto power profile (`autoProfileOn`). A
  * visible view gets a sample every 2.5 s; the auto profile alone needs one
- * every 5 s. `measured` fires after each new sample.
+ * every 5 s. The first sample has nothing to compare to, so the next one comes
+ * after 1 s. `measured` fires after each new load.
  */
 Singleton {
     id: root
@@ -20,10 +21,13 @@ Singleton {
     property bool autoProfileOn: false
 
     readonly property bool active: viewers > 0 || autoProfileOn
-    readonly property int sampleIntervalMs: viewers > 0 ? 2500 : 5000
+    readonly property int sampleIntervalMs: !ready ? 1000 : viewers > 0 ? 2500 : 5000
 
     /** Load in percent between the last two samples. */
     property real percent: 0
+
+    /** False until two samples exist, so a view can show a loading state, not 0%. */
+    property bool ready: false
     property var coreLoads: []
     property int threadCount: 0
     property var coreGroups: []
@@ -35,8 +39,10 @@ Singleton {
 
     // Without a timer running, the next sample has no earlier one to compare to.
     onActiveChanged: {
-        if (!active) previousCounters = null;
-        else if (!topologyRead) topologyReader.running = true;
+        if (!active) {
+            previousCounters = null;
+            ready = false;
+        } else if (!topologyRead) topologyReader.running = true;
     }
 
     Process {
@@ -68,6 +74,7 @@ Singleton {
         coreLoads = sample.coreLoads;
         if (sample.percent === null) return;
         percent = sample.percent;
+        ready = true;
         measured(percent);
     }
 

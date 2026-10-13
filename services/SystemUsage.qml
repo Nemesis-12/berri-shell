@@ -11,7 +11,6 @@ Singleton {
 
     readonly property int sampleIntervalMs: 2500
     property int viewers: 0
-    readonly property real cpuPercent: CpuLoad.percent
 
     property var memory: null
     property var disks: []

@@ -10,8 +10,10 @@ import "../../logic/ListSync.js" as ListSync
  * button, the "WI-FI" title and an on/off switch; below it a scrolling list
  * of nearby networks (ListRow rows), connected first then by signal
  * strength. Clicking a known or open network connects at once; a new
- * secured network turns its row into a password field (Enter connects, Esc
- * cancels).
+ * network with a password type (WPA, WPA2, WPA3) turns its row into a
+ * password field (Enter connects, Esc cancels, a connection closes it). Other
+ * new secured networks (for example company networks) cannot be joined here,
+ * so their rows do not react to clicks.
  */
 Item {
     id: root
@@ -63,11 +65,23 @@ Item {
         root.passwordFailed = false;
     }
 
+    /** True when a new network of this security type can be joined with a password. */
+    function takesPassword(security) {
+        return security === WifiSecurityType.WpaPsk || security === WifiSecurityType.Wpa2Psk
+            || security === WifiSecurityType.Sae;
+    }
+
+    /** True when a click on this network does something. */
+    function canChoose(network) {
+        return network.known || network.security === WifiSecurityType.Open || root.takesPassword(network.security);
+    }
+
     function chooseNetwork(network) {
         if (network.known || network.security === WifiSecurityType.Open) {
             network.connect();
             return;
         }
+        if (!root.takesPassword(network.security)) return;
         root.editingNetwork = network.name;
         root.passwordText = "";
         root.passwordFailed = false;
@@ -101,7 +115,15 @@ Item {
     RadioRequest {
         kind: "scan"
         device: root.wifiDevice
-        wanted: root.active && root.wifiDevice !== null
+        wanted: root.active && root.wifiDevice !== null && Networking.wifiEnabled
+    }
+
+    // Switching Wi-Fi off ends a password entry.
+    Connections {
+        target: Networking
+        function onWifiEnabledChanged() {
+            if (!Networking.wifiEnabled) root.cancelEditing();
+        }
     }
 
     Timer {
@@ -165,7 +187,7 @@ Item {
 
                     width: listView.width
                     active: modelData.connected
-                    rowEnabled: !editing
+                    rowEnabled: !editing && root.canChoose(modelData)
                     tagText: row.editing && root.passwordFailed ? "FAILED"
                         : modelData.connected ? "CONNECTED"
                         : row.joining ? "JOINING…" : row.secured ? "SECURED" : "OPEN"
@@ -191,8 +213,12 @@ Item {
                         font.family: Theme.condensed
                         font.weight: Font.Medium
                         font.pixelSize: 13
-                        color: Theme.fg
+                        color: root.canChoose(row.modelData) || row.modelData.connected ? Theme.fg : Theme.dim
                         elide: Text.ElideRight
+
+                        Behavior on color {
+                            ColorAnimation { duration: Theme.stateMs; easing.type: Easing.OutCubic }
+                        }
                     }
 
                     Rectangle {
@@ -238,6 +264,9 @@ Item {
 
                     Connections {
                         target: row.modelData
+                        function onConnectedChanged() {
+                            if (row.modelData.connected && root.editingNetwork === row.modelData.name) root.cancelEditing();
+                        }
                         function onConnectionFailed() {
                             if (root.editingNetwork === row.modelData.name) root.passwordFailed = true;
                         }

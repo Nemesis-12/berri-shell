@@ -10,7 +10,10 @@ var SENSOR_KINDS = { input: "S", discreteGpu: "D" };
 var PROBE_PREFIX = { distribution: "O ", kernel: "K ", hostname: "N " };
 // /proc/PID/stat after the parenthesized command name. State is Linux field 3.
 var PROCESS_FIELDS = { state: 0, userTicks: 11, systemTicks: 12, startedTicks: 19 };
-var DISK_FIELDS = { device: 0, totalKb: 1, usedKb: 2, mount: 5 };
+var DISK_FIELDS = { device: 1, totalKb: 2, usedKb: 3, mount: 4 };
+// df -P row: device, 1024-blocks, used, available, capacity, then the mount path (it may hold spaces).
+// DISK_FIELDS are the capture groups of this pattern.
+var DISK_ROW = /^(\S+)\s+(\d+)\s+(\d+)\s+\d+\s+\S+\s+(.+)$/;
 
 /** Parse one /proc/stat snapshot. Guest time is already included in user time. */
 function cpuCounters(text) {
@@ -68,20 +71,23 @@ function readCpuLoad(text, previous, groups) {
     var beforeByCpu = Object.create(null);
     if (previous) previous.forEach(function (item) { beforeByCpu[item.id] = item; });
     for (var i = 1; i < counters.length; i++) {
-        loads[Number(counters[i].id.slice(3))] = cpuPercent(counters[i], beforeByCpu[counters[i].id]) || 0;
+        // No earlier sample, a new thread or counters that did not advance: unknown (null), not zero.
+        loads[Number(counters[i].id.slice(3))] = previous ? cpuPercent(counters[i], beforeByCpu[counters[i].id]) : null;
     }
     var cores = groups && groups.length ? groups : Object.keys(loads).map(function (id) { return [Number(id)]; });
     var covered = Object.create(null);
     for (var j = 0; j < cores.length; j++) {
-        var sum = 0, count = 0;
+        var sum = 0, count = 0, found = false;
         for (var k = 0; k < cores[j].length; k++) {
             var id = cores[j][k];
             if (loads[id] === undefined) continue;
             covered[id] = true;
+            found = true;
+            if (loads[id] === null) continue;
             sum += loads[id];
             count++;
         }
-        if (count) result.coreLoads.push(sum / count);
+        if (found) result.coreLoads.push(count ? sum / count : null);
     }
     Object.keys(loads).forEach(function (id) {
         if (!covered[id]) result.coreLoads.push(loads[id]);
@@ -89,7 +95,10 @@ function readCpuLoad(text, previous, groups) {
     return result;
 }
 
-/** Read the default route, then the matching receive and send byte counts. */
+/**
+ * Read the default route, then the matching receive and send byte counts.
+ * `routed` is false without a default route: the reading has no name or counters.
+ */
 function readNetwork(routeText, deviceText) {
     var route = routeText.split("\n");
     var name = "";
@@ -97,6 +106,7 @@ function readNetwork(routeText, deviceText) {
         var fields = route[i].trim().split(/\s+/);
         if (fields[ROUTE_FIELDS.destination] === "00000000") { name = fields[ROUTE_FIELDS.name]; break; }
     }
+    if (name === "") return { name: "", rx: -1, tx: -1, routed: false };
     var devices = deviceText.split("\n");
     var fallback = null;
     for (var j = 2; j < devices.length; j++) {
@@ -107,11 +117,25 @@ function readNetwork(routeText, deviceText) {
         var bytes = devices[j].slice(colon + 1).trim().split(/\s+/);
         var rx = Number(bytes[NETWORK_FIELDS.receivedBytes]), tx = Number(bytes[NETWORK_FIELDS.sentBytes]);
         if (!isFinite(rx) || !isFinite(tx) || rx < 0 || tx < 0) continue;
-        var device = { name: deviceName, rx: rx, tx: tx };
+        var device = { name: deviceName, rx: rx, tx: tx, routed: true };
         if (deviceName === name) return device;
         if (!fallback) fallback = device;
     }
-    return fallback || { name: name, rx: -1, tx: -1 };
+    return fallback || { name: name, rx: -1, tx: -1, routed: true };
+}
+
+/**
+ * MiB per second between two network readings of the same interface.
+ * `before` carries the time of its reading in ms; `now` is the time of `next`.
+ * Without a comparable pair (no route, a different interface, a first reading,
+ * counters that went back) both rates are zero.
+ */
+function networkRates(before, next, now) {
+    var none = { down: 0, up: 0 };
+    if (!before || next.rx < 0 || before.name !== next.name || now <= before.time) return none;
+    var mib = 1048576, seconds = (now - before.time) / 1000;
+    if (next.rx < before.rx || next.tx < before.tx) return none;
+    return { down: (next.rx - before.rx) / seconds / mib, up: (next.tx - before.tx) / seconds / mib };
 }
 
 /** Select CPU, GPU and fan inputs from readable hwmon files. */
@@ -184,10 +208,12 @@ function processCounters(text, pid) {
 function readProcesses(text, previous) {
     var lines = text.split("\n");
     var totals = cpuCounters(lines[0]);
-    if (!totals) return { sample: null, rows: [] };
+    if (!totals) return { sample: null, rows: [], cpuKnown: false };
     var current = { total: totals[0].total, processes: Object.create(null) };
     var combined = Object.create(null);
     var elapsed = previous ? current.total - previous.total : 0;
+    // Without a total that advanced, no process load can be compared.
+    var cpuKnown = elapsed > 0;
     for (var i = 1; i < lines.length; i++) {
         var fields = /^(\d+)\t([^\t]+)\t([^\t]+)\t(.+)$/.exec(lines[i]);
         if (!fields) continue;
@@ -196,15 +222,16 @@ function readProcesses(text, previous) {
         if (!counters || !isFinite(mem) || mem < 0) continue;
         current.processes[pid] = { name: name, ticks: counters.ticks, started: counters.started };
         var before = previous && previous.processes[pid];
-        var row = combined[name] || { name: name, cpu: 0, mem: 0 };
+        // Unknown (null), not zero, until the total CPU counter advances.
+        var row = combined[name] || { name: name, cpu: cpuKnown ? 0 : null, mem: 0 };
         if (before && before.name === name && before.started === counters.started
-                && elapsed > 0 && counters.ticks >= before.ticks)
+                && cpuKnown && counters.ticks >= before.ticks)
             row.cpu += 100 * (counters.ticks - before.ticks) / elapsed;
         row.mem += mem;
         combined[name] = row;
     }
-    return { sample: current, rows: Object.keys(combined).map(function (name) { return combined[name]; })
-        .sort(function (a, b) { return b.cpu - a.cpu || b.mem - a.mem; }).slice(0, 8) };
+    return { sample: current, cpuKnown: cpuKnown, rows: Object.keys(combined).map(function (name) { return combined[name]; })
+        .sort(function (a, b) { return (b.cpu || 0) - (a.cpu || 0) || b.mem - a.mem; }).slice(0, 8) };
 }
 
 /** Read distinct disks from df, deriving percent from the same bytes as the captions. */
@@ -213,8 +240,8 @@ function readDisks(text) {
     var seen = Object.create(null);
     var found = [];
     for (var i = 1; i < lines.length; i++) {
-        var fields = lines[i].trim().split(/\s+/);
-        if (fields.length <= DISK_FIELDS.mount) continue;
+        var fields = DISK_ROW.exec(lines[i].trim());
+        if (!fields) continue;
         var total = Number(fields[DISK_FIELDS.totalKb]) / 1048576;
         var used = Number(fields[DISK_FIELDS.usedKb]) / 1048576;
         if (!isFinite(total) || !isFinite(used) || total <= 0 || used < 0 || used > total) continue;

@@ -4,7 +4,7 @@ import qs.services
 
 /**
  * System cell: a vertical "SYSTEM" label plus three usage rings (CPU, RAM,
- * disk) fed by SystemUsage, each with a live-value caption below it.
+ * disk) fed by SystemUsage and CpuLoad, each with a live-value caption below it.
  * Mirrors the mock's 5C system cell (Berri Dashboard v2.dc.html, ~line 438).
  */
 Item {
@@ -67,13 +67,13 @@ Item {
             RingColumn {
                 width: root.columnWidth
                 boxHeight: root.ringBoxHeight
-                caption: Math.round(SystemUsage.cpuPercent) + "%"
+                caption: CpuLoad.ready ? Math.round(CpuLoad.percent) + "%" : "-"
 
                 UsageRing {
                     anchors.centerIn: parent
                     size: root.ringSize
                     iconName: "cpu"
-                    value: SystemUsage.cpuPercent
+                    value: CpuLoad.ready ? CpuLoad.percent : 0
                 }
             }
 
