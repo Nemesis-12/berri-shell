@@ -39,7 +39,7 @@ QtObject {
      * `blockWrites`, so the write finishes and reports before it returns and the
      * result is known here.
      */
-    function write(path: string, nextText: string, previousText: string, failurePrefix: string): var {
+    function write(path: string, nextText: string, previousText: var, failurePrefix: string): var {
         var outcome = null;
         files.write(path, nextText, function (ok, error) {
             outcome = Save.writeOutcome(ok, error, failurePrefix, previousText, nextText);
@@ -61,6 +61,12 @@ QtObject {
     function saveAndRebuild(path: string, uids): bool {
         var prepared = store.prepareCalendarWrite(path);
         if (!prepared) return false;
+        // One atomic backup must finish before the calendar is replaced. A new
+        // local calendar has null previous text because no file exists yet.
+        if (prepared.previousText !== null) {
+            var backup = write(path + ".bak", prepared.previousText, prepared.previousText, prepared.failurePrefix + " backup");
+            if (!backup.saved) return store.acceptCalendarWrite(path, backup, uids);
+        }
         var written = write(path, prepared.nextText, prepared.previousText, prepared.failurePrefix);
         return store.acceptCalendarWrite(path, written, uids);
     }

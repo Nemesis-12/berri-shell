@@ -47,17 +47,17 @@ TestCase {
 
     function test_an_added_item_is_saved_then_rebuilt_then_signalled() {
         compare(Calendar.add({ title: "New", date: day }), true);
-        compare(TestIo.events, ["write", "revision:Kept,New"]);
+        compare(TestIo.events, ["write", "write", "revision:Kept,New"]);
     }
 
     function test_an_updated_item_is_saved_then_rebuilt_then_signalled() {
         compare(Calendar.update(kept, { title: "Changed" }), true);
-        compare(TestIo.events, ["write", "revision:Changed"]);
+        compare(TestIo.events, ["write", "write", "revision:Changed"]);
     }
 
     function test_a_removed_item_is_saved_then_rebuilt_then_signalled() {
         compare(Calendar.remove(kept), true);
-        compare(TestIo.events, ["write", "revision:"]);
+        compare(TestIo.events, ["write", "write", "revision:"]);
     }
 
     // A failed write puts the old file text back, rebuilds the views, and only then reports the failure.
@@ -65,7 +65,7 @@ TestCase {
         TestIo.failWrite = true;
         compare(Calendar.add({ title: "New", date: day }), false);
         compare(TestIo.events, ["write-failed", "revision:Kept", "saveFailed"]);
-        compare(Calendar.lastError, "Could not save berri: Permission denied");
+        compare(Calendar.lastError, "Could not save berri backup: Permission denied");
     }
 
     function test_a_failed_update_is_undone_and_rebuilt_before_the_failure_signal() {

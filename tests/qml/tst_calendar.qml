@@ -210,7 +210,7 @@ TestCase {
         same(shell.itemsInMonth(2026, 10), october);
         same(shell.itemsInMonth(2026, 11), november);
         compare(shell.getItem(Items.itemKey("berri", "edited")).title, "Before");
-        compare(failureSpy.signalArguments[0][0], "Could not save berri: Permission denied");
+        compare(failureSpy.signalArguments[0][0], "Could not save berri backup: Permission denied");
         compare(shell.lastError, failureSpy.signalArguments[0][0]);
     }
 
