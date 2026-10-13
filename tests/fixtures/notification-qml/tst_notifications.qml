@@ -114,18 +114,47 @@ TestCase {
     function test_transientExpiryEntriesShareLiveLimit() {
         var n;
         for (var i = 0; i <= 200; i++) {
-            n = notification({ id: i, transient: true, urgency: NotificationUrgency.Normal, expireTimeout: 3600 });
+            n = notification({ id: i, transient: true, urgency: NotificationUrgency.Normal, expireTimeout: 3600000 });
             Notifications.receive(n);
         }
         compare(Object.keys(Notifications.live).length, 200);
         compare(Object.keys(Notifications.expiresAtById).length, 200);
         compare(popup._queue.length, 20);
-        n.expireTimeout = 0.001;
+        n.expireTimeout = 1;
         n.expireTimeoutChanged.emit();
         tryVerify(function () { return Notifications.liveIdByServerId[200] === undefined; }, 10000);
         compare(Object.keys(Notifications.live).length, 199);
         compare(Object.keys(Notifications.expiresAtById).length, 199);
         compare(Notifications.all.length, 0);
+    }
+
+    // The sender timeout is in milliseconds (freedesktop spec), as Quickshell passes it on.
+    function test_sixtySecondNotificationExpiresAfterSixtySeconds() {
+        var n = notification({ id: 1, urgency: NotificationUrgency.Normal, expireTimeout: 60000 });
+        var closed = [];
+        n.closed.connect(function (reason) { closed.push(reason); });
+        var start = Date.now();
+        Notifications.receive(n);
+        var id = Notifications.liveIdByServerId[1];
+        var due = Notifications.expiresAtById[id];
+        verify(due >= start + 60000 && due <= Date.now() + 60000, "Expiry is not 60 s ahead: " + (due - start));
+        Notifications.expireDue(start + 59000);
+        compare(closed.length, 0);
+        verify(Notifications.live[id] === n);
+        Notifications.expireDue(start + 60001);
+        compare(closed, [NotificationCloseReason.Expired]);
+        compare(Notifications.live[id], undefined);
+    }
+
+    function test_defaultAndNeverTimeouts() {
+        Notifications.receive(notification({ id: 1, urgency: NotificationUrgency.Normal, expireTimeout: -1 }));
+        var start = Date.now();
+        var due = Notifications.expiresAtById[Notifications.liveIdByServerId[1]];
+        verify(due >= start - 50 + 5000 && due <= start + 5000, "Default is not 5 s: " + (due - start));
+        Notifications.receive(notification({ id: 2, urgency: NotificationUrgency.Normal, expireTimeout: 0 }));
+        compare(Notifications.expiresAtById[Notifications.liveIdByServerId[2]], undefined);
+        Notifications.receive(notification({ id: 3, expireTimeout: 60000 }));
+        compare(Notifications.expiresAtById[Notifications.liveIdByServerId[3]], undefined);
     }
 
     // Median milliseconds for 100 updates plus one flush, with `count` stored items.

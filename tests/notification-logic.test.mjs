@@ -148,3 +148,11 @@ test("saving bounded history excludes sender actions and stays below eight MiB",
   const bytes = Buffer.byteLength(JSON.stringify({ dnd: false, items: lib.savedItems(history) }, null, 2));
   assert.ok(bytes < 8 * 1024 * 1024, `Saved history is ${bytes} bytes`);
 });
+
+test("expireDelayMs reads the sender timeout as milliseconds", () => {
+  assert.equal(lib.expireDelayMs(60000, "normal"), 60000);
+  assert.equal(lib.expireDelayMs(1500, "low"), 1500);
+  assert.equal(lib.expireDelayMs(-1, "normal"), 5000, "server default is 5 s");
+  assert.equal(lib.expireDelayMs(0, "normal"), 0, "0 means never");
+  assert.equal(lib.expireDelayMs(60000, "critical"), 0, "critical items stay until dismissed");
+});

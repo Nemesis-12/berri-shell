@@ -170,6 +170,17 @@ function shouldAlert(urgency, dnd) {
     return !dnd || urgency === "critical";
 }
 
+/**
+ * Milliseconds until a live notification expires, or 0 for never. The sender
+ * timeout is in milliseconds (freedesktop spec; Quickshell 0.3.1 passes it
+ * on unchanged). -1 asks for the server default of 5 s, 0 means never, and
+ * critical items stay until dismissed.
+ */
+function expireDelayMs(expireTimeout, urgency) {
+    if (urgency === "critical" || expireTimeout === 0) return 0;
+    return expireTimeout === -1 ? 5000 : expireTimeout;
+}
+
 /** Bounds every waiting pop-up, dropping oldest non-critical items first. Updates keep their place. */
 function queuePopup(queue, item, max) {
     var next = upsert(queue, item);

@@ -244,12 +244,9 @@ Singleton {
     }
 
     function setExpiry(id: string, n, urgency: string): void {
-        if (urgency === "critical" || n.expireTimeout === 0) {
-            delete root.expiresAtById[id];
-        } else {
-            var seconds = n.expireTimeout === -1 ? 5 : n.expireTimeout;
-            root.expiresAtById[id] = Date.now() + seconds * 1000;
-        }
+        var delay = Logic.expireDelayMs(n.expireTimeout, urgency);
+        if (delay === 0) delete root.expiresAtById[id];
+        else root.expiresAtById[id] = Date.now() + delay;
         root.armExpireTimer();
     }
 
@@ -267,8 +264,8 @@ Singleton {
         }
     }
 
-    function expireDue(): void {
-        var now = Date.now();
+    /** Expires every live item whose time is at or before `now`. */
+    function expireDue(now = Date.now()): void {
         Object.keys(root.expiresAtById).forEach(function (id) {
             if (root.expiresAtById[id] > now) return;
             delete root.expiresAtById[id];
