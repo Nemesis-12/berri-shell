@@ -313,7 +313,7 @@ Singleton {
             acceptCalendarRead(calendar.path, text, false);
             if (!calendar.readFailed) return true;
         }
-        root.lastError = root.readErrorText(calendar.name);
+        root.lastError = calendar.error || root.readErrorText(calendar.name);
         root.saveFailed(root.lastError);
         return false;
     }
@@ -328,9 +328,9 @@ Singleton {
     }
 
     // A file could not be read. Keep any cached document for display, but refuse edits until a read succeeds.
-    function _readFailed(calendar: var): void {
+    function _readFailed(calendar: var, message: string): void {
         calendar.readFailed = true;
-        calendar.error = root.readErrorText(calendar.name);
+        calendar.error = message;
         calendar.loaded = true;
         _rebuild();
         _checkReady();
@@ -344,7 +344,7 @@ Singleton {
     function acceptCalendarMissing(path: string): void {
         var calendar = _calendars[_idOfPath(path)];
         if (!calendar) return;
-        if (calendar.kind !== "local") { _readFailed(calendar); return; }
+        if (calendar.kind !== "local") { _readFailed(calendar, root.readErrorText(calendar.name)); return; }
         calendar.document = Format.emptyCalendar();
         calendar.text = null;
         calendar.signature = "";
@@ -375,7 +375,11 @@ Singleton {
         // Read success alone is not parse success. Empty or incomplete text and
         // OS errors keep the last valid document and refuse writes. A complete
         // empty VCALENDAR is valid. Unknown fields remain the reader's concern.
-        if (calendar.kind !== "link" && (failed || !Format.isCompleteCalendar(text))) { _readFailed(calendar); return; }
+        if (calendar.kind !== "link" && (failed || !Format.isCompleteCalendar(text))) {
+            var message = !failed && text === "" ? "Calendar file is empty: " + calendar.name : root.readErrorText(calendar.name);
+            _readFailed(calendar, message);
+            return;
+        }
         var wasFailed = calendar.readFailed;
         if (!failed) { calendar.readFailed = false; if (calendar.kind !== "link") calendar.error = ""; }
         var signature = text.length + ":" + Items.shortHash(text);
