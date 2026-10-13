@@ -57,6 +57,38 @@ TestCase {
         compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title).sort(), ["Kept", "New"]);
     }
 
+    // A file color change must retry the read before it changes the cached items.
+    function test_whole_calendar_color_after_a_failed_read_writes_nothing() {
+        const meta = Calendar._addCalendar("work", "file", "Work", "work.ics", "", "blue");
+        const text = savedText().replace("END:VEVENT", "X-BERRI-COLOR:red\r\nEND:VEVENT");
+        TestIo.texts[meta.path] = text;
+        startReading();
+        TestIo.deniedReads[meta.path] = true;
+        calendarFiles().read(meta.path, "", true);
+        compare(Calendar.applyColorToCalendar("work", "green"), false);
+        compare(TestIo.texts[meta.path], text);
+        compare(TestIo.writes.length, 0);
+        compare(Calendar.calendars.find(calendar => calendar.id === "work").color, "blue");
+        compare(Calendar.getItem(Items.itemKey("work", "kept")).color, "red");
+        compare(failureSpy.count, 1);
+        compare(Calendar.prepareCalendarWrite(meta.path), null);
+        // A successful retry takes current content before clearing its own colors.
+        TestIo.deniedReads = ({});
+        TestIo.texts[meta.path] = text.replace("SUMMARY:Kept", "SUMMARY:Current");
+        compare(Calendar.applyColorToCalendar("work", "green"), true);
+        compare(Format.readCalendar(TestIo.texts[meta.path]).items.map(item => item.title), ["Current"]);
+        verify(!TestIo.texts[meta.path].includes("X-BERRI-COLOR:red"));
+    }
+
+    // Helpers get no write text for unread, unknown or subscription calendars.
+    function test_write_preparation_refuses_an_unread_calendar() {
+        compare(Calendar.prepareCalendarWrite(berriPath), null);
+        compare(Calendar.prepareCalendarWrite(Calendar.dir + "/unknown.ics"), null);
+        TestIo.texts[berriPath] = savedText();
+        startReading();
+        compare(Calendar.prepareCalendarWrite(berriPath).previousText, savedText());
+    }
+
     function test_a_denied_first_read_refuses_edits_and_keeps_the_file() {
         const original = savedText();
         TestIo.texts[berriPath] = original;
