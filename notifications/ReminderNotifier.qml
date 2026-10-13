@@ -47,9 +47,8 @@ Singleton {
         if (_started || !_stateRead || !Calendar.ready) return;
         _started = true;
         var now = Date.now();
-        // First run also catches unshown reminders from the past week.
-        var from = _lastCheck > 0 ? Math.max(_lastCheck, now - missedWindowMs) : now - missedWindowMs;
-        _sweep(from, now);
+        // Saved shown keys, rather than the last check, decide which past alerts remain unseen.
+        _sweep(now - missedWindowMs, now);
     }
 
     // The calendar changed: also catch newly saved past alerts. Shown keys prevent repeats.
