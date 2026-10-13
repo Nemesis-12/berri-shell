@@ -89,6 +89,83 @@ TestCase {
         compare(Calendar.prepareCalendarWrite(berriPath).previousText, savedText());
     }
 
+    function test_broken_read_shows_an_error_and_refuses_all_saves_data() {
+        return [
+            { tag: "empty", text: "" },
+            { tag: "invalid", text: "temporarily empty while saving" },
+            { tag: "unclosed", text: "BEGIN:VCALENDAR\nBEGIN:VTIMEZONE\n" + savedText().split("BEGIN:VCALENDAR\r\n")[1] },
+            { tag: "mismatched", text: savedText().replace("END:VEVENT", "END:VTODO") },
+            { tag: "invalid line", text: savedText().replace("SUMMARY:Kept", "broken line") },
+            { tag: "extra text", text: savedText() + "garbage" }
+        ];
+    }
+
+    // Bad external text keeps the last valid display but cannot become a writable document.
+    function test_broken_read_shows_an_error_and_refuses_all_saves(data) {
+        TestIo.texts[berriPath] = savedText();
+        startReading();
+        TestIo.texts[berriPath] = data.text;
+        calendarFiles().read(berriPath, data.text, false);
+        compare(Calendar.calendars[0].error, "Could not read berri");
+        compare(Calendar.itemsOn("2026-10-05").map(item => item.title), ["Kept"]);
+        const uid = Items.itemKey("berri", "kept");
+        compare(Calendar.add({ title: "New", date: "2026-10-06" }), false);
+        compare(Calendar.update(uid, { title: "Changed" }), false);
+        compare(Calendar.move(uid, "2026-10-05", "2026-10-06", {}), false);
+        compare(Calendar.remove(uid), false);
+        compare(Calendar.setDone(uid, true), false);
+        compare(Calendar.prepareCalendarWrite(berriPath), null);
+        compare(TestIo.texts[berriPath], data.text);
+        compare(TestIo.writes.length, 0);
+        TestIo.texts[berriPath] = savedText();
+        compare(Calendar.update(uid, { title: "Recovered" }), true);
+        compare(Calendar.calendars[0].error, "");
+        compare(Calendar.itemsOn("2026-10-05").map(item => item.title), ["Recovered"]);
+    }
+
+    // No cached document is made from a broken first read or a broken import.
+    function test_broken_first_read_and_import_are_refused() {
+        const broken = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nSUMMARY:Lost\nEND:VCALENDAR";
+        TestIo.texts[berriPath] = broken;
+        startReading();
+        compare(Calendar.calendars[0].error, "Could not read berri");
+        compare(Calendar.add({ title: "New", date: "2026-10-06" }), false);
+        TestIo.texts["/broken.ics"] = broken;
+        compare(Calendar.importFile("/broken.ics"), "");
+        compare(Calendar.lastError, "Not a calendar file");
+        compare(TestIo.writes.length, 0);
+    }
+
+    // A missing file for a known calendar is a failed read, even with no cached items.
+    function test_missing_known_calendar_is_never_empty_and_writable_data() {
+        return [{ tag: "loaded local", kind: "local", loaded: true },
+            { tag: "unread file", kind: "file", loaded: false },
+            { tag: "loaded file", kind: "file", loaded: true },
+            { tag: "restored local", kind: "restored", loaded: false }];
+    }
+
+    function test_missing_known_calendar_is_never_empty_and_writable(data) {
+        if (data.kind === "restored") Calendar._loadState({ calendars: [{ id: "berri", file: "berri.ics" }] });
+        const meta = data.kind === "file" ? Calendar._addCalendar("work", "file", "Work", "work.ics", "", "blue") : Calendar._calendars.berri;
+        if (data.loaded) {
+            TestIo.texts[meta.path] = savedText();
+            startReading();
+            delete TestIo.texts[meta.path];
+            // Reload the real reader through its file-change signal.
+            const reader = TestIo.readers[meta.path];
+            verify(reader !== undefined);
+            reader.fileChanged();
+        } else startReading();
+        compare(Calendar.calendars.find(calendar => calendar.id === meta.id).error, "Could not read " + meta.name);
+        compare(Calendar.add({ title: "New", date: "2026-10-06", calendarId: meta.id }), false);
+        compare(Calendar.prepareCalendarWrite(meta.path), null);
+        compare(TestIo.texts[meta.path], undefined);
+        compare(TestIo.writes.length, 0);
+        TestIo.texts[meta.path] = savedText();
+        compare(Calendar.add({ title: "After read", date: "2026-10-06", calendarId: meta.id }), true);
+        compare(Format.readCalendar(TestIo.texts[meta.path]).items.map(item => item.title).sort(), ["After read", "Kept"]);
+    }
+
     function test_a_denied_first_read_refuses_edits_and_keeps_the_file() {
         const original = savedText();
         TestIo.texts[berriPath] = original;
