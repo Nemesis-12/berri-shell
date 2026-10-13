@@ -110,7 +110,7 @@ Singleton {
         root.commit(root.all.filter(function (n) { return !selected.has(n.id); }));
     }
 
-    /** Runs a sender action, marks the item read and closes it at the sender. */
+    /** Runs a sender action and marks the item read. Quickshell closes a nonresident sender inside invoke(). */
     function invokeAction(id: string, actionId: string): void {
         var n = root.live[id];
         if (n) {
@@ -120,7 +120,6 @@ Singleton {
                     break;
                 }
             }
-            if (!n.resident) n.dismiss();
         }
         if (!n || !n.resident) root.removed(id);
         root.commit(Logic.patch(root.all, id, { read: true }));
@@ -229,7 +228,17 @@ Singleton {
             n.bodyChanged.connect(refreshItem);
             n.appIconChanged.connect(refreshItem);
             n.urgencyChanged.connect(refreshItem);
-            n.actionsChanged.connect(refreshItem);
+            // A retained action object can change its label without a new action list.
+            var watchedActions = new Set();
+            var watchActions = function () {
+                for (var i = 0; i < n.actions.length; i++) {
+                    if (watchedActions.has(n.actions[i])) continue;
+                    watchedActions.add(n.actions[i]);
+                    n.actions[i].textChanged.connect(refreshItem);
+                }
+            };
+            watchActions();
+            n.actionsChanged.connect(function () { watchActions(); refreshItem(); });
             n.appNameChanged.connect(refreshItem);
             n.desktopEntryChanged.connect(refreshItem);
             n.imageChanged.connect(refreshItem);

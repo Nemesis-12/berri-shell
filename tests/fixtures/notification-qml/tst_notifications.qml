@@ -46,6 +46,18 @@ TestCase {
         return n;
     }
 
+    // A sender action with the change signal of its text.
+    function action(identifier, text, invoke) {
+        var listeners = [];
+        return {
+            identifier: identifier, text: text, invoke: invoke || function () {},
+            textChanged: {
+                connect: function (f) { listeners.push(f); },
+                emit: function () { listeners.slice().forEach(function (f) { f(); }); }
+            }
+        };
+    }
+
     // The saved-state replacement is a direct child of the real store.
     function savedState() {
         for (var i = 0; i < Notifications.children.length; i++)
@@ -208,11 +220,11 @@ TestCase {
     }
 
     function test_currentAndQueuedUpdates() {
-        var n = notification({ id: 1, actions: [{ identifier: "old", text: "Old action" }] });
+        var n = notification({ id: 1, actions: [action("old", "Old action")] });
         Notifications.receive(n);
         verify(hasText(popup, "Before"));
         n.summary = "After";
-        n.actions = [{ identifier: "new", text: "New action" }];
+        n.actions = [action("new", "New action")];
         n.summaryChanged.emit();
         n.actionsChanged.emit();
         compare(popup._current.summary, "After");
@@ -235,9 +247,9 @@ TestCase {
     function test_updatedActionsInvokeCurrentSenderOnly() {
         var oldCalls = 0, newCalls = 0;
         var n = notification({ id: 1, resident: true,
-            actions: [{ identifier: "old", text: "Old", invoke: function () { oldCalls++; } }] });
+            actions: [action("old", "Old", function () { oldCalls++; })] });
         Notifications.receive(n);
-        n.actions = [{ identifier: "new", text: "New", invoke: function () { newCalls++; } }];
+        n.actions = [action("new", "New", function () { newCalls++; })];
         n.actionsChanged.emit();
         Notifications.invokeAction(popup._current.id, popup._current.actions[0].id);
         compare(oldCalls, 0);
@@ -246,9 +258,42 @@ TestCase {
         compare(n.dismissCount, 0);
     }
 
+    // Quickshell closes a nonresident notification inside action.invoke(); the store must not close it again.
+    function test_nonResidentActionClosesOnce() {
+        var n = notification({ id: 1 });
+        n.actions = [action("open", "Open", function () { n.dismiss(); })];
+        Notifications.receive(n);
+        var id = popup._current.id;
+        Notifications.invokeAction(id, "open");
+        compare(n.dismissCount, 1);
+        compare(Notifications.live[id], undefined);
+        compare(Notifications.all.length, 1);
+        compare(Notifications.all[0].read, true);
+        compare(popup._open, false);
+    }
+
+    function test_labelChangeOfSameActionUpdatesPopup() {
+        var open = action("open", "Before");
+        var n = notification({ id: 1, actions: [open] });
+        Notifications.receive(n);
+        verify(hasText(popup, "Before"));
+        open.text = "After";
+        open.textChanged.emit();
+        compare(popup._current.actions[0].label, "After");
+        verify(hasText(popup, "After"));
+        // An action that appears later is watched too.
+        var later = action("later", "Old");
+        n.actions = [open, later];
+        n.actionsChanged.emit();
+        later.text = "New";
+        later.textChanged.emit();
+        compare(popup._current.actions[1].label, "New");
+        compare(popup._queue.length, 0);
+    }
+
     function test_actionTextAndCountAreBounded() {
         var actions = [];
-        for (var i = 0; i < 30; i++) actions.push({ identifier: "action" + i, text: "x".repeat(100 * 1024) });
+        for (var i = 0; i < 30; i++) actions.push(action("action" + i, "x".repeat(100 * 1024)));
         actions[0].identifier = "x".repeat(129);
         Notifications.receive(notification({ id: 1, actions: actions }));
         compare(popup._current.actions.length, 15);
