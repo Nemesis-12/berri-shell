@@ -18,6 +18,11 @@ function daysInMonth(year, month) {
 function weekdayInMonth(year, month, nth, day) {
     var first = Math.floor(Date.UTC(year, month - 1, 1) / 86400000);
     var last = first + daysInMonth(year, month) - 1;
+    return weekdayInPeriod(first, last, nth, day);
+}
+
+/** Finds an ordinal weekday within a month or year, or null when it does not exist. */
+function weekdayInPeriod(first, last, nth, day) {
     var n = nth > 0 ? first + ((day - weekdayOf(first) + 7) % 7) + (nth - 1) * 7
         : last - ((weekdayOf(last) - day + 7) % 7) + (nth + 1) * 7;
     return n >= first && n <= last ? n : null;
@@ -56,6 +61,16 @@ function retainedRuleParts(item) {
     return parts;
 }
 
+/** Reads yearly weekday lists, including ordinals retained by both feed readers. */
+function yearlyWeekdays(item, parts) {
+    if (!parts.BYDAY) return item.byDay.map(function (day) { return { nth: 0, day: day }; });
+    return parts.BYDAY.split(",").map(function (value) {
+        var match = /^([+-]?\d{1,2})?(SU|MO|TU|WE|TH|FR|SA)$/i.exec(value);
+        return { nth: match && match[1] ? Number(match[1]) : 0,
+            day: match ? Text.weekdays.indexOf(match[2].toUpperCase()) : -1 };
+    });
+}
+
 /** The fixed numbers of a repeating series: its first day, step size, first week and month. */
 function seriesOf(item) {
     var s = Times.dayNum(item.date);
@@ -67,6 +82,7 @@ function seriesOf(item) {
         months: parts.BYMONTH ? parts.BYMONTH.split(",").map(Number) : [],
         monthDays: parts.BYMONTHDAY ? parts.BYMONTHDAY.split(",").map(Number) : [],
         positions: parts.BYSETPOS ? parts.BYSETPOS.split(",").map(Number) : [],
+        yearlyWeekdays: item.repeat === "yearly" ? yearlyWeekdays(item, parts) : [],
         iv: Math.max(1, item.interval || 1),
         sy: +item.date.slice(0, 4), sm: +item.date.slice(5, 7), sd: +item.date.slice(8, 10),
         monthIndex: +item.date.slice(0, 4) * 12 + +item.date.slice(5, 7) - 1,
@@ -106,13 +122,21 @@ function monthStarts(item, c, y, mo) {
     var last = daysInMonth(y, mo);
     if (c.months.length && c.months.indexOf(mo) < 0) return [];
     var ordinal = item.monthWeekday ? weekdayInMonth(y, mo, item.monthWeekday.nth, item.monthWeekday.day) : null;
+    var first = item.repeat === "yearly" && !c.months.length ? dayOfUtc(y, 1, 1) : base;
+    var end = item.repeat === "yearly" && !c.months.length ? dayOfUtc(y, 12, 31) : base + last - 1;
+    var yearlyDays = c.yearlyWeekdays.map(function (weekday) {
+        return { day: weekday.day, date: weekday.nth ? weekdayInPeriod(first, end, weekday.nth, weekday.day) : null,
+            ordinal: weekday.nth !== 0 };
+    });
     var days = [];
     for (var d = 1; d <= last; d++) {
         var n = base + d - 1;
         if (c.monthDays.length && c.monthDays.indexOf(d) < 0 && c.monthDays.indexOf(d - last - 1) < 0) continue;
         if (item.monthWeekday && n !== ordinal) continue;
-        if (item.byDay.length && item.byDay.indexOf(weekdayOf(n)) < 0) continue;
-        if (!c.monthDays.length && !item.monthWeekday && !item.byDay.length && d !== c.sd) continue;
+        if (item.repeat === "yearly" && yearlyDays.length) {
+            if (!yearlyDays.some(function (weekday) { return weekday.ordinal ? n === weekday.date : weekdayOf(n) === weekday.day; })) continue;
+        } else if (item.byDay.length && item.byDay.indexOf(weekdayOf(n)) < 0) continue;
+        if (!c.monthDays.length && !item.monthWeekday && !item.byDay.length && !yearlyDays.length && d !== c.sd) continue;
         days.push(n);
     }
     return days;
@@ -138,7 +162,7 @@ function yearlyStep(item, c, k) {
     var yr = c.sy + k * c.iv;
     var days = [];
     for (var mo = 1; mo <= 12; mo++) {
-        if (!c.months.length && !c.monthDays.length && !item.byDay.length && mo !== c.sm) continue;
+        if (!c.months.length && !c.monthDays.length && !c.yearlyWeekdays.length && mo !== c.sm) continue;
         days = days.concat(monthStarts(item, c, yr, mo));
     }
     return { base: dayOfUtc(yr, 1, 1), list: selectedPositions(days, c.positions) };
