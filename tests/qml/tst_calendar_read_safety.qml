@@ -17,6 +17,7 @@ TestCase {
     readonly property string feed: "https://example.test/feed"
 
     SignalSpy { id: failureSpy; target: Calendar; signalName: "saveFailed" }
+    CalendarDisk { id: helperDisk; store: Calendar; files: tests.calendarFiles() }
 
     function calendarFiles() {
         return Calendar.children.find(function (child) { return child instanceof CalendarFiles; });
@@ -49,10 +50,13 @@ TestCase {
     function test_add_before_the_first_read_keeps_all_old_items() {
         const original = savedText();
         TestIo.texts[berriPath] = original;
+        TestIo.heldReads[berriPath] = true;
+        startReading();
         compare(Calendar.add({ title: "New", date: "2026-10-06" }), false);
         compare(TestIo.texts[berriPath], original);
         compare(TestIo.writes.length, 0);
-        startReading();
+        delete TestIo.heldReads[berriPath];
+        TestIo.readers[berriPath].loaded();
         compare(Calendar.add({ title: "New", date: "2026-10-06" }), true);
         compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title).sort(), ["Kept", "New"]);
     }
@@ -83,10 +87,13 @@ TestCase {
     // Helpers get no write text for unread, unknown or subscription calendars.
     function test_write_preparation_refuses_an_unread_calendar() {
         compare(Calendar.prepareCalendarWrite(berriPath), null);
+        compare(helperDisk.commitCalendar(berriPath), false);
         compare(Calendar.prepareCalendarWrite(Calendar.dir + "/unknown.ics"), null);
         TestIo.texts[berriPath] = savedText();
         startReading();
         compare(Calendar.prepareCalendarWrite(berriPath).previousText, savedText());
+        compare(helperDisk.commitCalendar(berriPath), true);
+        compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title), ["Kept"]);
     }
 
     function test_broken_read_shows_an_error_and_refuses_all_saves_data() {

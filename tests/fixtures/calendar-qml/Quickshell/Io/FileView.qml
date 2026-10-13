@@ -24,6 +24,7 @@ Item {
         else { TestIo.texts[path] = value; TestIo.writes = TestIo.writes.concat([path]); TestIo.note("write"); saved(); }
     }
     function reload() {
+        if (TestIo.heldReads[path]) return;
         if (TestIo.deniedReads[path]) loadFailed(FileViewError.PermissionDenied);
         else if (TestIo.texts[path] === undefined) loadFailed(FileViewError.FileNotFound);
         else loaded();
