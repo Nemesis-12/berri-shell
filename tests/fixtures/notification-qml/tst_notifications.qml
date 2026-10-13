@@ -56,7 +56,7 @@ TestCase {
     function init() {
         Notifications.flush();
         Notifications.writeSaved();
-        popup.hideNow();
+        popup._hideNow();
         alerts.visible = false;
         alerts.filter = "all";
         Notifications.all = [];
@@ -75,7 +75,7 @@ TestCase {
             verify(Object.keys(Notifications.live).length <= 200, "Live senders exceed 200");
         }
         compare(Object.keys(Notifications.live).length, 200);
-        compare(popup.queue.length, 20);
+        compare(popup._queue.length, 20);
         compare(Notifications.all.length, 200);
         compare(Notifications.all[0].body.length, 4096);
         tryCompare(savedState(), "saveCount", 1, 10000);
@@ -90,13 +90,13 @@ TestCase {
             Notifications.receive(notification({ id: i, transient: true, body: "x".repeat(100 * 1024) }));
         compare(Object.keys(Notifications.live).length, 200);
         compare(Object.keys(Notifications.liveIdByServerId).length, 200);
-        compare(popup.queue.length, 20);
+        compare(popup._queue.length, 20);
         compare(Notifications.all.length, 0);
         compare(first.dismissCount, 1);
         first.summaryChanged.emit();
         compare(Object.keys(Notifications.live).length, 200);
         compare(Notifications.liveIdByServerId[0], undefined);
-        compare(popup.current.body.length, 4096);
+        compare(popup._current.body.length, 4096);
         compare(savedState().saveCount, 0);
     }
 
@@ -106,8 +106,8 @@ TestCase {
         n.transient = true;
         n.transientChanged.emit();
         compare(Notifications.all.length, 0);
-        compare(popup.current.id, Notifications.liveIdByServerId[1]);
-        verify(popup.open);
+        compare(popup._current.id, Notifications.liveIdByServerId[1]);
+        verify(popup._open);
         compare(n.dismissCount, 0);
     }
 
@@ -119,7 +119,7 @@ TestCase {
         }
         compare(Object.keys(Notifications.live).length, 200);
         compare(Object.keys(Notifications.expiresAtById).length, 200);
-        compare(popup.queue.length, 20);
+        compare(popup._queue.length, 20);
         n.expireTimeout = 0.001;
         n.expireTimeoutChanged.emit();
         tryVerify(function () { return Notifications.liveIdByServerId[200] === undefined; }, 10000);
@@ -186,21 +186,21 @@ TestCase {
         n.actions = [{ identifier: "new", text: "New action" }];
         n.summaryChanged.emit();
         n.actionsChanged.emit();
-        compare(popup.current.summary, "After");
+        compare(popup._current.summary, "After");
         verify(hasText(popup, "After"));
         verify(hasText(popup, "New action"));
-        compare(popup.current.actions[0].id, "new");
-        compare(popup.queue.length, 0);
+        compare(popup._current.actions[0].id, "new");
+        compare(popup._queue.length, 0);
         Notifications.receive(notification({ id: 2, summary: "Other" }));
-        compare(popup.queue.length, 1);
+        compare(popup._queue.length, 1);
         n.summary = "Queued update";
         n.summaryChanged.emit();
-        compare(popup.current.summary, "Other");
-        compare(popup.queue.length, 1);
-        compare(popup.queue[0].summary, "Queued update");
-        popup.close();
-        popup.showNext();
-        compare(popup.current.summary, "Queued update");
+        compare(popup._current.summary, "Other");
+        compare(popup._queue.length, 1);
+        compare(popup._queue[0].summary, "Queued update");
+        popup._close();
+        popup._showNext();
+        compare(popup._current.summary, "Queued update");
     }
 
     function test_updatedActionsInvokeCurrentSenderOnly() {
@@ -210,7 +210,7 @@ TestCase {
         Notifications.receive(n);
         n.actions = [{ identifier: "new", text: "New", invoke: function () { newCalls++; } }];
         n.actionsChanged.emit();
-        Notifications.invokeAction(popup.current.id, popup.current.actions[0].id);
+        Notifications.invokeAction(popup._current.id, popup._current.actions[0].id);
         compare(oldCalls, 0);
         compare(newCalls, 1);
         compare(Notifications.all[0].read, true);
@@ -222,10 +222,10 @@ TestCase {
         for (var i = 0; i < 30; i++) actions.push({ identifier: "action" + i, text: "x".repeat(100 * 1024) });
         actions[0].identifier = "x".repeat(129);
         Notifications.receive(notification({ id: 1, actions: actions }));
-        compare(popup.current.actions.length, 15);
-        compare(popup.current.actions[0].id, "action1");
-        compare(popup.current.actions[0].label.length, 256);
-        compare(popup.current.actions[14].id, "action15");
+        compare(popup._current.actions.length, 15);
+        compare(popup._current.actions[0].id, "action1");
+        compare(popup._current.actions[0].label.length, 256);
+        compare(popup._current.actions[14].id, "action15");
     }
 
     // Finds a real Alerts row so its snooze signal exercises the UI connection.

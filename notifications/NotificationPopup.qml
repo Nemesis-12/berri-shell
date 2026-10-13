@@ -38,10 +38,10 @@ Item {
     property bool blocked: false
 
     readonly property int cardMaxWidth: 380
-    readonly property int cardPadding: 12
+    readonly property int _cardPadding: 12
 
     /** True from the moment a card grows until it has fully shrunk (the pill hides its content). */
-    readonly property bool active: open || queue.length > 0
+    readonly property bool active: _open || _queue.length > 0
 
     /** Card rectangle in this item's coordinates; zero size while nothing shows. */
     readonly property real cardX: card.visible ? card.x : 0
@@ -49,162 +49,166 @@ Item {
     readonly property real cardWidth: card.visible ? card.width : 0
     readonly property real cardHeight: card.visible ? card.height : 0
 
-    property var current: null
-    property bool open: false
-    property bool hovered: false
+    property var _current: null
+    property bool _open: false
+    property bool _hovered: false
     /** Items that wait, newest last. */
-    property var queue: []
-    readonly property int maxQueued: NotificationLogic.limits.queued
+    property var _queue: []
+    readonly property int _maxQueued: NotificationLogic.limits.queued
     /** Width of the pill when the card started to grow; the card shrinks back to it. */
-    property real startWidth: 124
-    property real progress: 0
+    property real _startWidth: 124
+    property real _progress: 0
 
-    readonly property bool critical: current !== null && current.urgency === "critical"
-    readonly property bool focusedHere: Hyprland.focusedMonitor !== null
+    readonly property bool _critical: _current !== null && _current.urgency === "critical"
+    readonly property bool _focusedHere: Hyprland.focusedMonitor !== null
         && Hyprland.focusedMonitor.name === screenName
 
     // Moves progress to `to` from where it is now (also when it is mid-way).
     SpringMotion {
         id: slide
         target: root
-        property: "progress"
+        property: "_progress"
         duration: 500
         // The shrink has ended: the next waiting item may grow.
-        onFinished: if (!root.open && root.current !== null) root.showNext()
+        onFinished: if (!root._open && root._current !== null) root._showNext()
     }
 
     /** Starts or redirects the existing card motion. */
-    function slideTo(to: real): void {
+    function _slideTo(to: real): void {
         slide.stop();
         slide.to = to;
         slide.start();
     }
 
     /** Takes a new notification from the store. */
-    function receive(item) {
-        if (root.dashboardOpen || (root.blocked && item.urgency !== "critical") || !root.focusedHere) return;
-        if (root.current === null) {
-            root.showNow(item);
-        } else if (root.open) {
-            root.queue = NotificationLogic.queuePopup(root.queue, root.current, root.maxQueued);
-            root.showNow(item);
+    function _receive(item) {
+        if (root.dashboardOpen || (root.blocked && item.urgency !== "critical") || !root._focusedHere) return;
+        if (root._current === null) {
+            root._showNow(item);
+        } else if (root._open) {
+            root._queue = NotificationLogic.queuePopup(root._queue, root._current, root._maxQueued);
+            root._showNow(item);
         } else {
-            root.queue = NotificationLogic.queuePopup(root.queue, item, root.maxQueued);
+            root._queue = NotificationLogic.queuePopup(root._queue, item, root._maxQueued);
         }
     }
 
     /** Replaces the same pop-up in place, including its actions. Never adds a queued copy. */
-    function update(item) {
-        if (root.current !== null && root.current.id === item.id) {
-            root.current = item;
-            root.armTimer();
+    function _update(item) {
+        if (root._current !== null && root._current.id === item.id) {
+            root._current = item;
+            root._armTimer();
         }
-        root.queue = root.queue.map(function (n) { return n.id === item.id ? item : n; });
+        root._queue = root._queue.map(function (n) { return n.id === item.id ? item : n; });
     }
 
     /** Shows one snapshot and keeps the captured rest width until the shrink ends. */
-    function showNow(item) {
-        if (!root.open) root.startWidth = root.anchorRect.width;
-        root.current = item;
-        root.clock = Date.now();
-        root.open = true;
-        root.slideTo(1);
-        root.armTimer();
+    function _showNow(item) {
+        if (!root._open) root._startWidth = root.anchorRect.width;
+        root._current = item;
+        root._clock = Date.now();
+        root._open = true;
+        root._slideTo(1);
+        root._armTimer();
     }
 
     /** Shrinks the card; the next waiting item grows after it has settled. */
-    function close() {
-        if (!root.open) return;
-        root.open = false;
-        root.hovered = false;
+    function _close() {
+        if (!root._open) return;
+        root._open = false;
+        root._hovered = false;
         dismissTimer.stop();
-        root.slideTo(0);
+        root._slideTo(0);
     }
 
     /** Drops everything at once (dashboard opens, fullscreen starts, card clicked). */
-    function hideNow() {
+    function _hideNow() {
         dismissTimer.stop();
-        root.queue = [];
-        root.open = false;
-        root.hovered = false;
+        root._queue = [];
+        root._open = false;
+        root._hovered = false;
         slide.stop();
-        root.progress = 0;
-        root.current = null;
+        root._progress = 0;
+        root._current = null;
     }
 
     /** Restarts the normal-item timeout when the card is open and not hovered. */
-    function armTimer() {
+    function _armTimer() {
         dismissTimer.stop();
-        if (root.open && !root.critical && !root.hovered) dismissTimer.start();
+        if (root._open && !root._critical && !root._hovered) dismissTimer.start();
     }
 
-    onHoveredChanged: armTimer()
+    /** Sets hover and restarts the timeout rule. */
+    function _setHovered(on: bool): void {
+        root._hovered = on;
+        root._armTimer();
+    }
 
     /** Forgets an item that left the store: shrinks its card and cuts it from the queue. */
-    function drop(id: string): void {
-        root.queue = root.queue.filter(function (n) { return n.id !== id; });
-        if (root.open && root.current !== null && root.current.id === id) root.close();
+    function _drop(id: string): void {
+        root._queue = root._queue.filter(function (n) { return n.id !== id; });
+        if (root._open && root._current !== null && root._current.id === id) root._close();
     }
 
     /** Clock for the age text; a timer refreshes it while a card shows. */
-    property real clock: Date.now()
+    property real _clock: Date.now()
 
     // Refreshes the age text while a card shows.
     Timer {
         interval: 30000
-        running: root.current !== null
+        running: root._current !== null
         repeat: true
-        onTriggered: root.clock = Date.now()
+        onTriggered: root._clock = Date.now()
     }
 
     /** Marks the current item read, hides the card, then asks the host to open Alerts. */
-    function openAlerts() {
-        if (root.current === null) return;
-        Notifications.markRead(root.current.id);
-        root.hideNow();
+    function _openAlerts() {
+        if (root._current === null) return;
+        Notifications.markRead(root._current.id);
+        root._hideNow();
         root.openAlertsRequested();
     }
 
     Connections {
         target: Notifications
-        function onArrived(item) { root.receive(item); }
-        function onUpdated(item) { root.update(item); }
-        function onRemoved(id) { root.drop(id); }
+        function onArrived(item) { root._receive(item); }
+        function onUpdated(item) { root._update(item); }
+        function onRemoved(id) { root._drop(id); }
     }
 
-    onDashboardOpenChanged: if (dashboardOpen) hideNow()
+    onDashboardOpenChanged: if (dashboardOpen) _hideNow()
 
-    onBlockedChanged: if (blocked && !critical) hideNow()
+    onBlockedChanged: if (blocked && !_critical) _hideNow()
 
     Timer {
         id: dismissTimer
         interval: 5000
-        onTriggered: root.close()
+        onTriggered: root._close()
     }
 
     /** After a shrink: shows the next waiting item, or lets go of the card. */
-    function showNext() {
-        while (root.queue.length > 0) {
-            var next = root.queue[root.queue.length - 1];
-            root.queue = root.queue.slice(0, -1);
+    function _showNext() {
+        while (root._queue.length > 0) {
+            var next = root._queue[root._queue.length - 1];
+            root._queue = root._queue.slice(0, -1);
             if (root.blocked && next.urgency !== "critical") continue;
-            root.showNow(next);
+            root._showNow(next);
             return;
         }
-        root.current = null;
+        root._current = null;
     }
 
     // Layout numbers of the card content.
-    readonly property int actionCount: current && current.actions ? Math.min(2, current.actions.length) : 0
-    readonly property real contentHeight: 24 + 8 + 18 + (bodyText.text !== "" ? 4 + bodyText.implicitHeight : 0)
-        + (actionCount > 0 ? 10 + 30 : 0)
-    readonly property real fullHeight: PixelGrid.snap(2 + 2 * cardPadding + contentHeight, dpr)
+    readonly property int _actionCount: _current && _current.actions ? Math.min(2, _current.actions.length) : 0
+    readonly property real _contentHeight: 24 + 8 + 18 + (bodyText.text !== "" ? 4 + bodyText.implicitHeight : 0)
+        + (_actionCount > 0 ? 10 + 30 : 0)
+    readonly property real _fullHeight: PixelGrid.snap(2 + 2 * _cardPadding + _contentHeight, dpr)
 
     PanelShadow {
         target: card
         visible: card.visible
         opacity: card.opacity
-        openProgress: root.progress
+        openProgress: root._progress
         restOffset: 4
         restBlur: 14
         openOffset: 24
@@ -216,43 +220,43 @@ Item {
         id: card
 
         // Fixed rounded center, so both edges land on whole device pixels.
-        readonly property real halfWidth: PixelGrid.snap((root.startWidth + (root.cardMaxWidth - root.startWidth) * root.progress) / 2, root.dpr)
+        readonly property real halfWidth: PixelGrid.snap((root._startWidth + (root.cardMaxWidth - root._startWidth) * root._progress) / 2, root.dpr)
         readonly property real centerX: root.anchorRect.x + root.anchorRect.width / 2
 
-        visible: root.current !== null
+        visible: root._current !== null
         width: halfWidth * 2
         x: centerX - halfWidth
         y: root.anchorRect.y
-        height: PixelGrid.snap(root.anchorRect.height + (root.fullHeight - root.anchorRect.height) * root.progress, root.dpr)
+        height: PixelGrid.snap(root.anchorRect.height + (root._fullHeight - root.anchorRect.height) * root._progress, root.dpr)
         radius: 8
         color: Theme.shell
         border.width: 1
-        border.color: Qt.alpha(Theme.border, root.progress)
+        border.color: Qt.alpha(Theme.border, root._progress)
         clip: true
         // Over the last part of the shrink the card fades, so the pill's clock beneath shows through.
-        opacity: Math.min(1, root.progress / 0.12)
+        opacity: Math.min(1, root._progress / 0.12)
 
         HoverHandler {
-            onHoveredChanged: root.hovered = hovered && root.open
+            onHoveredChanged: root._setHovered(hovered && root._open)
         }
 
         MouseArea {
             anchors.fill: parent
-            enabled: root.open
+            enabled: root._open
             cursorShape: Qt.PointingHandCursor
-            onClicked: root.openAlerts()
+            onClicked: root._openAlerts()
         }
 
         // Laid out from the card's fixed center; the card clips it while it grows.
         Item {
             id: content
-            x: card.width / 2 - root.cardMaxWidth / 2 + root.cardPadding
-            y: root.cardPadding
-            width: root.cardMaxWidth - 2 * root.cardPadding
-            height: root.contentHeight
-            opacity: Math.max(0, Math.min(1, (root.progress - 0.3) / 0.4))
+            x: card.width / 2 - root.cardMaxWidth / 2 + root._cardPadding
+            y: root._cardPadding
+            width: root.cardMaxWidth - 2 * root._cardPadding
+            height: root._contentHeight
+            opacity: Math.max(0, Math.min(1, (root._progress - 0.3) / 0.4))
 
-            readonly property color lineColor: root.critical ? Theme.accentLight : Theme.dim
+            readonly property color lineColor: root._critical ? Theme.accentLight : Theme.dim
 
             Item {
                 id: header
@@ -265,16 +269,16 @@ Item {
                     height: 22
                     anchors.verticalCenter: parent.verticalCenter
                     radius: 2
-                    color: root.critical ? Theme.accentFill : Theme.raised
+                    color: root._critical ? Theme.accentFill : Theme.raised
                     ColorFade on color  { duration: Theme.stateMs }
 
                     AlertsAppIcon {
                         anchors.centerIn: parent
                         size: 13
                         strokeWidth: 2
-                        appName: root.current ? root.current.appName : ""
-                        appIcon: root.current ? root.current.appIcon : ""
-                        color: root.critical ? Theme.accentLight : Theme.fg2
+                        appName: root._current ? root._current.appName : ""
+                        appIcon: root._current ? root._current.appIcon : ""
+                        color: root._critical ? Theme.accentLight : Theme.fg2
                         ColorFade on color  { duration: Theme.stateMs }
                     }
                 }
@@ -284,7 +288,7 @@ Item {
                     id: appName
                     x: tile.width + 8
                     anchors.verticalCenter: parent.verticalCenter
-                    text: root.current ? root.current.appName : ""
+                    text: root._current ? root._current.appName : ""
                     font.family: Theme.condensed
                     font.weight: Font.Medium
                     font.pixelSize: 12
@@ -297,7 +301,7 @@ Item {
                     anchors.left: appName.right
                     anchors.leftMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
-                    text: root.current ? Times.ageText(root.current.time, root.clock, "short") : ""
+                    text: root._current ? Times.ageText(root._current.time, root._clock, "short") : ""
                     font.family: Theme.mono
                     font.weight: Font.Medium
                     font.pixelSize: 10
@@ -309,8 +313,8 @@ Item {
                     anchors.left: timeText.right
                     anchors.leftMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: root.queue.length > 0
-                    text: "+" + root.queue.length
+                    visible: root._queue.length > 0
+                    text: "+" + root._queue.length
                     font.family: Theme.mono
                     font.weight: Font.Medium
                     font.pixelSize: 10
@@ -325,7 +329,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     radius: 2
                     color: closeArea.containsMouse ? Theme.border : "transparent"
-                    opacity: root.hovered ? 1 : 0
+                    opacity: root._hovered ? 1 : 0
                     Fade on opacity {}
                     ColorFade on color {}
 
@@ -341,12 +345,12 @@ Item {
                     MouseArea {
                         id: closeArea
                         anchors.fill: parent
-                        enabled: root.open && root.hovered
+                        enabled: root._open && root._hovered
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            Notifications.dismiss(root.current.id);
-                            root.close();
+                            Notifications.dismiss(root._current.id);
+                            root._close();
                         }
                     }
                 }
@@ -357,7 +361,7 @@ Item {
                 id: titleText
                 y: 32
                 width: parent.width
-                text: root.current ? root.current.summary : ""
+                text: root._current ? root._current.summary : ""
                 elide: Text.ElideRight
                 maximumLineCount: 1
                 font.family: Theme.condensed
@@ -372,7 +376,7 @@ Item {
                 id: bodyText
                 y: 32 + 18 + 4
                 width: parent.width
-                text: root.current ? root.current.body : ""
+                text: root._current ? root._current.body : ""
                 textFormat: Text.PlainText
                 wrapMode: Text.WordWrap
                 maximumLineCount: 2
@@ -387,10 +391,10 @@ Item {
             Row {
                 y: 32 + 18 + (bodyText.text !== "" ? 4 + bodyText.implicitHeight : 0) + 10
                 spacing: 6
-                visible: root.actionCount > 0
+                visible: root._actionCount > 0
 
                 Repeater {
-                    model: root.current && root.current.actions ? root.current.actions.slice(0, 2) : []
+                    model: root._current && root._current.actions ? root._current.actions.slice(0, 2) : []
 
                     Rectangle {
                         id: button
@@ -416,12 +420,12 @@ Item {
                         MouseArea {
                             id: buttonArea
                             anchors.fill: parent
-                            enabled: root.open
+                            enabled: root._open
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                Notifications.invokeAction(root.current.id, button.modelData.id);
-                                root.close();
+                                Notifications.invokeAction(root._current.id, button.modelData.id);
+                                root._close();
                             }
                         }
                     }
