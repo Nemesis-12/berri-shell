@@ -154,6 +154,13 @@ Singleton {
         return true;
     }
 
+    // Starts the fallback only when no earlier IP request is still running.
+    function lookupIp() {
+        if (ipLocationProc.running) return;
+        ipLocationProc.locationRevision = root.locationRevision;
+        ipLocationProc.running = true;
+    }
+
     /** Name lookup for coordinates: wttr.in gives the area, Open-Meteo geocoding adds the country code. */
     function lookupName() {
         if (nameProc.running) {
@@ -211,32 +218,31 @@ Singleton {
                 var lon = parseFloat(data.longitude);
                 var name = data.name || data.city || data.location || "";
                 if (!root.useCoords(lat, lon, typeof name === "string" ? name : ""))
-                    ipLocationProc.running = true;
+                    root.lookupIp();
             } catch (e) {
-                ipLocationProc.running = true;
+                root.lookupIp();
             }
         }
-        onLoadFailed: ipLocationProc.running = true
+        onLoadFailed: root.lookupIp()
     }
 
     /** IP-based fallback location, same source Omarchy's own weather panel uses. */
     Process {
         id: ipLocationProc
+        property int locationRevision: -1
         command: ["curl", "-fsS", "--max-time", "10", "https://wttr.in/?format=j1"]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                try {
-                    var data = JSON.parse(text);
-                    var area = data.nearest_area[0];
-                    if (!root.useCoords(parseFloat(area.latitude), parseFloat(area.longitude)))
-                        throw new Error("No coordinates");
-                } catch (e) {
-                    // No location available; leave the placeholder showing.
-                    root.error = "No location";
-                    root.logFailure("no location");
-                    retryTimer.restart();
-                }
+        stdout: StdioCollector { waitForEnd: true }
+        onExited: (code) => {
+            if (locationRevision !== root.locationRevision || !root.locationPending) return;
+            try {
+                if (code !== 0) throw new Error("Offline");
+                var area = JSON.parse(stdout.text).nearest_area[0];
+                if (!root.useCoords(parseFloat(area.latitude), parseFloat(area.longitude)))
+                    throw new Error("No coordinates");
+            } catch (e) {
+                root.error = code !== 0 ? "Offline" : "No location";
+                root.logFailure(code !== 0 ? "offline" : "no location");
+                retryTimer.restart();
             }
         }
     }
