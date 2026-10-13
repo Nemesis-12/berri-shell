@@ -37,7 +37,13 @@ function runWeather(scenario) {
       .replaceAll('Clock.minute.getTime()', 'testSource.now')
       .replace('FolderRoots.weatherSettings', '"/synthetic-home/.local/state/omarchy/settings/weather.json"');
     fs.writeFileSync(path.join(folder, "WeatherUnderTest.qml"), source);
-    const config = { scenario, forecast, timeScale: Number(process.env.WEATHER_TEST_TIME_SCALE || 0.01) };
+    const response = structuredClone(forecast);
+    if (["clock", "partial", "missing-primary", "missing-hour"].includes(scenario)) {
+      response.hourly.time.push("2026-09-30T07:00");
+      for (const field of Object.keys(response.hourly))
+        if (field !== "time") response.hourly[field].push(response.hourly[field][0]);
+    }
+    const config = { scenario, forecast: response, timeScale: Number(process.env.WEATHER_TEST_TIME_SCALE || 0.01) };
     const runner = fs.readFileSync(path.join(fixture, scenario.endsWith("-race") || scenario.endsWith("-failure") ? "weather-requests.qml" : "weather-recovery.qml"), "utf8")
       .replace("TEST_CONFIG", JSON.stringify(config));
     const entry = path.join(folder, "test.qml");
@@ -101,4 +107,20 @@ test("weather logs a failed name request without response text or coordinates", 
 
 test("weather logs malformed geocoding while keeping the fallback place name", () => {
   runWeather("geocode-failure");
+});
+
+test("retained forecast hours follow the minute clock without a network request", () => {
+  runWeather("clock");
+});
+
+test("a partial forecast keeps missing readings in the service properties", () => {
+  runWeather("partial");
+});
+
+test("a missing primary reading preserves the last good service model and timestamp", () => {
+  runWeather("missing-primary");
+});
+
+test("a missing current hour preserves the last good service model and timestamp", () => {
+  runWeather("missing-hour");
 });
