@@ -4,11 +4,14 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
 REPO = Path(__file__).resolve().parent.parent
 QS = shutil.which("qs")
+if QS is None:
+    print("Calendar write tests skipped: Quickshell is required for isolated native file tests", file=sys.stderr)
 ORIGINAL = ("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Test//EN\r\n"
             "BEGIN:VEVENT\r\nUID:kept\r\nDTSTART;VALUE=DATE:20261005\r\n"
             "SUMMARY:Kept café\r\nX-BERRI-COLOR:red\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n")
