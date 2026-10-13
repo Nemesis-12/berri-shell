@@ -184,6 +184,24 @@ Item {
             tryCompare(front, "status", Image.Ready);
         }
 
+        // The fallback shows with no art or a broken link, never in the gap while new art loads.
+        function test_fallback_has_no_blank_moment() {
+            compare(art.showFallback, true);
+            art.artUrl = Qt.resolvedUrl("art-a.png");
+            compare(art.showFallback, true);
+            const front = find(art, "front");
+            tryCompare(front, "status", Image.Ready);
+            compare(art.showFallback, false);
+            art.artUrl = Qt.resolvedUrl("art-b.png");
+            compare(art.showFallback, false);
+            tryCompare(front, "status", Image.Ready);
+            compare(art.showFallback, false);
+            art.artUrl = Qt.resolvedUrl("missing.png");
+            tryCompare(art, "showFallback", true);
+            art.artUrl = "";
+            compare(art.showFallback, true);
+        }
+
         // A broken art link clears the old image and reports the failure.
         function test_failed_art_clears_the_old_image() {
             art.artUrl = Qt.resolvedUrl("art-a.png");

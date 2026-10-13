@@ -65,7 +65,7 @@ Item {
             size: 28
             strokeWidth: 1.5
             color: Theme.dim
-            opacity: root.artUrl === "" || albumArt.failed ? 1 : 0
+            opacity: albumArt.showFallback ? 1 : 0
 
             Fade on opacity { duration: Theme.stateMs }
         }

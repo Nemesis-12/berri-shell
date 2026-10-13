@@ -3,8 +3,8 @@ import "../logic/ArtUrl.js" as ArtUrl
 import qs.services
 
 /**
- * Shows album art and releases decoded images when hidden. `failed` is true
- * when the link cannot be loaded; the owner then shows its fallback icon.
+ * Shows album art and releases decoded images when hidden. The owner shows
+ * its fallback icon while `showFallback` is true.
  */
 Item {
     id: root
@@ -15,6 +15,14 @@ Item {
 
     /** True when a link is set but its image cannot be loaded. */
     readonly property bool failed: front.status === Image.Error
+
+    /**
+     * True when the owner should show its fallback icon: no art, a broken
+     * link, or new art loading with no earlier image to keep. While new art
+     * loads, the previous image (or the fallback) stays, so nothing blanks.
+     */
+    readonly property bool showFallback: root.safeUrl === "" || root.failed
+        || (front.status !== Image.Ready && back.source == "")
 
     function loadArt() {
         if (!root.visible || !root.safeUrl) {
