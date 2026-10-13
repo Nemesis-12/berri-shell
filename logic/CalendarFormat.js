@@ -18,7 +18,7 @@ var unescapeText = Text.unescapeText;
 
 /** Checks file structure before the tolerant reader can turn broken text into an empty calendar. */
 function isCompleteCalendar(text) {
-    var lines = Text.unfold((text || "").replace(/^\uFEFF/, ""));
+    var lines = Text.unfold((text || "").replace(/^\uFEFF/, "").replace(/[ \t\r\n]+$/, ""));
     var stack = [];
     var calendars = 0;
     for (var i = 0; i < lines.length; i++) {
@@ -36,7 +36,7 @@ function isCompleteCalendar(text) {
             if (!stack.length || stack.pop() !== upper.slice(4)) return false;
         } else {
             var property = Text.parseLine(line);
-            if (!stack.length || line.indexOf(":") < 0 || !/^[A-Z0-9-]+$/.test(property.name)) return false;
+            if (!stack.length || line.indexOf(":") < 0 || !/^[A-Z0-9_-]+(?:\.[A-Z0-9_-]+)?$/.test(property.name)) return false;
         }
     }
     return calendars === 1 && stack.length === 0;
