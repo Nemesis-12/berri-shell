@@ -168,3 +168,8 @@ Scope {
 ''')
         self.assertEqual(work.with_name("work.ics.bak").read_bytes(), ORIGINAL.encode())
         self.assertNotIn(b"X-BERRI-COLOR:red", work.read_bytes())
+
+
+# Direct runs show each test result, including the reason when Quickshell is absent.
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
