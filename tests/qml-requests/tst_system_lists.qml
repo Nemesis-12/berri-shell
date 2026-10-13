@@ -252,6 +252,21 @@ Item {
             compare(speaker.connectCalls, 0);
         }
 
+        function test_staggered_failed_pairings_each_keep_their_own_deadline() {
+            const first = createTemporaryObject(deviceType, host, { address: "A" });
+            const second = createTemporaryObject(deviceType, host, { address: "B" });
+            BluetoothPairing.pair(first);
+            BluetoothPairing.pair(second);
+            first.pairing = false;
+            wait(BluetoothPairing.graceMs / 2);
+            second.pairing = false;
+            wait(BluetoothPairing.graceMs * 0.65);
+            first.paired = true;
+            compare([first.trusted, first.connectCalls], [false, 0]);
+            second.paired = true;
+            compare([second.trusted, second.connectCalls], [true, 1]);
+        }
+
         function test_failed_pair_call_is_dropped() {
             const speaker = createTemporaryObject(deviceType, host, { address: "A", pairThrows: true });
             BluetoothPairing.pair(speaker);

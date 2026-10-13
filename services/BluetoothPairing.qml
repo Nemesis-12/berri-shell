@@ -46,11 +46,27 @@ Singleton {
     function pairingEnded(device) {
         root.ending = root.ending.filter(function (item) { return item.device !== device; })
             .concat([{ device: device, at: Date.now() + root.graceMs }]);
-        dropTimer.interval = root.graceMs;
+        root.scheduleDrop();
+    }
+
+    // Sets the drop timer for the earliest deadline in `ending`.
+    function scheduleDrop() {
+        if (root.ending.length === 0) {
+            dropTimer.stop();
+            return;
+        }
+        const next = Math.min.apply(null, root.ending.map(function (item) { return item.at; }));
+        dropTimer.interval = Math.max(1, next - Date.now());
         dropTimer.restart();
     }
 
+    // Trusts and connects a paired device, unless its grace period is over.
     function finish(device) {
+        const waiting = root.ending.find(function (item) { return item.device === device; });
+        if (waiting && waiting.at <= Date.now()) {
+            root.forget(device);
+            return;
+        }
         root.forget(device);
         device.trusted = true;
         device.connect();
@@ -63,10 +79,7 @@ Singleton {
             const now = Date.now() + 20;
             const late = root.ending.filter(function (item) { return item.at <= now; });
             late.forEach(function (item) { root.forget(item.device); });
-            if (root.ending.length === 0) return;
-            const next = Math.min.apply(null, root.ending.map(function (item) { return item.at; }));
-            dropTimer.interval = Math.max(1, next - Date.now());
-            dropTimer.restart();
+            root.scheduleDrop();
         }
     }
 
