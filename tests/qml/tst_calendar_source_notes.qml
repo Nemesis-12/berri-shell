@@ -47,7 +47,7 @@ TestCase {
     }
 
     function test_notes_use_normal_text_and_real_failures_keep_their_error() {
-        var view = createTemporaryObject(sourceView, tests);
+        var view = createTemporaryObject(sourceView, tests, { now: 121000 });
         verify(view !== null);
         wait(Theme.stateMs + Theme.listMs + 50);
         var normal = findItem(view, item => item instanceof CalendarSourceRow && item.calId === "normal");
@@ -63,8 +63,10 @@ TestCase {
         var failedText = findItem(failed, item => item instanceof MonoText && item.text === "DOWNLOAD FAILED");
         compare(failedText.color, view.redColor);
         compare(note.failure, "");
-        compare(note.sourceLine, "RDATE and EXRULE are not supported");
-        var noteText = findItem(note, item => item instanceof MonoText && item.text === "RDATE AND EXRULE ARE NOT SUPPORTED");
+        compare(note.sourceLine, "example.test · 2m ago · RDATE and EXRULE are not supported");
+        var noteText = findItem(note, item => item instanceof MonoText && item.text === note.sourceLine.toUpperCase());
         compare(noteText.color, Theme.dim);
+        compare(noteText.truncated, false);
+        verify(noteText.height <= note.height);
     }
 }
