@@ -136,7 +136,7 @@ Singleton {
         if (fields.calendarId && (!target || target.kind === "link")) return false;
         if (target) path = dir + "/" + target.file;
         var calendar = target || _calendars[Identity.LOCAL_ID];
-        if (!canWriteCalendar(calendar.id)) return false;
+        if (!calendar || !canWriteCalendar(calendar.id)) return false;
         var doc = calendar.document || Format.emptyCalendar();
         var item = Items.makeItem(Catalog.cleanDates(fields));
         doc.items.push(item);
@@ -300,7 +300,12 @@ Singleton {
      */
     function canWriteCalendar(id: string): bool {
         var calendar = _calendars[id];
-        if (!calendar) return false;
+        if (!calendar || calendar.kind === "link") return false;
+        if (!calendar.loaded) {
+            root.lastError = root.readErrorText(calendar.name);
+            root.saveFailed(root.lastError);
+            return false;
+        }
         if (!calendar.readFailed) return true;
         var text = calendarFiles.readNow(calendar.path);
         if (text !== null) {
