@@ -112,3 +112,14 @@ test("a non-ASCII BYDAY reports its error, keeps source text and reads the other
       [["good-before", "daily"], ["bad-day", "none"], ["good-after", "weekly"]]);
   }
 });
+
+test("snoozing a seconds alarm saves a valid minute clock at or after the requested time", () => {
+  const document = calendar("DTSTART:20261008T090000", "X-BERRI-KIND:reminder",
+    "BEGIN:VALARM", "ACTION:DISPLAY", "TRIGGER:-PT30S", "END:VALARM");
+  const reminder = document.items[0];
+  const next = Items.snoozeReminder(reminder.time, reminder.date, reminder.alarmMinutes, 15, "2026-10-08", "08:00");
+  assert.equal(next.time, "09:15");
+  document.items[0] = Items.applyChanges(reminder, next);
+  assert.equal(saved(document).items[0].time, "09:15");
+  assert.equal(saved(document).items[0].alarmMinutes, 0);
+});
