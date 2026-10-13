@@ -45,6 +45,18 @@ TestCase {
     // Let the file readers run for the calendar list.
     function startReading() { Calendar._syncPaths(); }
 
+    // An add must wait for the first read, then keep the items from that read.
+    function test_add_before_the_first_read_keeps_all_old_items() {
+        const original = savedText();
+        TestIo.texts[berriPath] = original;
+        compare(Calendar.add({ title: "New", date: "2026-10-06" }), false);
+        compare(TestIo.texts[berriPath], original);
+        compare(TestIo.writes.length, 0);
+        startReading();
+        compare(Calendar.add({ title: "New", date: "2026-10-06" }), true);
+        compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title).sort(), ["Kept", "New"]);
+    }
+
     function test_a_denied_first_read_refuses_edits_and_keeps_the_file() {
         const original = savedText();
         TestIo.texts[berriPath] = original;
