@@ -329,7 +329,6 @@ Singleton {
 
     // A file could not be read. Keep any cached document for display, but refuse edits until a read succeeds.
     function _readFailed(calendar: var): void {
-        calendar.mayCreate = false;
         calendar.readFailed = true;
         calendar.error = root.readErrorText(calendar.name);
         calendar.loaded = true;
@@ -338,18 +337,20 @@ Singleton {
     }
 
     /**
-     * FileNotFound is not a successful read for an existing calendar. Only a
-     * new local calendar, absent from saved state and never read, may start empty.
-     * Its null text means there is no previous file to back up on its first save.
+     * A missing local file starts empty, including after saved state or deletion.
+     * A missing imported file is a read error. Null text means there is no file
+     * to back up on the next local save.
      */
     function acceptCalendarMissing(path: string): void {
         var calendar = _calendars[_idOfPath(path)];
         if (!calendar) return;
-        if (!calendar.mayCreate || calendar.loaded) { _readFailed(calendar); return; }
+        if (calendar.kind !== "local") { _readFailed(calendar); return; }
         calendar.document = Format.emptyCalendar();
         calendar.text = null;
+        calendar.signature = "";
+        calendar.error = "";
+        calendar.readFailed = false;
         calendar.loaded = true;
-        calendar.mayCreate = false;
         _rebuild();
         _checkReady();
     }
@@ -376,7 +377,6 @@ Singleton {
         // empty VCALENDAR is valid. Unknown fields remain the reader's concern.
         if (calendar.kind !== "link" && (failed || !Format.isCompleteCalendar(text))) { _readFailed(calendar); return; }
         var wasFailed = calendar.readFailed;
-        calendar.mayCreate = false;
         if (!failed) { calendar.readFailed = false; if (calendar.kind !== "link") calendar.error = ""; }
         var signature = text.length + ":" + Items.shortHash(text);
         if (failed && calendar.kind === "link") { _recordsFailed(calendar, calendar.convertError || root.parserError || root.recordsErrorText); return; }

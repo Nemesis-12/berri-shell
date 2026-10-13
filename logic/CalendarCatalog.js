@@ -28,8 +28,7 @@ function cleanDates(fields) {
 function newMeta(dir, id, kind, name, file, color, usedColors) {
     return { id: id, kind: kind, name: name, color: kind === "local" ? "accent" : Queries.newCalendarColor(color, usedColors),
         hidden: false, url: "", file: file, updatedAt: 0, colorOverrides: ({}),
-        path: dir + "/" + file, document: null, records: null, text: "", signature: "", error: "", convertError: "", refreshing: false, loaded: false, readFailed: false,
-        mayCreate: kind === "local" };
+        path: dir + "/" + file, document: null, records: null, text: "", signature: "", error: "", convertError: "", refreshing: false, loaded: false, readFailed: false };
 }
 
 /** The calendar of one safe saved entry. */
@@ -52,7 +51,7 @@ function restoreCalendars(dir, values) {
     for (var i = 0; i < saved.length; i++) {
         var s = saved[i];
         if (!s || typeof s.id !== "string" || typeof s.file !== "string" || meta[s.id]) continue;
-        if (s.id === Identity.LOCAL_ID) { local.color = Items.cleanColor(s.color) || "accent"; local.hidden = !!s.hidden; local.mayCreate = false; continue; }
+        if (s.id === Identity.LOCAL_ID) { local.color = Items.cleanColor(s.color) || "accent"; local.hidden = !!s.hidden; continue; }
         // Saved names become file paths: skip any entry that could reach outside the calendar folder.
         if (!SavedCalendars.isSafeEntry(s)) continue;
         meta[s.id] = savedMeta(dir, s);

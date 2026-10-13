@@ -162,7 +162,7 @@ Scope {
                 root.read(filePath, content === null ? "" : content, content === null || content === "");
             }
             onLoaded: root.read(filePath, text(), false)
-            // Calendar decides whether a missing local file is new or previously saved.
+            // Calendar starts a missing local file empty and refuses missing imported files.
             onLoadFailed: error => {
                 if (error === FileViewError.FileNotFound) root.missing(filePath);
                 else root.read(filePath, "", true);
