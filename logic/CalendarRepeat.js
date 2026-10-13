@@ -100,12 +100,11 @@ function weeklyStep(c, k) {
     return { base: base, list: c.byDay.map(function (o) { return base + o; }) };
 }
 
-function monthlyStep(item, c, k) {
-    var idx = c.monthIndex + k * c.iv;
-    var y = Math.floor(idx / 12), mo = idx % 12 + 1;
+/** Selects month days before positions and series bounds are applied. */
+function monthStarts(item, c, y, mo) {
     var base = dayOfUtc(y, mo, 1);
     var last = daysInMonth(y, mo);
-    if (c.months.length && c.months.indexOf(mo) < 0) return { base: base, list: [] };
+    if (c.months.length && c.months.indexOf(mo) < 0) return [];
     var ordinal = item.monthWeekday ? weekdayInMonth(y, mo, item.monthWeekday.nth, item.monthWeekday.day) : null;
     var days = [];
     for (var d = 1; d <= last; d++) {
@@ -116,16 +115,33 @@ function monthlyStep(item, c, k) {
         if (!c.monthDays.length && !item.monthWeekday && !item.byDay.length && d !== c.sd) continue;
         days.push(n);
     }
-    // Select positions in the complete month before DTSTART, COUNT and query bounds limit it.
-    if (c.positions.length) days = days.filter(function (n, i) {
-        return c.positions.indexOf(i + 1) >= 0 || c.positions.indexOf(i - days.length) >= 0;
-    });
-    return { base: base, list: days };
+    return days;
 }
 
-function yearlyStep(c, k) {
+/** Selects positions in a complete month or year before series and query bounds. */
+function selectedPositions(days, positions) {
+    if (positions.length) days = days.filter(function (n, i) {
+        return positions.indexOf(i + 1) >= 0 || positions.indexOf(i - days.length) >= 0;
+    });
+    return days;
+}
+
+/** Selects one complete month of a monthly series. */
+function monthlyStep(item, c, k) {
+    var idx = c.monthIndex + k * c.iv;
+    var y = Math.floor(idx / 12), mo = idx % 12 + 1;
+    return { base: dayOfUtc(y, mo, 1), list: selectedPositions(monthStarts(item, c, y, mo), c.positions) };
+}
+
+/** Selects one complete year of a yearly series. */
+function yearlyStep(item, c, k) {
     var yr = c.sy + k * c.iv;
-    return { base: dayOfUtc(yr, 1, 1), list: c.sd <= daysInMonth(yr, c.sm) ? [dayOfUtc(yr, c.sm, c.sd)] : [] };
+    var days = [];
+    for (var mo = 1; mo <= 12; mo++) {
+        if (!c.months.length && !c.monthDays.length && !item.byDay.length && mo !== c.sm) continue;
+        days = days.concat(monthStarts(item, c, yr, mo));
+    }
+    return { base: dayOfUtc(yr, 1, 1), list: selectedPositions(days, c.positions) };
 }
 
 /** The base day and the start days of loop step k. Stops are decided by the caller from `base`. */
@@ -133,7 +149,7 @@ function stepStarts(item, c, k) {
     if (item.repeat === "daily") return { base: c.s + k * c.iv, list: [c.s + k * c.iv] };
     if (item.repeat === "weekly") return weeklyStep(c, k);
     if (item.repeat === "monthly") return monthlyStep(item, c, k);
-    return yearlyStep(c, k);
+    return yearlyStep(item, c, k);
 }
 
 /** Start days (as day numbers) of a repeating item that fall in [fromN, toN]. Stops early when `budget` has no steps left. */
