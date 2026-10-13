@@ -25,6 +25,23 @@ Item {
 
     // Delays a request until the scenario chooses to complete it.
     function respond(process) {
+        if (config.scenario === "name-race") {
+            var url = process.command[process.command.length - 1];
+            if (url.indexOf("api.open-meteo.com/v1/forecast") >= 0) {
+                finish(process, forecast(18));
+                if (stage === 0) {
+                    stage = 1;
+                    service.useCoords(38.7, -9.1);
+                }
+                return;
+            }
+            service.useCoords(40.4, -3.7, "Madrid, ES");
+            finish(process, { nearest_area: [{ areaName: [{ value: "Lisbon" }], country: [{ value: "Portugal" }] }] });
+            if (!check(service.locationName === "Madrid, ES", "An old name reply must not replace the configured new name")) return;
+            console.log("Weather checks passed for name race");
+            Qt.exit(0);
+            return;
+        }
         requests.push(process);
         advance();
     }

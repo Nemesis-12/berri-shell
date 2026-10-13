@@ -83,3 +83,7 @@ test("weather keeps the last good result during a failed refresh and then recove
 test("weather discards an in-flight old-place forecast and immediately requests the new place", () => {
   runWeather("forecast-race");
 });
+
+test("weather ignores a late place-name reply after configured coordinates change", () => {
+  runWeather("name-race");
+});
