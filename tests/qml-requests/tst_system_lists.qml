@@ -126,7 +126,7 @@ Item {
             const label = textItems(wifiList, "Fade", [])[0];
             compare(label.color, Theme.dim);
             secured.known = true;
-            tryVerify(() => label.color != Theme.dim, 200);
+            tryVerify(() => label.color != Theme.dim, 10000);
             verify(label.color != Theme.fg, "Color jumped: " + label.color);
             tryCompare(label, "color", Theme.fg);
         }

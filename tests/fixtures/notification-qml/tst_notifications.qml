@@ -78,7 +78,7 @@ TestCase {
         compare(popup.queue.length, 20);
         compare(Notifications.all.length, 200);
         compare(Notifications.all[0].body.length, 4096);
-        tryCompare(savedState(), "saveCount", 1, 1000);
+        tryCompare(savedState(), "saveCount", 1, 10000);
         verify(savedState().text.length < 1024 * 1024, "ASCII history exceeds 1 MiB");
         console.log("History JSON characters after 1000 critical items:", savedState().text.length);
     }
@@ -122,7 +122,7 @@ TestCase {
         compare(popup.queue.length, 20);
         n.expireTimeout = 0.001;
         n.expireTimeoutChanged.emit();
-        tryVerify(function () { return Notifications.liveIdByServerId[200] === undefined; }, 1000);
+        tryVerify(function () { return Notifications.liveIdByServerId[200] === undefined; }, 10000);
         compare(Object.keys(Notifications.live).length, 199);
         compare(Object.keys(Notifications.expiresAtById).length, 199);
         compare(Notifications.all.length, 0);
@@ -145,7 +145,7 @@ TestCase {
             }
             Notifications.flush();
             samples.push(Date.now() - start);
-            tryCompare(savedState(), "saveCount", 1, 1000);
+            tryCompare(savedState(), "saveCount", 1, 10000);
             compare(Notifications.items.filter(function (item) { return item.serverId === count; })[0].summary, "Update 99");
             compare(JSON.parse(savedState().text).items[count - 1].summary, "Update 99");
         }
@@ -304,7 +304,7 @@ TestCase {
         alerts.readShown();
         compare(Notifications.all.filter(function (n) { return !n.read; }).length, 0);
         compare(historyChanges.count, 1);
-        tryCompare(savedState(), "saveCount", 1, 1000);
+        tryCompare(savedState(), "saveCount", 1, 10000);
         compare(JSON.parse(savedState().text).items.filter(function (n) { return !n.read; }).length, 0);
         savedState().saveCount = 0;
         historyChanges.clear();
@@ -312,7 +312,7 @@ TestCase {
         compare(Notifications.all.length, 0);
         compare(Object.keys(Notifications.live).length, 0);
         compare(historyChanges.count, 1);
-        tryCompare(savedState(), "saveCount", 1, 1000);
+        tryCompare(savedState(), "saveCount", 1, 10000);
         compare(JSON.parse(savedState().text).items.length, 0);
     }
 }

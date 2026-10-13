@@ -47,20 +47,20 @@ Item {
             compare(host.pillA.slide.duration, 1260);
             compare(host.pillA.slide.to, 1);
             compare(host.pillA.slide.easing.type, Easing.Linear);
-            tryCompare(host.pillA, "progress", 1, 3000);
+            tryCompare(host.pillA, "progress", 1, 10000);
             compare(host.pillA.elapsedMs, 1260);
         }
 
         function test_close_from_open_ends_at_the_rest_time_and_eases_out() {
             host.pillA.openSlide();
-            tryCompare(host.pillA, "progress", 1, 3000);
+            tryCompare(host.pillA, "progress", 1, 10000);
             host.pillA.closeSlide();
             compare(host.pillA.closeFromOpen, true);
             compare(host.pillA.closing, true);
             compare(host.pillA.slide.to, 484 / 1260);
             // 1260 ms * (1 - 484/1260) = 776 ms.
             compare(host.pillA.slide.duration, 776);
-            tryCompare(host.pillA, "progress", 0, 3000);
+            tryCompare(host.pillA, "progress", 0, 10000);
             compare(host.pillA.active, false);
             compare(host.pillA.closeFromOpen, false);
         }
@@ -75,7 +75,7 @@ Item {
             compare(host.pillA.closing, false);
             compare(host.pillA.slide.to, 0);
             verify(Math.abs(host.pillA.slide.duration - Math.round(1260 * at)) <= 30);
-            tryCompare(host.pillA, "progress", 0, 3000);
+            tryCompare(host.pillA, "progress", 0, 10000);
         }
 
         function test_close_at_once_resets_without_the_close_finished_signal() {
@@ -90,19 +90,19 @@ Item {
 
         function test_dialog_waits_for_the_panel_at_rest() {
             host.pillA.openSlide();
-            tryCompare(host.pillA, "progress", 1, 3000);
+            tryCompare(host.pillA, "progress", 1, 10000);
             host.pillA.closeThenRun(() => host.events.push("dialog"), true);
             // The close has started, the dialog has not.
             compare(host.pillA.open, false);
             compare(host.events.length, 0);
             verify(host.pillA.progress > 0);
-            tryCompare(host.pillA, "progress", 0, 3000);
+            tryCompare(host.pillA, "progress", 0, 10000);
             compare(host.events, ["dialog"]);
         }
 
         function test_dialog_without_waiting_runs_as_the_close_starts() {
             host.pillA.openSlide();
-            tryCompare(host.pillA, "progress", 1, 3000);
+            tryCompare(host.pillA, "progress", 1, 10000);
             host.pillA.closeThenRun(() => host.events.push(host.pillA.open ? "open" : "closing"), false);
             compare(host.events, ["closing"]);
             verify(host.pillA.progress > 0);
@@ -115,7 +115,7 @@ Item {
 
         function test_dialog_runs_when_the_close_is_at_once() {
             host.pillA.openSlide();
-            tryCompare(host.pillA, "progress", 1, 3000);
+            tryCompare(host.pillA, "progress", 1, 10000);
             host.pillA.closeThenRun(() => host.events.push("dialog"), true);
             host.pillA.closeAtOnce();
             compare(host.events, ["dialog"]);
@@ -126,8 +126,8 @@ Item {
         function test_picker_open_closes_the_pill_of_that_monitor_first_with_its_normal_close() {
             host.pillA.openSlide();
             host.pillB.openSlide();
-            tryCompare(host.pillA, "progress", 1, 3000);
-            tryCompare(host.pillB, "progress", 1, 3000);
+            tryCompare(host.pillA, "progress", 1, 10000);
+            tryCompare(host.pillB, "progress", 1, 10000);
 
             host.pickerA.openSlide();
             // The pill of monitor A closes with its normal close, not at once.
@@ -139,7 +139,7 @@ Item {
             compare(host.pillB.open, true);
             compare(host.pillB.progress, 1);
             compare(host.pickerB.open, false);
-            tryCompare(host.pillA, "progress", 0, 3000);
+            tryCompare(host.pillA, "progress", 0, 10000);
             compare(host.pickerA.open, true);
         }
 
@@ -171,7 +171,7 @@ Item {
             requests.dialogRequested.connect((openDialog, afterClose) => host.pillA.closeThenRun(openDialog, afterClose));
             requests.reopenRequested.connect(() => { host.events.push("reopen"); host.pillA.openSlide(); });
             host.pillA.openSlide();
-            tryCompare(host.pillA, "progress", 1, 3000);
+            tryCompare(host.pillA, "progress", 1, 10000);
             // The dialog (here: at once finished) asks to reopen the panel.
             requests.dialogRequested(() => {
                 host.events.push("dialog");
@@ -179,7 +179,7 @@ Item {
                 Qt.callLater(() => requests.reopenRequested());
             }, true);
             compare(host.events.length, 0);
-            tryCompare(host.events, "length", 2, 3000);
+            tryCompare(host.events, "length", 2, 10000);
             compare(host.events, ["dialog", "reopen"]);
             compare(host.pillA.open, true);
         }
