@@ -16,7 +16,7 @@ import qs.services
  * open or a real fullscreen window (mode 2) covers the monitor. A maximized
  * window (mode 1) does not block; critical items always show. The newest item shows;
  * older ones wait (count "+N") and show one after the other. Normal items
- * close after 5 s (hover pauses unless the sender timeout ends first), critical
+ * close after 5 s (hover pauses the time and keeps what is left; the sender timeout can still end it), critical
  * ones stay until dismissed.
  * A click on the card opens the Alerts tab. Place this item above the Pill
  * in the same window. Pass its anchor in this item's coordinates and add
@@ -52,6 +52,11 @@ Item {
     property var _current: null
     property bool _open: false
     property bool _hovered: false
+    /** How long a normal card stays open. */
+    property int _showMs: 5000
+    /** Time left on the timeout while hover pauses it. */
+    property int _remainingMs: 5000
+    property real _timeoutStartedAt: 0
     /** Items that wait, newest last. */
     property var _queue: []
     readonly property int _maxQueued: NotificationLogic.limits.queued
@@ -99,7 +104,7 @@ Item {
     function _update(item) {
         if (root._current !== null && root._current.id === item.id) {
             root._current = item;
-            root._armTimer();
+            root._restartTimeout();
         }
         root._queue = root._queue.map(function (n) { return n.id === item.id ? item : n; });
     }
@@ -111,7 +116,7 @@ Item {
         root._clock = Date.now();
         root._open = true;
         root._slideTo(1);
-        root._armTimer();
+        root._restartTimeout();
     }
 
     /** Shrinks the card; the next waiting item grows after it has settled. */
@@ -134,16 +139,29 @@ Item {
         root._current = null;
     }
 
-    /** Restarts the normal-item timeout when the card is open and not hovered. */
-    function _armTimer() {
-        dismissTimer.stop();
-        if (root._open && !root._critical && !root._hovered) dismissTimer.start();
+    /** Starts the full normal-item timeout again (a new or replaced card). */
+    function _restartTimeout() {
+        root._remainingMs = root._showMs;
+        root._resumeTimeout();
     }
 
-    /** Sets hover and restarts the timeout rule. */
+    /** Runs the timeout for the time that is left, unless the card is critical, closed or hovered. */
+    function _resumeTimeout() {
+        dismissTimer.stop();
+        if (!root._open || root._critical || root._hovered) return;
+        dismissTimer.interval = Math.max(1, root._remainingMs);
+        root._timeoutStartedAt = Date.now();
+        dismissTimer.start();
+    }
+
+    /** Sets hover. Hover pauses the timeout; leaving continues with the time that was left. */
     function _setHovered(on: bool): void {
+        if (on && dismissTimer.running) {
+            root._remainingMs = Math.max(1, root._remainingMs - (Date.now() - root._timeoutStartedAt));
+            dismissTimer.stop();
+        }
         root._hovered = on;
-        root._armTimer();
+        if (!on) root._resumeTimeout();
     }
 
     /** Forgets an item that left the store: shrinks its card and cuts it from the queue. */
@@ -207,7 +225,6 @@ Item {
 
     Timer {
         id: dismissTimer
-        interval: 5000
         onTriggered: root._close()
     }
 

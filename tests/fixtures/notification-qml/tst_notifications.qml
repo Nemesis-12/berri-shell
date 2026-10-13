@@ -292,6 +292,33 @@ TestCase {
         compare(popup._queue.length, 0);
     }
 
+    // Finds the first Text with this string in the pop-up.
+    function findText(item, text) {
+        if (item.text === text) return item;
+        for (var i = 0; i < item.children.length; i++) {
+            var found = findText(item.children[i], text);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    // A click on an action button runs that sender action, marks the item read and closes the card.
+    function test_actionButtonRunsSenderActionAndClosesCard() {
+        var calls = [];
+        var n = notification({ id: 1, resident: true, actions: [
+            action("open", "Open", function () { calls.push("open"); }),
+            action("later", "Later", function () { calls.push("later"); })] });
+        Notifications.receive(n);
+        tryCompare(popup, "_progress", 1, 1000);
+        var label = findText(popup, "Later");
+        verify(label !== null, "Action button not found");
+        var at = label.mapToItem(popup, label.width / 2, label.height / 2);
+        mouseClick(popup, at.x, at.y);
+        compare(calls, ["later"]);
+        compare(Notifications.all[0].read, true);
+        compare(popup._open, false);
+    }
+
     function test_actionTextAndCountAreBounded() {
         var actions = [];
         for (var i = 0; i < 30; i++) actions.push(action("action" + i, "x".repeat(100 * 1024)));

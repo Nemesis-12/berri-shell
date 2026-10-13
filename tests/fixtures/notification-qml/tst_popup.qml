@@ -48,6 +48,8 @@ TestCase {
     function init() {
         popup._hideNow();
         popup._queue = [];
+        mouseMove(popup, 990, 690);
+        popup._showMs = 5000;
         other._hideNow();
         other._queue = [];
         Hyprland.focusedMonitor = { name: "test" };
@@ -141,6 +143,44 @@ TestCase {
         popup._receive(item("here"));
         compare(popup._current.id, "here");
         verify(popup.active);
+    }
+
+    // A normal card closes 5 s after it opens.
+    function test_normalCardClosesAfterFiveSeconds() {
+        var start = Date.now();
+        popup._receive(item("normal", "normal"));
+        tryCompare(popup, "_progress", 1, 1000);
+        tryVerify(function () { return !popup._open; }, 6000);
+        var shown = Date.now() - start;
+        verify(shown >= 4900 && shown <= 5600, "Card stayed " + shown + " ms");
+    }
+
+    // Critical cards stay until the person dismisses them.
+    function test_criticalCardStays() {
+        popup._showMs = 200;
+        popup._receive(item("critical"));
+        wait(500);
+        verify(popup._open);
+    }
+
+    // Hover pauses the timeout and keeps the time that was left.
+    function test_hoverPausesAndKeepsRemainingTime() {
+        popup._showMs = 2000;
+        var start = Date.now();
+        popup._receive(item("normal", "normal"));
+        tryCompare(popup, "_progress", 1, 1000);
+        wait(300);
+        mouseMove(popup, popup.cardX + popup.cardWidth / 2, popup.cardY + 40);
+        var shownBeforeHover = Date.now() - start;
+        tryVerify(function () { return popup._hovered; }, 500);
+        wait(2500);
+        verify(popup._open, "Hover did not pause the timeout");
+        var left = Date.now();
+        mouseMove(popup, 990, 690);
+        tryVerify(function () { return !popup._open; }, 3000);
+        var waited = Date.now() - left;
+        // The full timeout would be 2000 ms. About 2000 - shownBeforeHover is left.
+        verify(waited < 2000 - shownBeforeHover + 400, "Timeout restarted in full: " + waited + " ms after " + shownBeforeHover + " ms");
     }
 
     // Waiting cards follow the focus. The card on screen finishes where it is.
