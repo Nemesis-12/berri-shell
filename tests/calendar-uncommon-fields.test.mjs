@@ -92,3 +92,12 @@ test("unknown zones keep edited source clocks, carry a note and never gain UTC",
   }
   process.env.TZ = "UTC";
 });
+
+test("an edited repeat end refuses UTC conversion when its start zone is unknown", () => {
+  const document = calendar("DTSTART;TZID=Unknown/Zone:20261005T093000", "RRULE:FREQ=DAILY;UNTIL=20261006T093000Z");
+  document.items[0] = Items.applyChanges(document.items[0], { until: "2026-10-07" });
+  assert.throws(() => Format.writeCalendar(document), /Cannot convert repeat end in an unknown time zone/);
+  const known = calendar("DTSTART;TZID=Europe/Berlin:20261005T093000", "RRULE:FREQ=DAILY;UNTIL=20261006T093000Z");
+  known.items[0] = Items.applyChanges(known.items[0], { until: "2026-10-07" });
+  assert.equal(saved(known).items[0].until, "2026-10-07");
+});

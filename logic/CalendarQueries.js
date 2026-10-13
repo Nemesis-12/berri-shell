@@ -281,8 +281,11 @@ function curlError(code) {
 
 /** A source note for unsupported recurrence properties, separate from read or sync failures. */
 function recurrenceNote(items) {
-    var names = [];
+    var names = [], zones = [];
     for (var i = 0; i < items.length; i++) {
+        (items[i].unknownZones || []).forEach(function (zone) {
+            if (zones.indexOf(zone) < 0) zones.push(zone);
+        });
         var unsupported = Repeat.unsupportedYearlyParts(items[i]);
         for (var p = 0; p < unsupported.length; p++) {
             if (names.indexOf(unsupported[p]) < 0) names.push(unsupported[p]);
@@ -294,7 +297,10 @@ function recurrenceNote(items) {
         }
     }
     names.sort().reverse(); // Stable order, with RDATE before EXRULE.
-    return names.length ? names.join(" and ") + (names.length === 1 ? " is" : " are") + " not supported" : "";
+    var notes = [];
+    if (names.length) notes.push(names.join(" and ") + (names.length === 1 ? " is" : " are") + " not supported");
+    if (zones.length) notes.push("Unknown time zone: " + zones.sort().join(", ") + ". Source clocks are shown");
+    return notes.join(". ");
 }
 
 /** Keep feed records in the projection. Create feed items only for a requested month. */

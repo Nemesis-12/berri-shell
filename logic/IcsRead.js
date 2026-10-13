@@ -278,6 +278,12 @@ function parseItem(node, localZone) {
     read.sourceDates.start = read.start;
     read.sourceDates.end = read.endValue;
     item.sourceDates = read.sourceDates;
+    var dates = [read.start, read.endValue, read.sourceDates.until];
+    read.sourceDates.exdates.forEach(function (group) { dates = dates.concat(group.values); });
+    dates.forEach(function (source) {
+        if (source && source.form === "zone" && source.instantMs === null && item.unknownZones.indexOf(source.tzid) < 0)
+            item.unknownZones.push(source.tzid);
+    });
     if (item.repeat !== "none" && read.start) item.zoned = zonedSeries(read.start, read.endValue || durationEnd, localZone);
     if (item.uid === "") item.uid = Items.newUid();
     readChildren(item, node.children);

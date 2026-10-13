@@ -42,7 +42,7 @@ test("a stored item replaces each malformed field with its default", () => {
   assert.deepEqual(plain({ ...item, stamp: null }), { uid: "", kind: "event", title: "",
     date: null, time: null, startSecond: 0, end: null, endDate: null, color: "accent", repeat: "none", interval: 1, byDay: [],
     monthWeekday: null, until: null, untilMs: null, count: null, exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: null,
-    ruleRest: null, zoned: null, changedOccurrences: [], raw: [], rawChildren: [] });
+    ruleRest: null, zoned: null, changedOccurrences: [], unknownZones: [], raw: [], rawChildren: [] });
   assert.deepEqual(plain(Items.storedItem({ repeat: "weekly", byDay: [1, "x", 9, 6] }).byDay), [1, 6]);
 });
 

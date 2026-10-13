@@ -203,6 +203,7 @@ fn unknown_zone_keeps_the_written_clock() {
     for uid in ["windows", "escape"] {
         assert!(json.contains(&format!("\"uid\":\"{uid}\",\"kind\":\"event\",\"title\":\"{uid}\",\"location\":\"\",\"date\":\"2026-10-05\",\"time\":\"10:00\",\"end\":\"11:30\"")), "{uid}: {json}");
     }
+    assert!(json.contains("\"unknownZones\":[\"Eastern Standard Time\"]"), "{json}");
     assert!(json.contains("\"uid\":\"berlin\",\"kind\":\"event\",\"title\":\"berlin\",\"location\":\"\",\"date\":\"2026-10-05\",\"time\":\"03:00\""));
 }
 

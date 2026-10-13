@@ -77,6 +77,9 @@ pub fn source_zone(zone: Option<&str>, utc: bool) -> Option<&str> {
 
 // The instant of a source clock "YYYYMMDDTHHMMSS" in `zone`, or in the system zone for None.
 pub fn instant_of(value: &str, zone: Option<&str>) -> Option<c_long> {
+    if zone.is_some_and(|name| !zone_known(name)) {
+        return None;
+    }
     let mut clock = Clock {
         year: value[..4].parse::<i32>().ok()? - 1900,
         month: value[4..6].parse::<i32>().ok()? - 1,
@@ -114,7 +117,7 @@ pub fn local_clock(date: &CalendarDate) -> Option<(String, Option<String>)> {
         }
         CalendarDate::DateTime { value, zone, utc } => (value, zone, utc),
     };
-    if zone.as_deref().is_some_and(|name| !zone_known(name)) {
+    if !utc && zone.as_deref().is_some_and(|name| !zone_known(name)) {
         return Some(written_clock(value));
     }
     let instant = instant_of(value, source_zone(zone.as_deref(), *utc))?;

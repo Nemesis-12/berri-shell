@@ -19,8 +19,8 @@ function icsDateTime(key, time) {
 /**
  * Unchanged dates keep the exact source line, including seconds and TZID.
  * Edited dates keep DATE, floating, UTC or the source zone. The new local
- * clock is converted to that zone. If conversion fails, write the instant
- * as UTC. A change between date-only and timed uses DATE or floating time.
+ * clock is converted to that zone. An unknown zone keeps the edited source
+ * clock and TZID; it has no UTC instant. A change between date-only and timed uses DATE or floating time.
  */
 function dateProp(name, key, time, source, localZone) {
     if (source && source.date === key && source.time === time && source.raw && source.raw.split(/[;:]/)[0] === name)
@@ -29,8 +29,9 @@ function dateProp(name, key, time, source, localZone) {
     if (!source || source.form === "date" || source.form === "floating") return name + ":" + icsDateTime(key, time);
     var local = new Date(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10), +time.slice(0, 2), +time.slice(3, 5));
     if (source.form === "zone") {
-        var value = Zones.zoneClock(local.getTime(), source.tzid, localZone);
-        if (value) return name + ";TZID=" + (/[:;,]/.test(source.tzid) ? '"' + source.tzid + '"' : source.tzid) + ":" + value;
+        var value = source.instantMs === null ? icsDateTime(key, time) : Zones.zoneClock(local.getTime(), source.tzid, localZone);
+        if (!value) throw new Error("Cannot convert time in zone: " + source.tzid);
+        return name + ";TZID=" + (/[:;,]/.test(source.tzid) ? '"' + source.tzid + '"' : source.tzid) + ":" + value;
     }
     return name + ":" + Zones.utcClock(local.getTime()) + "Z";
 }
@@ -41,6 +42,9 @@ function untilValue(item, localZone) {
     var start = item.sourceDates && item.sourceDates.start;
     if (source && source.date === item.until) return source.value;
     if (item.time === null) return icsDate(item.until);
+    if ((start && start.form === "zone" && start.instantMs === null) ||
+        (source && source.form === "zone" && source.instantMs === null))
+        throw new Error("Cannot convert repeat end in an unknown time zone");
     var inUtc = (source && source.form === "utc") || (start && (start.form === "utc" || start.form === "zone"));
     if (!inUtc) return icsDate(item.until) + "T235959";
     var endMs = new Date(+item.until.slice(0, 4), +item.until.slice(5, 7) - 1, +item.until.slice(8, 10), 23, 59, 59).getTime();

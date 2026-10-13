@@ -29,7 +29,8 @@
  *   changedOccurrences (RECURRENCE-ID components of a repeating event: { from, cancelled, title, date, time, end, endDate },
  *   from = the day the occurrence had, date null = not moved; the component also stays in rawComponents),
  *   raw (unknown property lines, kept as is), rawChildren (unknown nested components),
- *   sourceDates (imported DTSTART, DTEND/DUE, UNTIL and EXDATE source forms).
+ *   sourceDates (imported DTSTART, DTEND/DUE, DURATION, UNTIL and EXDATE source forms),
+ *   unknownZones (unknown TZIDs; source clocks are shown and edited without conversion).
  *   This is the stored item. CalendarItems.js checks it when it is built (storedItem).
  *   A projected item is a copy with calendarId, readOnly and hasOwnColor (projectedItem).
  *   A shown item is a copy for QML with a pair key in uid and the file UID in sourceUid (shownItem).
@@ -54,7 +55,8 @@
  * CATEGORIES from other apps stay as raw lines.
  *
  * Month numbers are 1 to 12 everywhere.
- * Known limits: unknown TZIDs keep their source clock for display until edited.
+ * Known limits: unknown TZIDs keep their source clock and TZID on display and edits.
+ * The calendar source note marks them. A UTC conversion for an edited UNTIL is refused.
  * A zoned series follows its zone for ten years from its first day.
  * A moved occurrence without DTEND has no end time. Deleting a moved occurrence of an editable calendar
  * leaves its RECURRENCE-ID component in the file.
@@ -244,6 +246,7 @@ var fieldChecks = {
         return !!c && isDayKey(c.from) && typeof c.cancelled === "boolean" && orNull(isText)(c.title) &&
             orNull(isDayKey)(c.date) && orNull(isClock)(c.time) && orNull(isClock)(c.end) && orNull(isDayKey)(c.endDate);
     }),
+    unknownZones: listOf(isText),
     raw: listOf(isText),
     rawChildren: listOf(function (c) { return Array.isArray(c); })
 };
@@ -269,7 +272,7 @@ function blankItem() {
         color: "accent", repeat: "none", interval: 1, byDay: [], monthWeekday: null, until: null, untilMs: null, count: null,
         exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: null, ruleRest: null,
         zoned: null, changedOccurrences: [],
-        raw: [], rawChildren: []
+        unknownZones: [], raw: [], rawChildren: []
     };
 }
 

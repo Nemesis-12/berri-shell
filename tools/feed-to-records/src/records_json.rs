@@ -5,7 +5,7 @@ use crate::json::{field, json_string, list, number, number_list, string_list};
 use crate::model::{Feed, Record, Status};
 use crate::overrides::ChangedOccurrence;
 use crate::timing::{timing, Timing};
-use crate::zone::{instant_of, local_day, source_zone};
+use crate::zone::{instant_of, local_day, source_zone, zone_known};
 use crate::zoned::{zoned_series, ZonedSeries};
 
 // The local days of a list of source dates.
@@ -33,6 +33,19 @@ fn month_weekday_json(output: &mut String, month_weekday: Option<(i32, usize)>) 
         Some((nth, day)) => output.push_str(&format!(":{{\"nth\":{nth},\"day\":{day}}},")),
         None => output.push_str(":null,"),
     }
+}
+
+// Names of unknown source zones, used by the same calendar source note as editable files.
+fn unknown_zones(record: &Record) -> Vec<String> {
+    let mut zones = Vec::new();
+    for date in record.start.iter().chain(record.end_value.iter()).chain(record.until.iter()).chain(record.exdates.iter()) {
+        if let CalendarDate::DateTime { zone: Some(zone), utc: false, .. } = date {
+            if !zone_known(zone) && !zones.contains(zone) {
+                zones.push(zone.clone());
+            }
+        }
+    }
+    zones
 }
 
 // Writes one record with the field names used by CalendarFormat.js.
@@ -84,6 +97,7 @@ fn record_json(output: &mut String, record: &Record) {
         _ => Some(0),
     };
     number(output, "startSecond", start_second);
+    string_list(output, "unknownZones", &unknown_zones(record));
     string_list(output, "raw", &record.raw);
     output.pop();
     output.push('}');

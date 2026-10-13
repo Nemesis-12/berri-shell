@@ -79,6 +79,12 @@ Click the bottom-center notch to open the theme and wallpaper picker. Select a t
 
 Local commit discovery uses `~/Programming` by default. Set `BERRI_PROGRAMMING_ROOT` in the shell launch environment to use another folder.
 
+## Calendar file limits
+
+An unknown TZID keeps its source clock and zone name when read or edited. The calendar source note marks the unknown zone. berri does not assign a UTC offset to it. An edited repeat end that needs this conversion is refused by the writer.
+
+Unshown reminders from the past seven days are delivered once on startup or a calendar change. Older reminders stay visible in the calendar.
+
 ## Saved data
 
 Back up these folders before you change or remove saved data:
