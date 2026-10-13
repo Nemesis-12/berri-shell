@@ -49,13 +49,13 @@ pub fn repeat_rule(record: &mut Record, value: &str) {
             _ => rest.push(part),
         }
     }
-    // A week number counts only in a monthly rule, and FREQ can come after BYDAY.
+    // Only monthly ordinals have a dedicated field. Yearly ordinals stay in rule_rest.
     if record.repeat == Repeat::Monthly {
         record.month_weekday = ordinal_day;
     } else if let Some(part) = ordinal_part {
         rest.push(part);
     }
-    record.rule_rest = (!rest.is_empty()).then(|| rest.join(";"));
+    record.rule_rest = (record.repeats() && !rest.is_empty()).then(|| rest.join(";"));
 }
 
 // Reads one BYDAY value with a week number, such as 2TU or -1FR.
