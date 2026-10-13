@@ -209,3 +209,15 @@ test("both readers start alternate weeks on the retained WKST day", () => {
     assert.deepEqual(days, { "2026-11-01": ["08:00 Sunday week"], "2026-11-02": ["08:00 Sunday week"] });
   });
 });
+
+test("both readers use DURATION for all-day, overnight and DST event ends", () => {
+  const { editable, subscribed } = readLists(path.join(feedsDir, "duration.ics"), "UTC");
+  for (const list of [editable, subscribed]) {
+    const byUid = Object.fromEntries(list.map(item => [item.uid, item]));
+    assert.equal(byUid.days.endDate, "2026-10-10");
+    assert.equal(byUid.clock.end, "00:31");
+    assert.equal(byUid.clock.endDate, "2026-10-09");
+    assert.equal(byUid["dst-day"].end, "08:00");
+    assert.equal(byUid["dst-hours"].end, "07:00");
+  }
+});
