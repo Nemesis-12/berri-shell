@@ -29,7 +29,7 @@ Item {
     function whenLabel() {
         if (root.isNow) return "NOW";
         var date = Fmt.toDate(Weather.days[root.day].date);
-        return Fmt.weekday(date) + " " + date.getDate();
+        return Fmt.weekday(date) + " " + date.getUTCDate();
     }
 
     function temp(v) {

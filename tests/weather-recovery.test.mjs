@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 const repo = fileURLToPath(new URL("../", import.meta.url));
 const fixture = path.join(repo, "tests/fixtures");
 const forecast = {
+  utc_offset_seconds: 0,
   current: { time: "2026-09-30T06:15", temperature_2m: 17.5, apparent_temperature: 19.5,
     relative_humidity_2m: 96, dew_point_2m: 16.8, weather_code: 2, is_day: 0,
     wind_speed_10m: 2.9, wind_direction_10m: 315, wind_gusts_10m: 8.6, surface_pressure: 1004.9 },

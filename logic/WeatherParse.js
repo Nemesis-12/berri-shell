@@ -3,7 +3,7 @@
 .import "Times.js" as Times
 
 // Pure parsing helpers for Weather.qml. No QML types, so node can test them.
-// Open-Meteo times are local to the place ("2026-09-30T06:15"); they are read as system-local Dates.
+// Wall times stay as API text. Instants use the location UTC offset, never the host zone.
 
 function uvLabel(uv) {
     if (uv < 3) return "Low";
@@ -21,11 +21,12 @@ function round1(value) {
 }
 
 // One entry for each hour of the response.
-function readHours(h) {
+function readHours(h, utcOffsetSeconds) {
     var hoursAll = [];
     for (var i = 0; i < h.time.length; i++) {
         hoursAll.push({
-            time: WeatherFormat.toDate(h.time[i]),
+            time: h.time[i],
+            timeMs: Date.parse(h.time[i] + "Z") - utcOffsetSeconds * 1000,
             code: h.weather_code[i],
             isDay: h.is_day[i] === 1,
             tempC: Math.round(h.temperature_2m[i]),
@@ -41,7 +42,7 @@ function readDays(d) {
     var days = [];
     for (var j = 0; j < d.time.length; j++) {
         days.push({
-            date: WeatherFormat.toDate(d.time[j] + "T00:00"),
+            date: d.time[j],
             code: d.weather_code[j],
             minC: Math.round(d.temperature_2m_min[j]),
             maxC: Math.round(d.temperature_2m_max[j]),
@@ -103,12 +104,14 @@ function readCurrent(cur, today, uv) {
 // windKmh, windDirection, gustKmh, precipMm, precipProbability, uvIndex, uvLabel, pressureHpa,
 // sunrise ("HH:MM"), sunset ("HH:MM"), daylight ("12h 13m"), isDay.
 function parse(data) {
+    var utcOffsetSeconds = data.utc_offset_seconds;
     var days = readDays(data.daily);
     var nowIndex = currentHourIndex(data.current.time, data.hourly.time);
     var uv = data.hourly.uv_index[nowIndex] || 0;
     return {
         current: readCurrent(data.current, days[0], uv),
-        hoursAll: readHours(data.hourly),
+        hoursAll: readHours(data.hourly, utcOffsetSeconds),
+        utcOffsetSeconds: utcOffsetSeconds,
         days: days,
         nowIndex: nowIndex
     };
@@ -153,7 +156,7 @@ function hoursFor(model, index) {
     var out = [];
     for (var i = index === 0 ? model.nowIndex : 0; i < model.hoursAll.length; i++) {
         var t = model.hoursAll[i].time;
-        if (t.getFullYear() === date.getFullYear() && t.getMonth() === date.getMonth() && t.getDate() === date.getDate())
+        if (t.slice(0, 10) === date)
             out.push(model.hoursAll[i]);
     }
     return out;

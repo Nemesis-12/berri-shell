@@ -4,42 +4,35 @@
 // Small text helpers for the weather tab. Times come from Weather as
 // milliseconds or as ISO text; both are accepted.
 
-// Milliseconds, "2026-09-30T07:18", "2026-09-30" or "07:18" (today) -> local Date.
+// Converts weather wall time to a UTC Date used only for calendar fields.
+// Numeric timestamps are host instants, such as the last refresh time.
 function toDate(v) {
     if (v instanceof Date) return v;
     if (typeof v === "number") return new Date(v);
-    if (typeof v === "string") {
-        if (v.length === 5 && v.charAt(2) === ":") {
-            var t = new Date();
-            t.setHours(parseInt(v.slice(0, 2)), parseInt(v.slice(3, 5)), 0, 0);
-            return t;
-        }
-        if (v.length === 10) {
-            var p = v.split("-");
-            return new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
-        }
-        return new Date(v);
-    }
-    return new Date(NaN);
+    if (typeof v !== "string" || v === "") return new Date(NaN);
+    if (v.length === 5) v = "2000-01-01T" + v;
+    if (v.length === 10) v += "T00:00";
+    return new Date(v + "Z");
 }
 
-// "3:05 PM" or, with clock24, "15:05". Empty text for a missing time.
+// Formats a remote wall clock; refresh timestamps use the host clock.
 function clock(v, clock24) {
     var d = toDate(v);
     if (isNaN(d.getTime())) return "";
-    return Times.clockOfDate(d, clock24);
+    if (typeof v === "number") return Times.clockOfDate(d, clock24);
+    return Times.clockText(Times.pad(d.getUTCHours()) + ":" + Times.pad(d.getUTCMinutes()), clock24);
 }
 
 // Hour label for the strip: "3P" or, with clock24, "15".
 function hourLabel(v, clock24) {
-    var h = toDate(v).getHours();
+    var h = toDate(v).getUTCHours();
     if (clock24) return Times.pad(h);
     return ((h % 12) || 12) + (h < 12 ? "A" : "P");
 }
 
 // Uppercase day name for the weather column and card.
 function weekday(v) {
-    var name = Times.weekdaysShort[toDate(v).getDay()];
+    var name = Times.weekdaysShort[toDate(v).getUTCDay()];
     return name === undefined ? undefined : name.toUpperCase();
 }
 

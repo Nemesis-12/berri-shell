@@ -30,6 +30,7 @@ const fill = (value) => hourTimes.map(() => value);
 const dayFill = (a, b) => [a, b];
 
 const sample = {
+  utc_offset_seconds: 0,
   current: { time: "2026-09-30T06:15", temperature_2m: 17.5, apparent_temperature: 19.5, relative_humidity_2m: 96,
     dew_point_2m: 16.8, weather_code: 2, is_day: 0, wind_speed_10m: 2.9, wind_direction_10m: 315,
     wind_gusts_10m: 8.6, surface_pressure: 1004.9 },
@@ -58,7 +59,7 @@ test("hours start at the current hour", () => {
   const model = lib.parse(sample);
   const next = lib.nextHours(model);
   assert.equal(next.length, 24);
-  assert.equal(next[0].time.getHours(), 6);
+  assert.equal(Number(format.hourLabel(next[0].time, true)), 6);
   assert.equal(lib.hoursFor(model, 0).length, 18); // 06:00 to 23:00
   assert.equal(lib.hoursFor(model, 1).length, 24);
 });
@@ -68,10 +69,10 @@ test("hours strip for today keeps going after midnight", () => {
   const model = lib.parse(late);
   const strip = lib.stripHours(model, 0);
   assert.equal(strip.length, 24);
-  assert.deepEqual(Array.from(strip.slice(0, 6), (h) => h.time.getHours()), [23, 0, 1, 2, 3, 4]);
+  assert.deepEqual(Array.from(strip.slice(0, 6), (h) => Number(format.hourLabel(h.time, true))), [23, 0, 1, 2, 3, 4]);
   const tomorrow = lib.stripHours(model, 1);
   assert.equal(tomorrow.length, 24); // other days: whole day
-  assert.ok(tomorrow.every((h) => h.time.getDate() === 1));
+  assert.ok(tomorrow.every((h) => h.time.startsWith("2026-10-01")));
 });
 
 test("day detail", () => {
@@ -118,7 +119,7 @@ test("shared time and compass helpers keep weather text", () => {
   assert.equal(format.clock("07:30", false), "7:30 AM");
   assert.equal(format.clock("2026-09-30T19:43", false), "7:43 PM");
   assert.equal(format.hourLabel("2026-09-30T06:00", false), "6A");
-  assert.equal(format.toDate("2026-09-30").getDate(), 30);
+  assert.equal(format.toDate("2026-09-30").getUTCDate(), 30);
   assert.equal(format.compass(22.5, 16), "NNE");
   assert.equal(format.compass(22.5), "NE");
   assert.equal(format.compass("NNE"), "NNE");
