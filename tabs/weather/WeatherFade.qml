@@ -1,22 +1,24 @@
 import QtQuick
 import qs.common
+import qs.services
+import "../../logic/WeatherParse.js" as WeatherParse
 
 /**
- * Crossfades between two copies of `content` when `day` changes. The hidden
+ * Crossfades between two copies of `content` when the chosen date changes. The hidden
  * copy takes the new day, then one progress value (`blend`) fades the two.
  * Each copy needs a `day` property; it is set from here.
  */
 Item {
     id: root
 
-    /** Day index shown: 0 is now, 1..6 later days. */
-    property int day: 0
+    /** Empty means now; forecast selections keep their calendar date. */
+    property string date: ""
 
     /** What to draw for one day: an item with a `day` property. */
     property Component content
 
-    property int dayA: 0
-    property int dayB: 0
+    property string dateA: ""
+    property string dateB: ""
     property bool showB: false
 
     /** 0 shows copy A only, 1 shows copy B only. */
@@ -28,9 +30,9 @@ Item {
         }
     }
 
-    onDayChanged: {
-        if (root.showB) root.dayA = root.day;
-        else root.dayB = root.day;
+    onDateChanged: {
+        if (root.showB) root.dateA = root.date;
+        else root.dateB = root.date;
         root.showB = !root.showB;
     }
 
@@ -39,7 +41,7 @@ Item {
         sourceComponent: root.content
         opacity: 1 - root.blend
         visible: opacity > 0.001
-        onLoaded: item.day = Qt.binding(() => root.dayA)
+        onLoaded: item.day = Qt.binding(() => WeatherParse.selectedDay(Weather.days, root.dateA))
     }
 
     Loader {
@@ -47,6 +49,6 @@ Item {
         sourceComponent: root.content
         opacity: root.blend
         visible: opacity > 0.001
-        onLoaded: item.day = Qt.binding(() => root.dayB)
+        onLoaded: item.day = Qt.binding(() => WeatherParse.selectedDay(Weather.days, root.dateB))
     }
 }

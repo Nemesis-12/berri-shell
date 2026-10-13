@@ -1,4 +1,5 @@
 import QtQuick
+import "../../logic/WeatherParse.js" as WeatherParse
 import qs.common
 import qs.services
 
@@ -18,8 +19,17 @@ Item {
     /** Shows pressure in the fourth readout cell in place of the UV index. */
     property bool showPressure: false
 
-    /** Day picked: 0 is today (now), 1..6 later days. */
-    property int selectedDay: 0
+    /** Empty means current conditions; other selections keep their calendar date. */
+    property string selectedDate: ""
+    readonly property int selectedDay: WeatherParse.selectedDay(Weather.days, root.selectedDate)
+
+    Connections {
+        target: Weather
+        function onDaysChanged() {
+            if (root.selectedDate !== "" && !Weather.days.some(day => day.date === root.selectedDate))
+                root.selectedDate = "";
+        }
+    }
 
     readonly property int gap: 1
     readonly property int leftWidth: 480
@@ -41,7 +51,7 @@ Item {
 
         WeatherFade {
             anchors.fill: parent
-            day: root.selectedDay
+            date: root.selectedDate
             content: Component { WeatherCard { clock24: root.clock24 } }
         }
     }
@@ -60,7 +70,7 @@ Item {
 
         WeatherFade {
             anchors.fill: parent
-            day: root.selectedDay
+            date: root.selectedDate
             content: Component { WeatherReadouts { showPressure: root.showPressure } }
         }
     }
@@ -71,7 +81,7 @@ Item {
         y: root.topHeight + root.gap
         width: root.leftWidth
         height: root.height - y
-        day: root.selectedDay
+        date: root.selectedDate
         content: Component { WeatherHours { clock24: root.clock24 } }
     }
 
@@ -111,7 +121,7 @@ Item {
                 day: modelData
                 today: index === 0
                 selected: index === root.selectedDay
-                onClicked: root.selectedDay = index
+                onClicked: root.selectedDate = index === 0 ? "" : modelData.date
             }
         }
     }

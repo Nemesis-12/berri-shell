@@ -28,7 +28,9 @@ Item {
 
     function whenLabel() {
         if (root.isNow) return "NOW";
-        var date = Fmt.toDate(Weather.days[root.day].date);
+        var day = Weather.days[root.day];
+        if (!day) return "-";
+        var date = Fmt.toDate(day.date);
         return Fmt.weekday(date) + " " + date.getUTCDate();
     }
 

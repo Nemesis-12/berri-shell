@@ -173,7 +173,8 @@ function nextHours(model) {
 
 // Detail for day `index`; index 0 is today and uses current values. Other days use their summaries.
 function dayDetail(model, index) {
-    if (index <= 0 || index >= model.days.length) return model.current;
+    if (index < 0 || index >= model.days.length) return null;
+    if (index === 0) return model.current;
     var day = model.days[index];
     return {
         code: day.code,
@@ -196,6 +197,14 @@ function dayDetail(model, index) {
         sunset: day.sunset,
         daylight: day.daylight
     };
+}
+
+// Resolves a chosen calendar date in the rolling forecast; absent dates use today.
+function selectedDay(days, date) {
+    for (var i = 0; i < days.length; i++) {
+        if (days[i].date === date) return i;
+    }
+    return 0;
 }
 
 // Hours that belong to day `index`; for day 0, from the current hour to the end of today.
