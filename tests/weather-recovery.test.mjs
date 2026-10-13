@@ -37,7 +37,7 @@ function runWeather(scenario) {
       .replace('FolderRoots.weatherSettings', '"/synthetic-home/.local/state/omarchy/settings/weather.json"');
     fs.writeFileSync(path.join(folder, "WeatherUnderTest.qml"), source);
     const config = { scenario, forecast, timeScale: Number(process.env.WEATHER_TEST_TIME_SCALE || 0.01) };
-    const runner = fs.readFileSync(path.join(fixture, "weather-recovery.qml"), "utf8")
+    const runner = fs.readFileSync(path.join(fixture, scenario.endsWith("-race") ? "weather-requests.qml" : "weather-recovery.qml"), "utf8")
       .replace("TEST_CONFIG", JSON.stringify(config));
     const entry = path.join(folder, "test.qml");
     fs.writeFileSync(entry, runner);
@@ -78,4 +78,8 @@ test("weather retries an IP location response without usable coordinates", () =>
 
 test("weather keeps the last good result during a failed refresh and then recovers", () => {
   runWeather("retained");
+});
+
+test("weather discards an in-flight old-place forecast and immediately requests the new place", () => {
+  runWeather("forecast-race");
 });
