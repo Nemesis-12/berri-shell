@@ -12,7 +12,7 @@ Window {
     CurrentWeather { id: cell; width: 300; height: 80 }
     WeatherCard { id: card; y: 80; width: 300; height: 272 }
     WeatherReadouts { id: readouts; x: 300; y: 80; width: 180; height: 272 }
-    WeatherHours { id: hours; y: 352; width: 480; height: 182; clock24: true }
+    WeatherHours { id: hours; day: 1; y: 352; width: 480; height: 182; clock24: true }
     WeatherDayRow {
         id: day
         x: 481
@@ -51,6 +51,7 @@ Window {
             if (!test.check(test.texts(readouts).indexOf("Dew point -°") >= 0
                             && test.texts(readouts).indexOf("- mm expected") >= 0,
                             "Readout details must not turn missing values into zero")) return;
+            if (!test.check(test.texts(hours).indexOf("02") >= 0, "Remote hour text must keep 02 across the host DST gap")) return;
             if (!test.check(test.texts(hours).indexOf("-°") >= 0 && test.texts(day).indexOf("-°") >= 0,
                             "Hourly and daily temperatures must show missing values")) return;
             if (!test.check(!test.texts(test).some(text => /NO DATA|NaN|undefined|null|^0(?:°|$| mm)/.test(text)),

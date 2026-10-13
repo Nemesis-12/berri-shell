@@ -44,12 +44,12 @@ TestCase {
                 humidity: 60, dewPointC: 15, windKmh: 12, windDirection: "N", gustKmh: 15,
                 precipMm: 1, precipProbability: 20, uvIndex: 3, uvLabel: "Moderate", pressureHpa: 1000,
                 sunrise: "07:00", sunset: "19:00", daylight: "12h" },
-            days: [{ date: new Date(2026, 9, 5) },
-                { date: new Date(2026, 9, 6), code: 3, minC: 17, maxC: 26, feelsLikeMax: 25,
+            days: [{ date: "2026-10-05" },
+                { date: "2026-10-06", code: 3, minC: 17, maxC: 26, feelsLikeMax: 25,
                     humidityMean: 60, dewPointMean: 15, windMaxKmh: 12, windDirection: "N", gustMaxKmh: 15,
                     precipMm: 1, precipProbability: 20, uvMax: 3, pressureHpa: 1000,
                     sunrise: "07:00", sunset: "19:00", daylight: "12h" }],
-            hoursAll: [{ time: new Date(2026, 9, 6, 9), tempC: 24, code: 3, isDay: true, precipProbability: 20 }],
+            hoursAll: [{ time: "2026-10-06T09:00", timeMs: Date.UTC(2026, 9, 6, 9), tempC: 24, code: 3, isDay: true, precipProbability: 20 }],
             nowIndex: 0
         };
         Weather.updatedAt = 1;
