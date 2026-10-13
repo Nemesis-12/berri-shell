@@ -210,3 +210,16 @@ test("weekly INTERVAL uses WKST before BYDAY ordering and COUNT", () => {
     }
   }
 });
+
+// The yearly rule must expand weekdays inside its selected month, rather than copy DTSTART.
+test("yearly BYMONTH and BYDAY select every October Monday after saving and editing", () => {
+  const doc = calendar("DTSTART:20261005T090000", "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=MO");
+  doc.items[0] = Items.applyChanges(doc.items[0], { title: "Edited" });
+  for (const read of [doc, saved(doc)]) {
+    assert.deepEqual(monthDates(read.items[0], 2027, 10),
+      ["2027-10-04", "2027-10-11", "2027-10-18", "2027-10-25"]);
+    const source = { id: "repeat", name: "Repeat", kind: "link", records: read.items };
+    assert.deepEqual(Object.keys(Queries.storedItemsInMonth(Queries.projectStoredCalendars([source]), 2027, 10)).sort(),
+      ["2027-10-04", "2027-10-11", "2027-10-18", "2027-10-25"]);
+  }
+});
