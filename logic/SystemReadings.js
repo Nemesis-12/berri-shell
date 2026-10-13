@@ -95,7 +95,10 @@ function readCpuLoad(text, previous, groups) {
     return result;
 }
 
-/** Read the default route, then the matching receive and send byte counts. */
+/**
+ * Read the default route, then the matching receive and send byte counts.
+ * `routed` is false without a default route: the reading has no name or counters.
+ */
 function readNetwork(routeText, deviceText) {
     var route = routeText.split("\n");
     var name = "";
@@ -103,6 +106,7 @@ function readNetwork(routeText, deviceText) {
         var fields = route[i].trim().split(/\s+/);
         if (fields[ROUTE_FIELDS.destination] === "00000000") { name = fields[ROUTE_FIELDS.name]; break; }
     }
+    if (name === "") return { name: "", rx: -1, tx: -1, routed: false };
     var devices = deviceText.split("\n");
     var fallback = null;
     for (var j = 2; j < devices.length; j++) {
@@ -113,11 +117,11 @@ function readNetwork(routeText, deviceText) {
         var bytes = devices[j].slice(colon + 1).trim().split(/\s+/);
         var rx = Number(bytes[NETWORK_FIELDS.receivedBytes]), tx = Number(bytes[NETWORK_FIELDS.sentBytes]);
         if (!isFinite(rx) || !isFinite(tx) || rx < 0 || tx < 0) continue;
-        var device = { name: deviceName, rx: rx, tx: tx };
+        var device = { name: deviceName, rx: rx, tx: tx, routed: true };
         if (deviceName === name) return device;
         if (!fallback) fallback = device;
     }
-    return fallback || { name: name, rx: -1, tx: -1 };
+    return fallback || { name: name, rx: -1, tx: -1, routed: true };
 }
 
 /**

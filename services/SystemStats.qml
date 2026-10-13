@@ -260,8 +260,16 @@ Singleton {
 
     // Derives transfer rates from consecutive byte counters for the same interface.
     // Without a comparable pair (no route, other interface, first reading) both are zero.
+    // Without a route the name and the baseline are cleared, so the first reading after recovery starts a new one.
     function readNetwork() {
         var next = Readings.readNetwork(routeFile.text(), networkFile.text());
+        if (!next.routed) {
+            netName = "";
+            downMiBs = 0;
+            upMiBs = 0;
+            prevNet = null;
+            return;
+        }
         var now = Date.now();
         var rates = Readings.networkRates(prevNet, next, now);
         netName = next.name;

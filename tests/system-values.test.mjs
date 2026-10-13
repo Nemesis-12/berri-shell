@@ -145,3 +145,25 @@ test("a process sample whose total did not advance keeps CPU unknown until a com
   stats.readProcessSample("cpu 500 0 0 1500\n" + line(200));
   assert.equal(stats.processCpuKnown, true);
 });
+
+test("network without a default route clears the baseline, and the first sample after recovery starts a new one", () => {
+  const route = "Iface Destination\nwlan0 00000000\n";
+  const noRoute = "Iface Destination\nwlan0 0001A8C0\n";
+  const devices = (rx) => `h\nh\n wlan0: ${rx} 0 0 0 0 0 0 0 ${rx} 0 0 0 0 0 0 0\n`;
+  const stats = systemService("SystemStats", { prevNet: null, netName: "", downMiBs: 0, upMiBs: 0,
+    routeFile: { text: () => route }, networkFile: { text: () => devices(1048576) } });
+  stats.readNetwork();
+  stats.prevNet.time -= 1000;
+  stats.networkFile = { text: () => devices(3145728) };
+  stats.readNetwork();
+  assert.equal(stats.netName, "wlan0");
+  assert.ok(stats.downMiBs > 1);
+  stats.routeFile = { text: () => noRoute };
+  stats.readNetwork();
+  assert.deepEqual([stats.downMiBs, stats.upMiBs, stats.netName, stats.prevNet], [0, 0, "", null]);
+  stats.routeFile = { text: () => route };
+  stats.networkFile = { text: () => devices(9437184) };
+  stats.readNetwork();
+  assert.deepEqual([stats.downMiBs, stats.upMiBs, stats.netName], [0, 0, "wlan0"]);
+  assert.equal(stats.prevNet.rx, 9437184);
+});
