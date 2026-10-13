@@ -31,6 +31,7 @@ Singleton {
     property int locationRevision: 0
     property bool forecastPending: false
     property bool namePending: false
+    property string pendingCity: ""
 
     /** True once a real reading has been received at least once. */
     readonly property bool ready: current !== null
@@ -142,6 +143,7 @@ Singleton {
             root.updatedAt = 0;
             root.error = "";
             root.locationName = "";
+            root.pendingCity = "";
         }
         root.latitude = lat;
         root.longitude = lon;
@@ -163,6 +165,19 @@ Singleton {
         nameProc.command = ["curl", "-fsS", "--max-time", "10",
             "https://wttr.in/" + root.latitude + "," + root.longitude + "?format=j1"];
         nameProc.running = true;
+    }
+
+    // Refines the current place name; an older lookup cannot overwrite it.
+    function lookupCountry(city, revision) {
+        if (revision !== root.locationRevision) return;
+        if (geocodeProc.running) {
+            root.pendingCity = city;
+            return;
+        }
+        geocodeProc.locationRevision = revision;
+        geocodeProc.command = ["curl", "-fsS", "--max-time", "10",
+            "https://geocoding-api.open-meteo.com/v1/search?count=10&format=json&name=" + encodeURIComponent(city)];
+        geocodeProc.running = true;
     }
 
     // Starts one forecast request and keeps the last result while it runs.
@@ -238,9 +253,7 @@ Singleton {
                     var area = JSON.parse(text).nearest_area[0];
                     var city = area.areaName[0].value;
                     root.locationName = city + ", " + area.country[0].value;
-                    geocodeProc.command = ["curl", "-fsS", "--max-time", "10",
-                        "https://geocoding-api.open-meteo.com/v1/search?count=10&format=json&name=" + encodeURIComponent(city)];
-                    geocodeProc.running = true;
+                    root.lookupCountry(city, nameProc.locationRevision);
                 } catch (e) {
                     // Keep the name empty; the tab hides it.
                 }
@@ -254,9 +267,11 @@ Singleton {
 
     Process {
         id: geocodeProc
+        property int locationRevision: -1
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
+                if (geocodeProc.locationRevision !== root.locationRevision) return;
                 try {
                     var place = WeatherParse.placeFromGeocoding(JSON.parse(text).results, root.latitude, root.longitude);
                     if (place !== "") root.locationName = place;
@@ -264,6 +279,10 @@ Singleton {
                     // Keep the wttr.in name.
                 }
             }
+        }
+        onExited: {
+            if (root.pendingCity !== "") Qt.callLater(root.lookupCountry, root.pendingCity, root.locationRevision);
+            root.pendingCity = "";
         }
     }
 
