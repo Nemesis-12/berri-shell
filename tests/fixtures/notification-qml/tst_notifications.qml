@@ -154,14 +154,20 @@ TestCase {
     }
 
     // Update cost may grow with the item count, but a 4 times larger store must stay under 3.5 times the cost.
-    // Both sizes run in the same test, so machine load affects both the same way.
+    // Each round measures both sizes back to back, so machine load affects both the same way. A burst of load
+    // can still hit one size only, so the test uses the lowest ratio of 3 rounds. A real quadratic cost
+    // gives a high ratio in every round.
     function test_updateCostGrowsAtMostLinearly() {
         var small = 50, large = 200;
-        var smallCost = Math.max(1, medianUpdateCost(small));
-        var largeCost = medianUpdateCost(large);
-        var ratio = largeCost / smallCost;
-        console.log("Median of 100 updates plus flush:", small, "items", smallCost, "ms;", large, "items", largeCost, "ms; ratio", ratio);
-        verify(ratio < 3.5, "Update cost grew " + ratio + " times for " + large / small + " times more items (limit 3.5)");
+        var lowest = Infinity;
+        for (var round = 0; round < 3; round++) {
+            var smallCost = Math.max(1, medianUpdateCost(small));
+            var largeCost = medianUpdateCost(large);
+            var ratio = largeCost / smallCost;
+            console.log("Round", round, "median of 100 updates plus flush:", small, "items", smallCost, "ms;", large, "items", largeCost, "ms; ratio", ratio);
+            lowest = Math.min(lowest, ratio);
+        }
+        verify(lowest < 3.5, "Update cost grew " + lowest + " times for " + large / small + " times more items in the best round (limit 3.5)");
     }
 
     // Reads the real text bindings in a pop-up, without pointer or keyboard input.

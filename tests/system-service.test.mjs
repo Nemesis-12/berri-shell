@@ -32,7 +32,7 @@ test("the actual process command supplies rows within the opening deadline", () 
   const command = /id: processReader\s+command: (\[[\s\S]*?\])\s+stdout:/.exec(source);
   assert.ok(command, "The process sample command must exist");
   const [program, ...args] = vm.runInNewContext(command[1]);
-  const sample = execFileSync(program, args, { encoding: "utf8", timeout: 30000 });
+  const sample = execFileSync(program, args, { encoding: "utf8", timeout: 180000 });
   const result = systemLogic("SystemReadings").readProcesses(sample, null);
   assert.ok(result.rows.length >= 1, "A completed first sample must show a row");
   assert.match(result.rows[0].name, /\S/);

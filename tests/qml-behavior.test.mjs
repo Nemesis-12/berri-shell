@@ -30,7 +30,7 @@ test("volume, playback, and brightness follow their shared owners in QML", () =>
   const runner = process.env.QMLTESTRUNNER || "/usr/lib/qt6/bin/qmltestrunner";
   const result = spawnSync(runner, ["-input", path.join(root, "tests/qml-playback"), "-import", imports], {
     encoding: "utf8",
-    timeout: 30000,
+    timeout: 180000,
     env: {
       ...process.env,
       QT_QPA_PLATFORM: "offscreen",

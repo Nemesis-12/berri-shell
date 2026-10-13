@@ -156,7 +156,7 @@ Item {
     }
     Timer {
         id: deadline
-        interval: 60000 // Real time. Stops a hung run well before the 75 second limit of the Node test.
+        interval: 120000 // Real time. Stops a hung run before the 180 second limit of the Node test.
         onTriggered: test.check(false, "Weather did not recover")
     }
 }

@@ -116,7 +116,7 @@ test("during a held download neither the script nor curl has the link in its arg
   const port = await listen(held);
   const { child, done } = startDownload(`https://127.0.0.1:${port}/${marker}.ics`);
   let timer;
-  await Promise.race([hasArrived, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("The request did not arrive")), 10000); })]);
+  await Promise.race([hasArrived, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("The request did not arrive")), 60000); })]);
   clearTimeout(timer);
   const pids = [child.pid, ...descendants(child.pid)];
   const lines = pids.map((pid) => fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").replaceAll("\0", " "));

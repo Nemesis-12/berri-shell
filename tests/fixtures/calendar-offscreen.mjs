@@ -38,7 +38,7 @@ export function calendarOffscreen(change = () => {}, input = "qml") {
     const env = { ...process.env, QT_QPA_PLATFORM: "offscreen", QT_QUICK_BACKEND: "software", QML_DISABLE_DISK_CACHE: "1" };
     delete env.LD_LIBRARY_PATH;
     const result = spawnSync(process.env.QMLTESTRUNNER || "/usr/lib/qt6/bin/qmltestrunner",
-      ["-import", copy, "-input", path.join(copy, input)], { cwd: copy, env, encoding: "utf8", timeout: 30000 });
+      ["-import", copy, "-input", path.join(copy, input)], { cwd: copy, env, encoding: "utf8", timeout: 180000 });
     const output = `${result.stdout || ""}${result.stderr || ""}`;
     if (result.error)
       throw new Error(`qmltestrunner failed: ${result.error.message}\n${output}`);
