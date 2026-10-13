@@ -223,3 +223,47 @@ test("yearly BYMONTH and BYDAY select every October Monday after saving and edit
       ["2027-10-04", "2027-10-11", "2027-10-18", "2027-10-25"]);
   }
 });
+
+// BYSETPOS applies to the full year, including every month in BYMONTH.
+test("yearly month lists, month days and positions select complete years", () => {
+  for (const [parts, expected] of [
+    ["BYMONTH=10,2,10", ["2027-02-01", "2027-10-01"]],
+    ["BYMONTH=2,10;BYMONTHDAY=1,-1", ["2027-02-01", "2027-02-28", "2027-10-01", "2027-10-31"]],
+    ["BYMONTH=2,10;BYMONTHDAY=1,-1;BYSETPOS=1,-1,1,99", ["2027-02-01", "2027-10-31"]],
+    ["BYMONTH=2,10;BYDAY=MO;BYMONTHDAY=1,2,3,4;BYSETPOS=-1", ["2027-10-04"]],
+    ["BYMONTHDAY=31", ["2027-01-31", "2027-03-31", "2027-05-31", "2027-07-31", "2027-08-31", "2027-10-31", "2027-12-31"]],
+    ["BYDAY=MO;BYSETPOS=1,-1", ["2027-01-04", "2027-12-27"]],
+  ]) {
+    const doc = calendar("DTSTART:20260101T090000", `RRULE:FREQ=YEARLY;${parts}`);
+    for (const read of [doc, saved(doc)]) {
+      const dates = Array.from({ length: 12 }, (_, i) => monthDates(read.items[0], 2027, i + 1)).flat();
+      assert.deepEqual(dates, expected, parts);
+    }
+  }
+  const doc = calendar("DTSTART:20260220T090000", "RRULE:FREQ=YEARLY;INTERVAL=2;BYMONTH=2,10;BYMONTHDAY=1;BYSETPOS=1;COUNT=2");
+  assert.deepEqual(monthDates(doc.items[0], 2026, 2), []);
+  assert.deepEqual(monthDates(doc.items[0], 2027, 2), []);
+  assert.deepEqual(monthDates(doc.items[0], 2028, 2), ["2028-02-01"]);
+  assert.deepEqual(monthDates(doc.items[0], 2030, 2), ["2030-02-01"]);
+  assert.deepEqual(monthDates(doc.items[0], 2032, 2), []);
+});
+
+// Yearly weekday ordinals count within selected months, or within the whole year.
+test("yearly ordinal weekday lists count within months or the year", () => {
+  for (const [parts, expected] of [
+    ["BYMONTH=2,10;BYDAY=2MO,-1FR", ["2027-02-08", "2027-02-26", "2027-10-11", "2027-10-29"]],
+    ["BYMONTH=10;BYDAY=MO,-1FR;BYMONTHDAY=25,29,30", ["2027-10-25", "2027-10-29"]],
+    ["BYMONTH=10;BYDAY=+2mo;BYSETPOS=-1", ["2027-10-11"]],
+    ["BYDAY=2MO,-1FR", ["2027-01-11", "2027-12-31"]],
+    ["BYDAY=20MO,-20FR", ["2027-05-17", "2027-08-20"]],
+    ["BYDAY=53FR", ["2027-12-31"]],
+    ["BYMONTH=2;BYDAY=5MO", []],
+  ]) {
+    const doc = calendar("DTSTART:20260101T090000", `RRULE:FREQ=YEARLY;${parts}`);
+    doc.items[0] = Items.applyChanges(doc.items[0], { title: "Edited" });
+    for (const read of [doc, saved(doc)]) {
+      const dates = Array.from({ length: 12 }, (_, i) => monthDates(read.items[0], 2027, i + 1)).flat();
+      assert.deepEqual(dates, expected, parts);
+    }
+  }
+});
