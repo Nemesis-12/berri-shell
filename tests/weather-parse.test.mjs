@@ -257,3 +257,12 @@ test("the six later-day columns sample the mock's daytime hours for days one to 
     assert.ok(columns.every(hour => hour.time.startsWith(model.days[day].date)));
   }
 });
+
+test("the current-hour strip advances while data is stale and ends when hours run out", () => {
+  const model = lib.parse({ ...sample, utc_offset_seconds: -36000 });
+  assert.equal(lib.nextHours(model, Date.UTC(2026, 8, 30, 17, 1))[0].time, "2026-09-30T07:00");
+  assert.equal(lib.stripHours(model, 0, Date.UTC(2026, 9, 1, 10, 1))[0].time, "2026-10-01T00:00");
+  assert.equal(lib.nextHours(model, Date.UTC(2026, 9, 2, 10)).length, 0);
+  assert.equal(lib.nextHours(model, Date.UTC(2026, 8, 30, 9)).length, 0);
+  assert.equal(lib.stripHours(model, 1, Date.UTC(2026, 8, 30, 17))[0].time, "2026-10-01T06:00");
+});
