@@ -236,3 +236,24 @@ test("a selected date stays selected when the rolling forecast crosses midnight"
   assert.equal(lib.selectedDay(after, ""), 0);
   assert.equal(lib.dayDetail(lib.parse(sample), 7), null);
 });
+
+test("the six later-day columns sample the mock's daytime hours for days one to six", () => {
+  const week = structuredClone(sample);
+  for (let day = 2; day < 7; day++) {
+    const date = `2026-10-0${day}`;
+    for (let hour = 0; hour < 24; hour++) {
+      week.hourly.time.push(`${date}T${String(hour).padStart(2, "0")}:00`);
+      for (const field of Object.keys(week.hourly))
+        if (field !== "time") week.hourly[field].push(week.hourly[field][0]);
+    }
+    week.daily.time.push(date);
+    for (const field of Object.keys(week.daily))
+      if (field !== "time") week.daily[field].push(week.daily[field][1]);
+  }
+  const model = lib.parse(week);
+  for (let day = 1; day <= 6; day++) {
+    const columns = lib.stripHours(model, day).slice(0, 6);
+    assert.deepEqual(Array.from(columns, hour => format.hourLabel(hour.time, true)), ["06", "09", "12", "15", "18", "21"]);
+    assert.ok(columns.every(hour => hour.time.startsWith(model.days[day].date)));
+  }
+});
