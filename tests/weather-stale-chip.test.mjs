@@ -15,8 +15,8 @@ load("WeatherFormat", format);
 const NOW = Date.UTC(2026, 9, 4, 12, 0, 0);
 const MIN = 60000;
 
-test("the chip says NO DATA before the first good reading", () => {
-  assert.equal(format.staleChip(0, NOW), "NO DATA");
+test("the chip shows a placeholder before the first good reading", () => {
+  assert.equal(format.staleChip(0, NOW), "-");
 });
 
 test("the chip shows the age of the last good reading", () => {

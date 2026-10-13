@@ -57,10 +57,10 @@ function millimetres(v) {
     return v > 0 ? (Math.round(v * 10) / 10).toString() : "0";
 }
 
-// Text of the stale-data chip: "NO DATA" before the first good reading,
+// Text of the stale-data chip: "-" before the first good reading,
 // otherwise the age of `updatedAt` at `now` (both ms): "JUST NOW", "5 M AGO", "2 H AGO", "3 D AGO".
 function staleChip(updatedAt, now) {
-    if (!updatedAt) return "NO DATA";
+    if (!updatedAt) return "-";
     var age = Times.ageText(updatedAt, now, "shortCaps");
     return age === "NOW" ? "JUST NOW" : age.replace(/^(\d+)([MHD])$/, "$1 $2 AGO");
 }
