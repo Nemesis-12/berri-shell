@@ -89,24 +89,24 @@ var ZONE_SCAN_DAYS = 3660; // a zoned series is followed for ten years
 var ZONE_SCAN_STEP = 21;
 
 /**
- * The source-zone data of a repeating event with a named zone: its first source clock, its length in
+ * The source-clock data of a repeating event in UTC or a named zone: its first source clock, its length in
  * minutes, and the offset from UTC (seconds) at that clock on each source day, as a list of
  * [first day, offset] changes. A repeat takes its time from the source zone, so the shown time
  * follows the daylight-saving changes of that zone. Null when the zone is unknown.
  */
 function zonedSeries(start, endValue, localZone) {
-    if (start.form !== "zone" || start.instantMs === null) return null;
+    if ((start.form !== "zone" && start.form !== "utc") || start.instantMs === null) return null;
     var hhmm = start.value.slice(9, 13);
     function offsetOn(dayN) {
         var wall = Times.keyOfDayNum(dayN).replace(/-/g, "") + "T" + hhmm + "00";
         return Math.round((Zones.clockMs(wall) - Zones.zoneInstant(wall, start.tzid, localZone)) / 1000);
     }
     var first = Times.dayNum(start.value.slice(0, 4) + "-" + start.value.slice(4, 6) + "-" + start.value.slice(6, 8));
-    var offset = offsetOn(first);
+    var offset = start.form === "utc" ? 0 : offsetOn(first);
     if (!isFinite(offset)) return null;
     var offsets = [[Times.keyOfDayNum(first), offset]];
     var before = first;
-    for (var n = first + ZONE_SCAN_STEP; n <= first + ZONE_SCAN_DAYS; n += ZONE_SCAN_STEP) {
+    for (var n = first + ZONE_SCAN_STEP; start.form !== "utc" && n <= first + ZONE_SCAN_DAYS; n += ZONE_SCAN_STEP) {
         var now = offsetOn(n);
         if (now === offset) { before = n; continue; }
         var low = before, high = n; // the offset changes on a day after `low`, up to `high`
@@ -151,9 +151,10 @@ function readRepeatRule(read, p, localZone) {
     item.byDay = repeatRule.byDay;
     item.monthWeekday = repeatRule.monthWeekday;
     item.until = repeatRule.until;
+    item.untilMs = repeatRule.untilSource ? repeatRule.untilSource.instantMs : null;
     read.sourceDates.until = repeatRule.untilSource || null;
     item.count = repeatRule.count;
-    item.ruleRest = rule.rest.length ? rule.rest.join(";") : null; // rule parts berri ignores, written back as they were
+    item.ruleRest = rule.rest.length ? rule.rest.join(";") : null; // retained rule parts, written back as they were
 }
 
 function readExdates(read, p, localZone) {
@@ -204,6 +205,7 @@ function setItemDates(item, start, endValue, isTodo) {
     if (first) {
         item.date = first.date;
         item.time = first.time;
+        item.startSecond = first.time === null ? 0 : (+first.value.slice(13, 15) || 0);
     }
     if (!start || !endValue) return;
     if (start.time === null) {

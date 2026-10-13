@@ -23,15 +23,18 @@ Item {
     required property string source
     required property real updatedAt
     required property string failure
+    required property string note
 
     readonly property color tint: CalendarColors.resolve(calColor)
     readonly property bool isLink: kind === "link"
+    readonly property bool hasNote: note !== "" && failure === ""
     readonly property string sourceLine: failure !== ""
         ? failure
-        : isLink ? (source + " · " + Times.ageText(updatedAt, row.now, "ago")) : (itemCount + (itemCount === 1 ? " item" : " items"))
+        : (isLink ? (source + " · " + Times.ageText(updatedAt, row.now, "ago")) : (itemCount + (itemCount === 1 ? " item" : " items")))
+            + (hasNote ? " · " + note : "")
 
     width: ListView.view.width
-    height: 46
+    height: Math.ceil(Math.max(46, sourceDetails.implicitHeight + 16))
 
     Rectangle {
         anchors.bottom: parent.bottom
@@ -73,8 +76,9 @@ Item {
         }
     }
 
-    // Name and source line, 5px apart, in boxes as tall as their CSS lines.
+    // Name and source line stay 5px apart. Notes wrap so the host and age stay visible.
     Column {
+        id: sourceDetails
         x: 12 + 12 + 10
         anchors.verticalCenter: parent.verticalCenter
         anchors.verticalCenterOffset: -0.5
@@ -102,13 +106,15 @@ Item {
 
         Item {
             width: parent.width
-            height: 9
+            height: row.hasNote ? Math.max(9, sourceText.implicitHeight) : 9
 
             MonoText {
+                id: sourceText
                 anchors.verticalCenter: parent.verticalCenter
                 width: parent.width
                 text: row.sourceLine.toUpperCase()
-                elide: Text.ElideRight
+                elide: row.hasNote ? Text.ElideNone : Text.ElideRight
+                wrapMode: row.hasNote ? Text.WordWrap : Text.NoWrap
                 font.pixelSize: 9
                 font.weight: Font.Medium
                 font.letterSpacing: 0.36

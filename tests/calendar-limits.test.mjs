@@ -99,3 +99,14 @@ test("a rejected item does not hide the other items of the month", () => {
   assert.equal(limited, true);
   assert.deepEqual(Object.keys(days), ["2026-10-05"]);
 });
+
+// A yearly step can produce hundreds of starts, and each start must cost work.
+test("yearly weekday expansion spends the work budget before a distant counted query", () => {
+  const heavy = monthQuery([record(0, { date: "1000-01-06", repeat: "yearly", byDay: [1], count: 1000000 })]);
+  assert.equal(heavy.limited, true);
+  assert.equal(heavy.count, 0);
+  assert.ok(heavy.ms < SLOW_CI_MS, `took ${heavy.ms} ms`);
+  const normal = monthQuery([record(0, { date: "2026-01-05", repeat: "yearly", byDay: [1], count: 100 })]);
+  assert.equal(normal.limited, false);
+  assert.deepEqual(Object.keys(normal.days), ["2026-10-05", "2026-10-12", "2026-10-19", "2026-10-26"]);
+});

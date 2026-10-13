@@ -13,17 +13,17 @@
  *
  * Item shape (all dates "YYYY-MM-DD", all times "HH:MM", local display time):
  *   uid, kind ("event" | "task" | "reminder"), title,
- *   date, time (null = all-day / no time), end (end time, events only),
+ *   date, time (null = all-day / no time), startSecond (seconds of the first start), end (end time, events only),
  *   endDate (last day of a multi-day all-day event, else null),
  *   color (preset key "accent" | "blue" | "green" | "yellow" | "red" | "cyan" | "magenta" | "orange",
  *   or a custom "#rrggbb"; stored as X-BERRI-COLOR, "accent" is not written),
  *   repeat ("none" | "daily" | "weekly" | "monthly" | "yearly"), interval,
- *   byDay (weekly only, 0 = Sunday), monthWeekday (monthly only: { nth, day }, nth 1 to 5 or -1 for the last,
- *   day 0 = Sunday; from BYDAY=2TU), until, count,
+ *   byDay (plain weekdays, 0 = Sunday), monthWeekday (monthly only: { nth, day }, nth 1 to 5 or -1 for the last,
+ *   day 0 = Sunday; from BYDAY=2TU), until, untilMs (inclusive timed bound), count,
  *   exdates (skipped occurrence dates), doneDates (occurrence dates ticked off),
  *   alarmMinutes (VALARM minutes before start, null = none), status, stamp,
- *   ruleRest (RRULE parts berri ignores, written back unchanged),
- *   zoned (repeating event with a named time zone: { date, time, length, offsets }, the first source clock,
+ *   ruleRest (retained RRULE parts, written back unchanged),
+ *   zoned (repeating event in UTC or a named time zone: { date, time, length, offsets }, the first source clock,
  *   the length in minutes and the [first day, UTC offset in seconds] changes of that zone, so each
  *   occurrence follows the daylight-saving changes of the zone; null otherwise),
  *   changedOccurrences (RECURRENCE-ID components of a repeating event: { from, cancelled, title, date, time, end, endDate },
@@ -58,7 +58,11 @@
  * A zoned series follows its zone for ten years from its first day.
  * A moved occurrence without DTEND has no end time. Deleting a moved occurrence of an editable calendar
  * leaves its RECURRENCE-ID component in the file.
- * BYMONTHDAY, BYSETPOS, a BYDAY list with week numbers and other rule parts stay raw but are ignored.
+ * Monthly and yearly BYMONTH, BYMONTHDAY and BYSETPOS use retained rule parts.
+ * Yearly BYDAY ordinals count within BYMONTH months, or within the year otherwise.
+ * Unsupported yearly parts stop expansion and add a calendar source note.
+ * Other retained rule parts are ignored.
+ * RDATE and EXRULE stay raw and are not applied. The calendar source row shows a note.
  * A cancelled item (STATUS:CANCELLED) has no occurrences, also in an editable calendar.
  */
 
@@ -166,10 +170,9 @@ function normalize(item) {
         if (item.alarmMinutes === null) item.alarmMinutes = 0;
     }
     if (item.repeat === "none") {
-        item.interval = 1; item.byDay = []; item.until = null; item.count = null; item.exdates = []; item.ruleRest = null;
+        item.interval = 1; item.byDay = []; item.until = null; item.untilMs = null; item.count = null; item.exdates = []; item.ruleRest = null;
         item.zoned = null; item.changedOccurrences = [];
     }
-    if (item.repeat !== "weekly") item.byDay = [];
     if (item.repeat !== "monthly") item.monthWeekday = null;
     return item;
 }
@@ -200,6 +203,7 @@ var fieldChecks = {
     kind: function (v) { return KINDS.indexOf(v) >= 0 ? v : undefined; },
     title: function (v) { return isText(v) ? v : undefined; },
     date: function (v) { return v === null || isDayKey(v) ? v : undefined; },
+    startSecond: function (v) { return isWhole(v, 0) && v < 60 ? v : undefined; },
     time: function (v) { return v === null || isClock(v) ? v : undefined; },
     end: function (v) { return v === null || isClock(v) ? v : undefined; },
     endDate: function (v) { return v === null || isDayKey(v) ? v : undefined; },
@@ -213,6 +217,7 @@ var fieldChecks = {
         return { nth: v.nth, day: v.day };
     },
     until: function (v) { return v === null || isDayKey(v) ? v : undefined; },
+    untilMs: function (v) { return v === null || typeof v === "number" && isFinite(v) ? v : undefined; },
     count: function (v) { return v === null || isWhole(v, 1) ? v : undefined; },
     exdates: listOf(isDayKey),
     doneDates: listOf(isDayKey),
@@ -257,8 +262,8 @@ function takeCheckedFields(item, fields) {
 function blankItem() {
     return {
         uid: "", kind: "event", title: "",
-        date: null, time: null, end: null, endDate: null,
-        color: "accent", repeat: "none", interval: 1, byDay: [], monthWeekday: null, until: null, count: null,
+        date: null, time: null, startSecond: 0, end: null, endDate: null,
+        color: "accent", repeat: "none", interval: 1, byDay: [], monthWeekday: null, until: null, untilMs: null, count: null,
         exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: null, ruleRest: null,
         zoned: null, changedOccurrences: [],
         raw: [], rawChildren: []
@@ -304,6 +309,8 @@ function applyChanges(item, changes) {
         next.ruleRest = null;
         if (next.repeat === "none") next.exdates = [];
     }
+    if (next.date !== item.date || next.time !== item.time) next.startSecond = 0;
+    if (next.until !== item.until) next.untilMs = null;
     // The zone data describes the imported start; a new start or repeat makes it wrong.
     if (next.date !== item.date || next.time !== item.time || next.end !== item.end || next.repeat !== item.repeat) next.zoned = null;
     next.stamp = stampNow();

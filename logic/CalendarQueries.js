@@ -279,6 +279,24 @@ function curlError(code) {
     }
 }
 
+/** A source note for unsupported recurrence properties, separate from read or sync failures. */
+function recurrenceNote(items) {
+    var names = [];
+    for (var i = 0; i < items.length; i++) {
+        var unsupported = Repeat.unsupportedYearlyParts(items[i]);
+        for (var p = 0; p < unsupported.length; p++) {
+            if (names.indexOf(unsupported[p]) < 0) names.push(unsupported[p]);
+        }
+        var raw = items[i].raw || [];
+        for (var r = 0; r < raw.length; r++) {
+            var match = /^(RDATE|EXRULE)[;:]/i.exec(raw[r]);
+            if (match && names.indexOf(match[1].toUpperCase()) < 0) names.push(match[1].toUpperCase());
+        }
+    }
+    names.sort().reverse(); // Stable order, with RDATE before EXRULE.
+    return names.length ? names.join(" and ") + (names.length === 1 ? " is" : " are") + " not supported" : "";
+}
+
 /** Keep feed records in the projection. Create feed items only for a requested month. */
 function projectStoredCalendars(calendars) {
     var rows = [], names = {}, local = [], sources = [];
@@ -290,7 +308,8 @@ function projectStoredCalendars(calendars) {
         rows.push({ id: cal.id, name: cal.name, kind: cal.kind, color: cal.color,
             hidden: cal.hidden, itemCount: cal.kind === "link" ? records.length : items.length,
             source: cal.kind === "link" ? linkHost(cal.url) : cal.kind === "file" ? cal.file : "",
-            updatedAt: cal.updatedAt, readOnly: cal.kind === "link", error: cal.error || "" });
+            updatedAt: cal.updatedAt, readOnly: cal.kind === "link", error: cal.error || "",
+            note: recurrenceNote(cal.kind === "link" ? records : items) });
         if (cal.kind === "link") {
             if (!cal.hidden) sources.push({ id: cal.id, color: cal.color,
                 colorOverrides: cal.colorOverrides, records: records });

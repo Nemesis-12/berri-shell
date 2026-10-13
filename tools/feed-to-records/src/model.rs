@@ -104,6 +104,8 @@ pub struct Record {
     pub month_weekday: Option<(i32, usize)>,
     pub until: Option<CalendarDate>,
     pub count: Option<usize>,
+    // Retained RRULE parts used by the shared occurrence query.
+    pub rule_rest: Option<String>,
     pub exdates: Vec<CalendarDate>,
     pub done_dates: Vec<CalendarDate>,
     pub alarm_minutes: Option<usize>,
@@ -112,6 +114,8 @@ pub struct Record {
     pub recurrence_id: Option<CalendarDate>,
     pub override_event: bool,
     pub changed: Vec<ChangedOccurrence>,
+    // Unsupported RDATE and EXRULE source lines for the calendar source note.
+    pub raw: Vec<String>,
 }
 
 impl Record {

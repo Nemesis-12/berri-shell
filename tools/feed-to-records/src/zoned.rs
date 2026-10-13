@@ -1,4 +1,4 @@
-//! Daylight-saving data of a repeating event in a named zone.
+//! Source-clock data of a repeating event in UTC or a named zone.
 
 use crate::date::{civil_from_days, day_key, days_from_civil, CalendarDate};
 use crate::model::Record;
@@ -78,17 +78,18 @@ fn series_length(record: &Record, start: i64) -> Option<i64> {
     }
 }
 
-// The source-zone data of a repeating event with a named zone (see zonedSeries in CalendarFormat.js).
+// The source-clock data of a repeating event in UTC or a named zone (see zonedSeries in IcsRead.js).
 // Returns None for other events and for an unknown zone.
 pub fn zoned_series(record: &Record) -> Option<ZonedSeries> {
     let Some(CalendarDate::DateTime {
         value,
-        zone: Some(zone),
-        utc: false,
+        zone,
+        utc,
     }) = &record.start
     else {
         return None;
     };
+    let zone = if *utc { "UTC" } else { zone.as_deref()? };
     if !record.repeats() || !zone_known(zone) {
         return None;
     }
@@ -99,7 +100,9 @@ pub fn zoned_series(record: &Record) -> Option<ZonedSeries> {
     );
     let clock_seconds =
         value[9..11].parse::<i64>().ok()? * 3600 + value[11..13].parse::<i64>().ok()? * 60;
-    let offsets = {
+    let offsets = if *utc {
+        vec![(day_key(first), 0)]
+    } else {
         let _restore = ZoneGuard::set(zone);
         zone_offsets(first, clock_seconds)?
     };

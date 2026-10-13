@@ -23,8 +23,11 @@ fn plain_weekdays(value: &str) -> Option<Vec<usize>> {
 // Reads one repeat rule into the fields that berri uses.
 pub fn repeat_rule(record: &mut Record, value: &str) {
     let mut ordinal_day = None;
+    let mut ordinal_part = None;
+    let mut rest = Vec::new();
     for part in value.split(';') {
         let Some((key, value)) = part.split_once('=') else {
+            rest.push(part);
             continue;
         };
         match key.to_ascii_uppercase().as_str() {
@@ -34,15 +37,25 @@ pub fn repeat_rule(record: &mut Record, value: &str) {
             "UNTIL" => record.until = calendar_date(value, &[]),
             "BYDAY" => match plain_weekdays(value) {
                 Some(days) => record.by_day = days,
-                None => ordinal_day = ordinal_weekday(value),
+                None => {
+                    ordinal_day = ordinal_weekday(value);
+                    if ordinal_day.is_some() {
+                        ordinal_part = Some(part);
+                    } else {
+                        rest.push(part);
+                    }
+                }
             },
-            _ => {}
+            _ => rest.push(part),
         }
     }
-    // A week number counts only in a monthly rule, and FREQ can come after BYDAY.
+    // Only monthly ordinals have a dedicated field. Yearly ordinals stay in rule_rest.
     if record.repeat == Repeat::Monthly {
         record.month_weekday = ordinal_day;
+    } else if let Some(part) = ordinal_part {
+        rest.push(part);
     }
+    record.rule_rest = (record.repeats() && !rest.is_empty()).then(|| rest.join(";"));
 }
 
 // Reads one BYDAY value with a week number, such as 2TU or -1FR.

@@ -239,3 +239,53 @@ fn changed_occurrences_and_zone_data() {
     assert!(json.contains("\"changedOccurrences\":[{\"from\":\"2026-10-12\",\"cancelled\":false,\"title\":\"Moved\",\"date\":\"2026-10-13\",\"time\":\"13:00\",\"end\":null,\"endDate\":null},{\"from\":\"2026-10-19\",\"cancelled\":true,\"title\":null,\"date\":null,\"time\":null,\"end\":null,\"endDate\":null}]"), "{json}");
     assert!(json.contains("\"zoned\":{\"date\":\"2026-10-05\",\"time\":\"09:00\",\"length\":60,\"offsets\":[[\"2026-10-05\",7200],[\"2026-10-25\",3600],"), "{json}");
 }
+
+// UTC repeats need a zero-offset source clock so local DST cannot change their instant.
+#[test]
+fn utc_repeat_keeps_its_source_clock() {
+    let json = convert_text("utc-repeat", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:utc\nDTSTART:20261026T140000Z\nDTEND:20261026T150000Z\nRRULE:FREQ=WEEKLY;COUNT=2\nEND:VEVENT\nEND:VCALENDAR\n");
+    assert!(json.contains("\"zoned\":{\"date\":\"2026-10-26\",\"time\":\"14:00\",\"length\":60,\"offsets\":[[\"2026-10-26\",0]]}"), "{json}");
+}
+
+// Compact records must keep a timed UNTIL instant for the occurrence query.
+#[test]
+fn timed_until_keeps_its_inclusive_instant() {
+    let json = convert_text("timed-until", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:until\nDTSTART:20261008T140000Z\nRRULE:FREQ=DAILY;UNTIL=20261009T135959Z\nEND:VEVENT\nEND:VCALENDAR\n");
+    assert!(json.contains("\"untilMs\":1791554399000"), "{json}");
+}
+
+// Unsupported recurrence lines remain in compact records for the source note.
+#[test]
+fn unsupported_recurrence_lines_reach_the_source_note() {
+    let json = convert_text("unsupported-repeat", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:unsupported\nDTSTART:20261008T090000\nRDATE:20261012T090000\nEXRULE:FREQ=WEEKLY;BYDAY=MO\nEND:VEVENT\nEND:VCALENDAR\n");
+    assert!(json.contains("\"raw\":[\"RDATE:20261012T090000\",\"EXRULE:FREQ=WEEKLY;BYDAY=MO\"]"), "{json}");
+}
+
+// UNTIL comparisons must use DTSTART seconds even though the view shows minutes.
+#[test]
+fn timed_until_keeps_start_seconds() {
+    let json = convert_text("start-seconds", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:seconds\nDTSTART:20261008T140030Z\nRRULE:FREQ=DAILY;UNTIL=20261009T140015Z\nEND:VEVENT\nEND:VCALENDAR\n");
+    assert!(json.contains("\"startSecond\":30"), "{json}");
+}
+
+// Monthly date limits and positions must reach the same expansion used by editable files.
+#[test]
+fn monthly_limits_reach_the_occurrence_query() {
+    let json = convert_text("monthly-limits", "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:limits\nDTSTART:20261001T090000\nRRULE:FREQ=MONTHLY;BYDAY=MO,TU;BYMONTH=10;BYMONTHDAY=1,2,3;BYSETPOS=-1;WKST=SU\nEND:VEVENT\nEND:VCALENDAR\n");
+    assert!(json.contains("\"byDay\":[1,2]"), "{json}");
+    assert!(json.contains("\"ruleRest\":\"BYMONTH=10;BYMONTHDAY=1,2,3;BYSETPOS=-1;WKST=SU\""), "{json}");
+}
+
+// An unsupported frequency must not populate retained rule parts.
+#[test]
+fn unsupported_frequency_has_no_rule_rest() {
+    for (freq, repeat, rest) in [
+        ("HOURLY", "none", "null"),
+        ("YEARLY", "yearly", "\"BYMONTH=10\""),
+    ] {
+        let text = format!("BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:frequency\nDTSTART:20261005T090000\nRRULE:FREQ={freq};BYMONTH=10\nEND:VEVENT\nEND:VCALENDAR\n");
+        let json = convert_text(&format!("frequency-{freq}"), &text);
+        assert!(json.contains(&format!("\"repeat\":\"{repeat}\"")), "{json}");
+        assert!(json.contains(&format!("\"ruleRest\":{rest}")), "{json}");
+    }
+}
