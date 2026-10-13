@@ -266,6 +266,7 @@ Singleton {
         var meta = _calendars[id];
         var clean = Items.cleanColor(color);
         if (!meta || meta.kind === "local" || !clean) return false;
+        if (meta.kind === "file" && !canWriteCalendar(id)) return false;
         var previousColor = meta.color;
         meta.color = clean;
         var path = dir + "/" + meta.file;
@@ -293,7 +294,7 @@ Singleton {
     // ---- helper interface. Helpers pass results; Calendar owns stored state and notification order.
 
     /**
-     * True when an edit may write this calendar. After a failed read, the
+     * True when an edit may write this calendar after its first read. After a failed read, the
      * file may hold changes berri never saw, so a write could overwrite them.
      * Such a calendar reads the file again first. If that fails, the
      * edit is refused and `saveFailed` carries the read error.
@@ -375,7 +376,9 @@ Singleton {
 
     /** Write text for a stored document. The result carries text only, never the stored document. */
     function prepareCalendarWrite(path: string): var {
-        var calendar = _calendars[_idOfPath(path)];
+        var id = _idOfPath(path);
+        if (!canWriteCalendar(id)) return null;
+        var calendar = _calendars[id];
         return { nextText: Format.writeCalendar(calendar.document, _localZone),
             previousText: calendar.text, failurePrefix: "Could not save " + calendar.name };
     }

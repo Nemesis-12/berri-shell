@@ -60,6 +60,7 @@ QtObject {
     /** Writes the prepared text and lets Calendar apply the result. */
     function saveAndRebuild(path: string, uids): bool {
         var prepared = store.prepareCalendarWrite(path);
+        if (!prepared) return false;
         var written = write(path, prepared.nextText, prepared.previousText, prepared.failurePrefix);
         return store.acceptCalendarWrite(path, written, uids);
     }
