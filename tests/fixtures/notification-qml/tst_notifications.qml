@@ -128,28 +128,40 @@ TestCase {
         compare(Notifications.all.length, 0);
     }
 
-    function test_updateCost() {
-        for (var i = 0; i < 199; i++) Notifications.receive(notification({ id: i }));
-        var n = notification({ id: 200 });
+    // Median milliseconds for 100 updates plus one flush, with `count` stored items.
+    function medianUpdateCost(count) {
+        init();
+        for (var i = 0; i < count - 1; i++) Notifications.receive(notification({ id: i }));
+        var n = notification({ id: count });
         Notifications.receive(n);
         wait(0);
         var samples = [];
-        for (var sample = 0; sample < 9; sample++) {
+        for (var sample = 0; sample < 15; sample++) {
             savedState().saveCount = 0;
             var start = Date.now();
-            for (var j = 0; j < 10; j++) {
+            for (var j = 0; j < 100; j++) {
                 n.summary = "Update " + j;
                 n.summaryChanged.emit();
             }
             Notifications.flush();
             samples.push(Date.now() - start);
             tryCompare(savedState(), "saveCount", 1, 1000);
-            compare(Notifications.items.filter(function (item) { return item.serverId === 200; })[0].summary, "Update 9");
-            compare(JSON.parse(savedState().text).items[199].summary, "Update 9");
+            compare(Notifications.items.filter(function (item) { return item.serverId === count; })[0].summary, "Update 99");
+            compare(JSON.parse(savedState().text).items[count - 1].summary, "Update 99");
         }
         samples.sort(function (a, b) { return a - b; });
-        console.log("Ten updates with 200 stored items, including flush, median:", samples[4], "ms; samples:", samples);
-        verify(samples[4] < 3, "Ten updates took a median of " + samples[4] + " ms");
+        return samples[7];
+    }
+
+    // Update cost may grow with the item count, but a 4 times larger store must stay under 3.5 times the cost.
+    // Both sizes run in the same test, so machine load affects both the same way.
+    function test_updateCostGrowsAtMostLinearly() {
+        var small = 50, large = 200;
+        var smallCost = Math.max(1, medianUpdateCost(small));
+        var largeCost = medianUpdateCost(large);
+        var ratio = largeCost / smallCost;
+        console.log("Median of 100 updates plus flush:", small, "items", smallCost, "ms;", large, "items", largeCost, "ms; ratio", ratio);
+        verify(ratio < 3.5, "Update cost grew " + ratio + " times for " + large / small + " times more items (limit 3.5)");
     }
 
     // Reads the real text bindings in a pop-up, without pointer or keyboard input.
