@@ -26,6 +26,7 @@ Item {
     readonly property string group: Weather.weatherGroup(root.detail.code)
     readonly property bool hasFeelsLike: root.detail.feelsLikeC !== undefined && root.detail.feelsLikeC !== null
 
+    // Labels the selected calendar date without dereferencing an absent day.
     function whenLabel() {
         if (root.isNow) return "NOW";
         var day = Weather.days[root.day];
@@ -121,7 +122,7 @@ Item {
                 id: big
                 text: Fmt.number(root.detail.tempC)
                 color: root.stale ? Theme.dim : Theme.fg
-                Behavior on color { StandardColorMotion { duration: Theme.stateMs } }
+                Behavior on color { ColorAnimation { duration: Theme.stateMs; easing.type: Easing.OutCubic } }
                 font.pixelSize: 128
                 font.letterSpacing: -5.12
                 x: -2
@@ -138,12 +139,14 @@ Item {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: 4
-                visible: root.group !== "unknown"
+                opacity: root.group === "unknown" ? 0 : 1
+                visible: opacity > 0.001
+                Fade on opacity { duration: Theme.stateMs }
                 name: Weather.iconForGroup(root.group, root.byDay)
                 size: 48
                 strokeWidth: 1.4
                 color: root.stale ? Theme.dim : Theme.accentLight
-                Behavior on color { StandardColorMotion { duration: Theme.stateMs } }
+                Behavior on color { ColorAnimation { duration: Theme.stateMs; easing.type: Easing.OutCubic } }
             }
         }
 

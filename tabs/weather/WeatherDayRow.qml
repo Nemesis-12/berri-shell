@@ -22,8 +22,9 @@ Rectangle {
     property real pick: root.selected ? 1 : 0
 
     Behavior on pick {
-        StandardMotion {
-            duration: 200
+        NumberAnimation {
+            duration: Theme.stateMs
+            easing.type: Easing.OutCubic
         }
     }
 
@@ -60,7 +61,9 @@ Rectangle {
     Icon {
         x: 14 + 48 + 10
         anchors.verticalCenter: parent.verticalCenter
-        visible: root.day.code !== null
+        opacity: root.day.code === null ? 0 : 1
+        visible: opacity > 0.001
+        Fade on opacity { duration: Theme.stateMs }
         name: Weather.iconForGroup(Weather.weatherGroup(root.day.code), true)
         size: 18
         strokeWidth: 1.6

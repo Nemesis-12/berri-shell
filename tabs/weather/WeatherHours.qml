@@ -76,7 +76,9 @@ Item {
             Icon {
                 x: 14
                 y: 14 + 9 + cell.spread
-                visible: cell.modelData.code !== null
+                opacity: cell.modelData.code === null ? 0 : 1
+                visible: opacity > 0.001
+                Fade on opacity { duration: Theme.stateMs }
                 name: Weather.iconForGroup(Weather.weatherGroup(cell.modelData.code), cell.modelData.isDay)
                 size: 20
                 strokeWidth: 1.6

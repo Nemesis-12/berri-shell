@@ -29,7 +29,7 @@ Item {
             size: 22
             strokeWidth: 1.5
             color: root.stale ? Theme.dim : Theme.accentLight
-            Behavior on color { StandardColorMotion { duration: Theme.stateMs } }
+            Behavior on color { ColorAnimation { duration: Theme.stateMs; easing.type: Easing.OutCubic } }
         }
 
         Text {
@@ -41,7 +41,7 @@ Item {
             font.pixelSize: 30
             lineHeight: 1
             color: root.stale ? Theme.dim : Theme.fg
-            Behavior on color { StandardColorMotion { duration: Theme.stateMs } }
+            Behavior on color { ColorAnimation { duration: Theme.stateMs; easing.type: Easing.OutCubic } }
         }
 
         StaleChip {

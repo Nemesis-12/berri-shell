@@ -25,8 +25,9 @@ Item {
     property real blend: showB ? 1 : 0
 
     Behavior on blend {
-        StandardMotion {
-            duration: 260
+        NumberAnimation {
+            duration: Theme.stateMs
+            easing.type: Easing.OutCubic
         }
     }
 
