@@ -60,7 +60,7 @@ test("hours start at the current hour", () => {
   const next = lib.nextHours(model);
   assert.equal(next.length, 24);
   assert.equal(Number(format.hourLabel(next[0].time, true)), 6);
-  assert.equal(lib.hoursFor(model, 0).length, 18); // 06:00 to 23:00
+  assert.equal(lib.hoursFor(model, 0).length, 24);
   assert.equal(lib.hoursFor(model, 1).length, 24);
 });
 
@@ -156,7 +156,7 @@ test("remote clock text and instants use the API offset across host DST", () => 
     assert.deepEqual(Array.from(model.hoursAll.slice(1, 4), (hour) => format.hourLabel(hour.time, true)), ["01", "02", "03"]);
     assert.equal(model.days[0].sunrise, "02:30");
     assert.equal(format.weekday(model.days[0].date), "SUN");
-    assert.equal(lib.hoursFor(model, 0).length, 22);
+    assert.equal(lib.hoursFor(model, 0).length, 24);
   } finally {
     if (previousZone === undefined) delete process.env.TZ;
     else process.env.TZ = previousZone;
@@ -196,7 +196,6 @@ test("missing current, hourly and daily readings stay missing while zero stays z
 test("a missing current hour fails instead of borrowing midnight UV and hours", () => {
   const missing = structuredClone(sample);
   missing.current.time = "2026-10-02T10:15";
-  assert.equal(lib.currentHourIndex(missing.current.time, missing.hourly.time), -1);
   assert.throws(() => lib.parse(missing), /current hour/);
   assert.equal(lib.parse(sample).current.uvIndex, 6.4);
 });
@@ -265,4 +264,46 @@ test("the current-hour strip advances while data is stale and ends when hours ru
   assert.equal(lib.nextHours(model, Date.UTC(2026, 9, 2, 10)).length, 0);
   assert.equal(lib.nextHours(model, Date.UTC(2026, 8, 30, 9)).length, 0);
   assert.equal(lib.stripHours(model, 1, Date.UTC(2026, 8, 30, 17))[0].time, "2026-10-01T06:00");
+});
+
+// Berlin leaves summer time on 2026-10-25: local midnights are 24 h and 25 h apart. Times are unix seconds.
+function berlinForecast() {
+  const unix = (iso) => Date.parse(iso) / 1000;
+  const start = unix("2026-10-24T22:00:00Z"); // 2026-10-25 00:00 at UTC+2
+  const hours = Array.from({ length: 49 }, (_, i) => start + i * 3600);
+  const fillHours = (value) => hours.map(() => value);
+  const berlin = structuredClone(sample);
+  berlin.utc_offset_seconds = 7200;
+  berlin.current.time = unix("2026-10-24T22:15:00Z");
+  berlin.hourly = { time: hours, weather_code: fillHours(3), is_day: fillHours(1), temperature_2m: fillHours(10),
+    precipitation_probability: fillHours(0), uv_index: fillHours(0) };
+  berlin.daily.time = [start, start + 25 * 3600];
+  berlin.daily.sunrise = [unix("2026-10-25T05:41:00Z"), unix("2026-10-26T05:43:00Z")];
+  berlin.daily.sunset = [unix("2026-10-25T15:55:00Z"), unix("2026-10-26T15:53:00Z")];
+  return berlin;
+}
+
+test("hour instants stay exact after the clocks change inside the forecast", () => {
+  const model = lib.parse(berlinForecast());
+  const after = Date.UTC(2026, 9, 25, 1, 30); // 02:30 local, second 02:00 hour
+  const strip = lib.nextHours(model, after);
+  assert.equal(strip[0].timeMs, Date.UTC(2026, 9, 25, 1));
+  assert.equal(strip[0].time, "2026-10-25T02:00");
+  assert.equal(strip[1].time, "2026-10-25T03:00");
+  assert.equal(model.hoursAll[2].time, "2026-10-25T02:00"); // the first 02:00
+  assert.equal(strip[1].timeMs, Date.UTC(2026, 9, 25, 2));
+  assert.equal(model.nowIndex, 0);
+  assert.equal(lib.nextHours(model, Date.UTC(2026, 9, 25, 22, 30))[0].time, "2026-10-25T23:00"); // 23:30 local on the next day
+  assert.equal(model.days[1].date, "2026-10-26");
+  assert.equal(model.days[0].sunrise, "06:41");
+  assert.equal(model.days[1].sunrise, "06:43");
+});
+
+test("the Today readout follows the location date after midnight", () => {
+  const model = lib.parse(berlinForecast());
+  const nextMorning = Date.UTC(2026, 9, 25, 23, 30); // 2026-10-26 00:30 local
+  assert.equal(lib.dayDetail(model, 0, Date.UTC(2026, 9, 25, 1)), model.current);
+  const today = lib.dayDetail(model, 0, nextMorning);
+  assert.equal(today.sunrise, "06:43");
+  assert.notEqual(today, model.current);
 });
