@@ -46,7 +46,7 @@ class CalendarWriteTests(unittest.TestCase):
         self.env["XDG_RUNTIME_DIR"] = "/proc/self/cwd/runtime"
 
     # Start only this isolated fixture and stop after the checks, never the desktop shell.
-    def run_qml(self, body, finish_after_ms=0):
+    def run_qml(self, body, wait_for_settings=False):
         qml = self.root / "shell.qml"
         qml.write_text('''import QtQuick
 import Quickshell
@@ -55,7 +55,20 @@ import qs.services
 import "logic/CalendarItems.js" as Items
 Scope {
     FileView { id: externalWriter; blockWrites: true; atomicWrites: true }
-    Timer { interval: ''' + str(finish_after_ms) + '''; running: interval > 0; onTriggered: { console.log("TEST PASS"); Qt.quit(); } }
+    property bool waitForSettings: ''' + str(wait_for_settings).lower() + '''
+    id: fixture
+    Component { id: settingsReader; FileView { blockLoading: true; printErrors: false } }
+    Timer {
+        id: settingsPoll
+        interval: 25; repeat: true
+        onTriggered: {
+            const reader = settingsReader.createObject(fixture, { path: FolderRoots.state + "/calendars.json" });
+            const text = reader.text();
+            reader.destroy();
+            if (!text || JSON.parse(text).calendars[0].color !== "blue") return;
+            console.log("TEST PASS"); Qt.quit();
+        }
+    }
     function check(ok, message) {
         if (!ok) { console.error("TEST FAIL", message); Qt.quit(); }
         return ok;
@@ -66,6 +79,7 @@ Scope {
         onTriggered: {
             if (!Calendar.ready) return;
             stop();
+            if (waitForSettings) settingsPoll.start();
 ''' + body + '''
         }
     }
@@ -120,9 +134,9 @@ Scope {
     # Saved settings must not prevent the first local event after a restart.
     def test_saved_color_without_local_file_allows_first_event_after_restart(self):
         self.path.unlink()
-        self.run_qml(''' 
+        self.run_qml('''
             Calendar.setCalendarColor("berri", "blue");
-''', finish_after_ms=500)
+''', wait_for_settings=True)
         settings = self.test_home / ".local/state/berri-shell/calendars.json"
         self.assertTrue(settings.exists())
         self.assertFalse(self.path.exists())
