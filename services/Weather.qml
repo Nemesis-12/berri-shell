@@ -275,19 +275,20 @@ Singleton {
     Process {
         id: geocodeProc
         property int locationRevision: -1
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
-                if (geocodeProc.locationRevision !== root.locationRevision) return;
+        stdout: StdioCollector { waitForEnd: true }
+        onExited: (code) => {
+            if (locationRevision === root.locationRevision) {
                 try {
-                    var place = WeatherParse.placeFromGeocoding(JSON.parse(text).results, root.latitude, root.longitude);
+                    if (code !== 0) throw new Error("Offline");
+                    var results = JSON.parse(stdout.text).results;
+                    if (results !== undefined && !Array.isArray(results)) throw new Error("Bad places");
+                    var place = WeatherParse.placeFromGeocoding(results, root.latitude, root.longitude);
                     if (place !== "") root.locationName = place;
+                    else root.logFailure("no location", "weather geocoding");
                 } catch (e) {
-                    // Keep the wttr.in name.
+                    root.logFailure(code !== 0 ? "offline" : "bad data", "weather geocoding");
                 }
             }
-        }
-        onExited: {
             if (root.pendingCity !== "") Qt.callLater(root.lookupCountry, root.pendingCity, root.locationRevision);
             root.pendingCity = "";
         }
