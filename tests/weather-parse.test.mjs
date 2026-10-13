@@ -192,3 +192,11 @@ test("missing current, hourly and daily readings stay missing while zero stays z
   assert.equal(format.number(0), "0");
   assert.equal(format.millimetres(0), "0");
 });
+
+test("a missing current hour fails instead of borrowing midnight UV and hours", () => {
+  const missing = structuredClone(sample);
+  missing.current.time = "2026-10-02T10:15";
+  assert.equal(lib.currentHourIndex(missing.current.time, missing.hourly.time), -1);
+  assert.throws(() => lib.parse(missing), /current hour/);
+  assert.equal(lib.parse(sample).current.uvIndex, 6.4);
+});
