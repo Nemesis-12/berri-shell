@@ -1,5 +1,6 @@
 import QtQuick
 import "../../logic/PixelGrid.js" as PixelGrid
+import "../../logic/SystemFormat.js" as Fmt
 import qs.common
 import qs.services
 
@@ -15,15 +16,16 @@ Item {
     /** Core number shown as "C0". */
     property int core: 0
 
-    /** 0 to 100. */
-    property real load: 0
+    /** 0 to 100, or null while the load is not measured (shown as a dash, no fill). */
+    property var load: null
 
     readonly property real dpr: PixelGrid.dpr(Screen.devicePixelRatio)
     property real level: 0
 
     // Follows `load` only for changes of a pixel or more; see SystemMeter.
     onLoadChanged: {
-        if (Math.abs(load - level) / 100 * height >= 1 || load === 0) level = load;
+        const target = load === null ? 0 : load;
+        if (Math.abs(target - level) / 100 * height >= 1 || target === 0) level = target;
     }
 
     Behavior on level {
@@ -55,7 +57,7 @@ Item {
         x: 9
         lineTop: 10
         font.pixelSize: 20
-        text: Math.round(root.load)
+        text: Fmt.wholePercent(root.load)
         color: root.difference(Theme.fg, Theme.card)
     }
 
@@ -78,7 +80,7 @@ Item {
             x: 9
             lineTop: 10
             font.pixelSize: 20
-            text: Math.round(root.load)
+            text: Fmt.wholePercent(root.load)
             color: root.difference(Theme.fg, Theme.accentLight)
         }
 

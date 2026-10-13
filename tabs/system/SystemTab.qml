@@ -97,7 +97,7 @@ Item {
             width: PixelGrid.snap(241 + (index + 1) * slot - 1, root.dpr) - x
             height: 150
             core: index
-            load: SystemStats.coreLoads[index] || 0
+            load: SystemStats.coreLoads[index] ?? null
         }
     }
 

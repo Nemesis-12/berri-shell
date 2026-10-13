@@ -68,6 +68,10 @@ Item {
         SystemProcessTable { id: table }
     }
 
+    Item { width: 60; height: 150
+        SystemCore { id: core; anchors.fill: parent; core: 3 }
+    }
+
     TestCase {
         name: "SystemLists"
         when: windowShown
@@ -250,6 +254,16 @@ Item {
             speaker.paired = true;
             compare(speaker.trusted, false);
             compare(speaker.connectCalls, 0);
+        }
+
+        function test_core_meter_shows_a_dash_until_its_load_is_known() {
+            core.load = null;
+            verify(texts(core, []).includes("-"), texts(core, []).join("|"));
+            verify(!texts(core, []).includes("0"), texts(core, []).join("|"));
+            compare(core.level, 0);
+            core.load = 42.4;
+            verify(texts(core, []).includes("42"), texts(core, []).join("|"));
+            verify(!texts(core, []).includes("-"), texts(core, []).join("|"));
         }
 
         function test_staggered_failed_pairings_each_keep_their_own_deadline() {
