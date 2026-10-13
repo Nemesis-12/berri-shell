@@ -97,3 +97,7 @@ test("weather ignores a late geocoding reply after coordinates change", () => {
 test("weather logs a failed name request without response text or coordinates", () => {
   runWeather("name-failure");
 });
+
+test("weather logs malformed geocoding while keeping the fallback place name", () => {
+  runWeather("geocode-failure");
+});

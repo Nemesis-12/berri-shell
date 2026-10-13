@@ -25,7 +25,7 @@ Item {
 
     // Delays a request until the scenario chooses to complete it.
     function respond(process) {
-        if (["name-race", "geocode-race", "name-failure"].indexOf(config.scenario) >= 0) {
+        if (["name-race", "geocode-race", "name-failure", "geocode-failure"].indexOf(config.scenario) >= 0) {
             var url = process.command[process.command.length - 1];
             if (url.indexOf("api.open-meteo.com/v1/forecast") >= 0) {
                 finish(process, forecast(18));
@@ -42,8 +42,15 @@ Item {
                 Qt.exit(0);
                 return;
             }
-            if (config.scenario === "geocode-race" && url.indexOf("wttr.in") >= 0) {
+            if (["geocode-race", "geocode-failure"].indexOf(config.scenario) >= 0 && url.indexOf("wttr.in") >= 0) {
                 finish(process, { nearest_area: [{ areaName: [{ value: "Lisbon" }], country: [{ value: "Portugal" }] }] });
+                return;
+            }
+            if (config.scenario === "geocode-failure") {
+                finish(process, "not JSON");
+                if (!check(service.locationName === "Lisbon, Portugal", "A failed geocode must keep the fallback name")) return;
+                console.log("Weather checks passed for geocode failure");
+                Qt.exit(0);
                 return;
             }
             service.useCoords(40.4, -3.7, "Madrid, ES");
