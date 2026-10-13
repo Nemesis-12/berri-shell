@@ -37,6 +37,7 @@ TestCase {
     // Reset only the public inputs and pop-up state between checks.
     function init() {
         popup._hideNow();
+        popup._queue = [];
         popup.anchorRect = Qt.rect(101, 10, 124, 30);
         popup.dpr = 1;
         popup.dashboardOpen = false;
@@ -95,20 +96,27 @@ TestCase {
         verify(popup.active);
     }
 
-    // Keep the current dashboard policy for this prefactor, including dropped critical arrivals.
-    function test_dashboardHidesAndRejectsCards() {
+    // The dashboard hides the card. Critical and transient items have no other home, so they wait for the close.
+    function test_dashboardKeepsItemsThatWouldBeLost() {
         popup._receive(item("waiting"));
         popup._receive(item("current"));
         popup.dashboardOpen = true;
         compare(popup._current, null);
-        compare(popup._queue.length, 0);
+        compare(popup._queue.map(function (n) { return n.id; }), ["waiting"]);
         compare(popup.cardWidth, 0);
-        popup._receive(item("during-dashboard"));
+        compare(popup.active, false);
+        popup._receive(item("critical-during"));
+        popup._receive(Object.assign(item("transient-during", "normal"), { transient: true }));
+        popup._receive(item("stored-normal", "normal"));
         compare(popup._current, null);
+        compare(popup._queue.map(function (n) { return n.id; }), ["waiting", "critical-during", "transient-during"]);
+        compare(popup.active, false);
         popup.dashboardOpen = false;
+        compare(popup._current.id, "transient-during");
+        compare(popup._queue.map(function (n) { return n.id; }), ["waiting", "critical-during"]);
+        verify(popup.active);
         popup._receive(item("after-dashboard"));
         compare(popup._current.id, "after-dashboard");
-        verify(popup.active);
     }
 
     // The monitor input keeps arrivals on the focused monitor.
@@ -122,7 +130,7 @@ TestCase {
         verify(popup.active);
     }
 
-    // Fullscreen still drops normal cards and allows critical cards.
+    // Fullscreen drops normal cards and keeps critical ones, current or waiting.
     function test_fullscreenRules() {
         popup.blocked = true;
         popup._receive(item("blocked-normal", "normal"));
@@ -132,10 +140,32 @@ TestCase {
         popup.blocked = false;
         popup._receive(item("normal-on-top", "normal"));
         compare(popup._queue[0].id, "allowed-critical");
+        popup._receive(item("normal-waiting", "normal"));
         popup.blocked = true;
-        compare(popup._current, null);
+        compare(popup._current.id, "allowed-critical");
         compare(popup._queue.length, 0);
-        compare(popup.cardWidth, 0);
+    }
+
+    // A queued critical card survives when fullscreen hides a normal one.
+    function test_fullscreenKeepsQueuedCritical() {
+        popup._receive(item("waiting-critical"));
+        popup._receive(item("normal-on-top", "normal"));
+        popup.blocked = true;
+        compare(popup._current.id, "waiting-critical");
+        compare(popup._queue.length, 0);
+    }
+
+    // The pill is hidden in fullscreen, so a click must not open a dashboard that nothing reveals.
+    function test_fullscreenCardClickDoesNotOpenAlerts() {
+        popup.blocked = true;
+        popup._receive(item("critical"));
+        tryCompare(popup, "_progress", 1, 1000);
+        mouseClick(popup, popup.cardX + popup.cardWidth / 2, popup.cardY + 20);
+        compare(testCase.alertsAtRequest, null);
+        compare(popup._current.id, "critical");
+        popup.blocked = false;
+        mouseClick(popup, popup.cardX + popup.cardWidth / 2, popup.cardY + 20);
+        compare(testCase.alertsAtRequest.current, null);
     }
 
     // The host gets its navigation request only after the notification is read and the card is gone.
@@ -146,7 +176,7 @@ TestCase {
         popup._receive(item("queued"));
         popup._receive(stored);
         popup._openAlerts();
-        compare(testCase.alertsAtRequest, { current: null, active: false, queued: 0, read: true });
+        compare(testCase.alertsAtRequest, { current: null, active: false, queued: 2, read: true });
         compare(popup.cardWidth, 0);
     }
 }

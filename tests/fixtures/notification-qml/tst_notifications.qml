@@ -69,6 +69,7 @@ TestCase {
         Notifications.flush();
         Notifications.writeSaved();
         popup._hideNow();
+        popup._queue = [];
         alerts.visible = false;
         alerts.filter = "all";
         Notifications.all = [];

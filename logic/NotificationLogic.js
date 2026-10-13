@@ -181,6 +181,15 @@ function expireDelayMs(expireTimeout, urgency) {
     return expireTimeout === -1 ? 5000 : expireTimeout;
 }
 
+/**
+ * True when a pop-up that cannot show now must wait instead of being dropped.
+ * Other items stay in Alerts. Critical items must be seen, and a transient
+ * item is never stored.
+ */
+function popupWaits(item) {
+    return item.urgency === "critical" || item.transient === true;
+}
+
 /** Bounds every waiting pop-up, dropping oldest non-critical items first. Updates keep their place. */
 function queuePopup(queue, item, max) {
     var next = upsert(queue, item);

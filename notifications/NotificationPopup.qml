@@ -41,7 +41,7 @@ Item {
     readonly property int _cardPadding: 12
 
     /** True from the moment a card grows until it has fully shrunk (the pill hides its content). */
-    readonly property bool active: _open || _queue.length > 0
+    readonly property bool active: _open || (_current !== null && _queue.length > 0)
 
     /** Card rectangle in this item's coordinates; zero size while nothing shows. */
     readonly property real cardX: card.visible ? card.x : 0
@@ -82,8 +82,10 @@ Item {
 
     /** Takes a new notification from the store. */
     function _receive(item) {
-        if (root.dashboardOpen || (root.blocked && item.urgency !== "critical") || !root._focusedHere) return;
-        if (root._current === null) {
+        if ((root.blocked && item.urgency !== "critical") || !root._focusedHere) return;
+        if (root.dashboardOpen) {
+            if (NotificationLogic.popupWaits(item)) root._queue = NotificationLogic.queuePopup(root._queue, item, root._maxQueued);
+        } else if (root._current === null) {
             root._showNow(item);
         } else if (root._open) {
             root._queue = NotificationLogic.queuePopup(root._queue, root._current, root._maxQueued);
@@ -121,10 +123,10 @@ Item {
         root._slideTo(0);
     }
 
-    /** Drops everything at once (dashboard opens, fullscreen starts, card clicked). */
+    /** Hides the card at once (dashboard opens, fullscreen starts, card clicked). Waiting critical and transient items stay. */
     function _hideNow() {
         dismissTimer.stop();
-        root._queue = [];
+        root._queue = root._queue.filter(NotificationLogic.popupWaits);
         root._open = false;
         root._hovered = false;
         slide.stop();
@@ -163,7 +165,8 @@ Item {
 
     /** Marks the current item read, hides the card, then asks the host to open Alerts. */
     function _openAlerts() {
-        if (root._current === null) return;
+        // The pill is hidden in fullscreen, so nothing would reveal the dashboard.
+        if (root._current === null || root.blocked) return;
         Notifications.markRead(root._current.id);
         root._hideNow();
         root.openAlertsRequested();
@@ -176,9 +179,18 @@ Item {
         function onRemoved(id) { root._drop(id); }
     }
 
-    onDashboardOpenChanged: if (dashboardOpen) _hideNow()
+    onDashboardOpenChanged: {
+        if (dashboardOpen) _hideNow();
+        else _showNext();
+    }
 
-    onBlockedChanged: if (blocked && !_critical) _hideNow()
+    // Fullscreen starts: only critical cards stay, the current one and the waiting ones.
+    onBlockedChanged: {
+        if (!blocked) return;
+        if (!_critical) _hideNow();
+        root._queue = root._queue.filter(function (n) { return n.urgency === "critical"; });
+        if (_current === null) _showNext();
+    }
 
     Timer {
         id: dismissTimer
@@ -242,7 +254,7 @@ Item {
 
         MouseArea {
             anchors.fill: parent
-            enabled: root._open
+            enabled: root._open && !root.blocked
             cursorShape: Qt.PointingHandCursor
             onClicked: root._openAlerts()
         }

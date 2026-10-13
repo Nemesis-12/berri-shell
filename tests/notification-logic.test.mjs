@@ -156,3 +156,10 @@ test("expireDelayMs reads the sender timeout as milliseconds", () => {
   assert.equal(lib.expireDelayMs(0, "normal"), 0, "0 means never");
   assert.equal(lib.expireDelayMs(60000, "critical"), 0, "critical items stay until dismissed");
 });
+
+test("popupWaits keeps only the pop-ups that Alerts cannot show again", () => {
+  assert.equal(lib.popupWaits({ urgency: "critical" }), true);
+  assert.equal(lib.popupWaits({ urgency: "normal", transient: true }), true);
+  assert.equal(lib.popupWaits({ urgency: "normal", transient: false }), false);
+  assert.equal(lib.popupWaits({ urgency: "low" }), false);
+});
