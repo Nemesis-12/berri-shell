@@ -275,3 +275,17 @@ fn monthly_limits_reach_the_occurrence_query() {
     assert!(json.contains("\"byDay\":[1,2]"), "{json}");
     assert!(json.contains("\"ruleRest\":\"BYMONTH=10;BYMONTHDAY=1,2,3;BYSETPOS=-1;WKST=SU\""), "{json}");
 }
+
+// An unsupported frequency must not populate retained rule parts.
+#[test]
+fn unsupported_frequency_has_no_rule_rest() {
+    for (freq, repeat, rest) in [
+        ("HOURLY", "none", "null"),
+        ("YEARLY", "yearly", "\"BYMONTH=10\""),
+    ] {
+        let text = format!("BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:frequency\nDTSTART:20261005T090000\nRRULE:FREQ={freq};BYMONTH=10\nEND:VEVENT\nEND:VCALENDAR\n");
+        let json = convert_text(&format!("frequency-{freq}"), &text);
+        assert!(json.contains(&format!("\"repeat\":\"{repeat}\"")), "{json}");
+        assert!(json.contains(&format!("\"ruleRest\":{rest}")), "{json}");
+    }
+}
