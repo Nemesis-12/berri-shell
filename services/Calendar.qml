@@ -311,7 +311,7 @@ Singleton {
         var text = calendarFiles.readNow(calendar.path);
         if (text !== null) {
             acceptCalendarRead(calendar.path, text, false);
-            return true;
+            if (!calendar.readFailed) return true;
         }
         root.lastError = root.readErrorText(calendar.name);
         root.saveFailed(root.lastError);
@@ -329,9 +329,27 @@ Singleton {
 
     // A file could not be read. Keep any cached document for display, but refuse edits until a read succeeds.
     function _readFailed(calendar: var): void {
+        calendar.mayCreate = false;
         calendar.readFailed = true;
         calendar.error = root.readErrorText(calendar.name);
         calendar.loaded = true;
+        _rebuild();
+        _checkReady();
+    }
+
+    /**
+     * FileNotFound is not a successful read for an existing calendar. Only a
+     * new local calendar, absent from saved state and never read, may start empty.
+     * Its null text means there is no previous file to back up on its first save.
+     */
+    function acceptCalendarMissing(path: string): void {
+        var calendar = _calendars[_idOfPath(path)];
+        if (!calendar) return;
+        if (!calendar.mayCreate || calendar.loaded) { _readFailed(calendar); return; }
+        calendar.document = Format.emptyCalendar();
+        calendar.text = null;
+        calendar.loaded = true;
+        calendar.mayCreate = false;
         _rebuild();
         _checkReady();
     }
@@ -353,7 +371,12 @@ Singleton {
         var id = _idOfPath(path);
         if (!id) return;
         var calendar = _calendars[id];
-        if (failed && calendar.kind !== "link") { _readFailed(calendar); return; }
+        // Read success alone is not parse success. Empty or incomplete text and
+        // OS errors keep the last valid document and refuse writes. A complete
+        // empty VCALENDAR is valid. Unknown fields remain the reader's concern.
+        if (calendar.kind !== "link" && (failed || !Format.isCompleteCalendar(text))) { _readFailed(calendar); return; }
+        var wasFailed = calendar.readFailed;
+        calendar.mayCreate = false;
         if (!failed) { calendar.readFailed = false; if (calendar.kind !== "link") calendar.error = ""; }
         var signature = text.length + ":" + Items.shortHash(text);
         if (failed && calendar.kind === "link") { _recordsFailed(calendar, calendar.convertError || root.parserError || root.recordsErrorText); return; }
@@ -369,7 +392,7 @@ Singleton {
             }
             if (unnamed) _saveState();
             _rebuild();
-        }
+        } else if (wasFailed) _rebuild();
         calendar.loaded = true;
         _checkReady();
     }
@@ -622,6 +645,7 @@ Singleton {
         folder: root.dir
         onListed: paths => root._reconcile(paths)
         onRead: (path, text, failed) => root.acceptCalendarRead(path, text, failed)
+        onMissing: path => root.acceptCalendarMissing(path)
         onDownloaded: (request, code, jsonPath) => links.downloaded(request, code, jsonPath)
         onConvertFailed: jsonPath => {
             var id = root._idOfPath(jsonPath);

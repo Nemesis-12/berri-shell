@@ -1,5 +1,5 @@
 import QtQuick
-import "../logic/CalendarQueries.js" as Queries
+import "../logic/CalendarFormat.js" as Format
 import "../logic/CalendarSave.js" as Save
 
 /**
@@ -26,7 +26,7 @@ QtObject {
         if (!/\.ics$/i.test(from)) return fail("Not an .ics file");
         var text = files.readNow(from);
         if (text === null) return fail("Cannot read the file");
-        if (!Queries.looksLikeCalendar(text)) return fail("Not a calendar file");
+        if (!Format.isCompleteCalendar(text)) return fail("Not a calendar file");
         var prepared = store.prepareCalendarImport(from, text);
         if (prepared.existingId) return prepared.existingId;
         var written = write(prepared.path, text, "", "Could not import calendar");

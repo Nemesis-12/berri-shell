@@ -25,6 +25,7 @@ Scope {
 
     signal listed(var paths)
     signal read(string path, string text, bool failed)
+    signal missing(string path)
     signal downloaded(var request, int code, string jsonPath)
     signal parserMissing()
     /** The parser ran on a saved subscription and failed. The old records file may still be read. */
@@ -161,8 +162,11 @@ Scope {
                 root.read(filePath, content === null ? "" : content, content === null || content === "");
             }
             onLoaded: root.read(filePath, text(), false)
-            // A missing file is an empty calendar. Any other error is a failed read.
-            onLoadFailed: error => root.read(filePath, "", error !== FileViewError.FileNotFound)
+            // Calendar decides whether a missing local file is new or previously saved.
+            onLoadFailed: error => {
+                if (error === FileViewError.FileNotFound) root.missing(filePath);
+                else root.read(filePath, "", true);
+            }
             onFileChanged: {
                 if (isLink) readLink();
                 else reload();

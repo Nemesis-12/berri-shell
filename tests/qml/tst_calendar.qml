@@ -14,9 +14,9 @@ TestCase {
 
     // Build one stored item for a service action.
     function item(fields) { return Items.makeItem(Object.assign({ uid: "edited", title: "Before", date: "2026-10-05" }, fields)); }
-    // Build calendar metadata for the stored items.
+    // Build calendar metadata for items that have already been read.
     function calendar(items, fields) {
-        return Object.assign({ id: "berri", name: "berri", kind: "local", color: "accent", hidden: false, document: { items: items } }, fields || {});
+        return Object.assign({ id: "berri", name: "berri", kind: "local", color: "accent", hidden: false, loaded: true, document: { items: items } }, fields || {});
     }
     // Seed the actual service while disk and network access stay in memory.
     function service(items, extras) {
