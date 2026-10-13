@@ -117,3 +117,12 @@ test("the process service keeps null CPU for the first sample and numbers after"
   stats.readProcessSample("cpu 500 0 0 1500\n" + line(200));
   assert.equal(stats.processes[0].cpu, 100 * 100 / 1000);
 });
+
+test("a thread whose counters did not advance stays unknown and is left out of the core average", () => {
+  const before = "cpu 0 0 0 200\ncpu0 0 0 0 100\ncpu1 0 0 0 100";
+  const after = "cpu 100 0 0 300\ncpu0 100 0 0 100\ncpu1 0 0 0 100";
+  const first = readings.readCpuLoad(before, null);
+  assert.deepEqual(Array.from(readings.readCpuLoad(after, first.counters).coreLoads), [100, null]);
+  const groups = readings.readCoreGroups("0 0 0\n1 0 0");
+  assert.deepEqual(Array.from(readings.readCpuLoad(after, first.counters, groups).coreLoads), [100]);
+});

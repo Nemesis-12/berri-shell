@@ -194,7 +194,7 @@ test("a changed online thread count starts a fresh total load interval", () => {
   const after = readings.readCpuLoad("cpu 300 0 0 1700\ncpu0 150 0 0 950\ncpu1 150 0 0 750", first.counters);
   assert.equal(after.percent, null);
   assert.equal(after.threadCount, 2);
-  assert.deepEqual(Array.from(after.coreLoads), [50, 0]);
+  assert.deepEqual(Array.from(after.coreLoads), [50, null]);
 });
 
 test("disk parsing skips rows with too few fields or impossible sizes", () => {

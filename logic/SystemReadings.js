@@ -71,8 +71,8 @@ function readCpuLoad(text, previous, groups) {
     var beforeByCpu = Object.create(null);
     if (previous) previous.forEach(function (item) { beforeByCpu[item.id] = item; });
     for (var i = 1; i < counters.length; i++) {
-        // The first sample has nothing to compare to: no number, not zero.
-        loads[Number(counters[i].id.slice(3))] = previous ? cpuPercent(counters[i], beforeByCpu[counters[i].id]) || 0 : null;
+        // No earlier sample, a new thread or counters that did not advance: unknown (null), not zero.
+        loads[Number(counters[i].id.slice(3))] = previous ? cpuPercent(counters[i], beforeByCpu[counters[i].id]) : null;
     }
     var cores = groups && groups.length ? groups : Object.keys(loads).map(function (id) { return [Number(id)]; });
     var covered = Object.create(null);
