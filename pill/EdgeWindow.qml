@@ -42,7 +42,7 @@ PanelWindow {
     property bool wantsKeyboard: false
     /** Dims the monitor behind the panel. */
     property bool dimmed: false
-    /** Optional pop-up card (PillPopup) that takes input while it shows. */
+    /** Optional notification pop-up card that takes input while it shows. */
     property var card: null
 
     /** The dim layer was clicked. */

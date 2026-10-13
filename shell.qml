@@ -125,12 +125,18 @@ ShellRoot {
             }
 
             // Notification card that grows out of the pill (52); above the pill and the dim layer.
-            PillPopup {
+            NotificationPopup {
                 id: popup
                 anchors.fill: parent
-                pill: pill
+                anchorRect: pill.popupAnchor
+                dpr: pill.dpr
+                dashboardOpen: pill.panelOpen
                 screenName: modelData.name
                 blocked: FullscreenState.modeOn(modelData) === 2
+                onOpenAlertsRequested: {
+                    pill.activeTab = pill.tabIds.indexOf("alerts");
+                    pill.openPanel();
+                }
             }
         }
     }

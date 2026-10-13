@@ -2,7 +2,6 @@ import QtQuick
 import QtTest
 import Quickshell.Services.Notifications
 import qs.notifications
-import "qs/pill"
 import "qs/tabs/alerts"
 
 TestCase {
@@ -13,20 +12,13 @@ TestCase {
     width: 1000
     height: 700
 
-    QtObject {
-        id: pill
-        property bool panelOpen: false
-        property real dpr: 1
-        property real maskWidth: 124
-        property real width: 124
-        property real x: 0
-        property real y: 0
-        property real pillHeight: 34
-        property var tabIds: ["alerts"]
-        property int activeTab: 0
-        function openPanel() { panelOpen = true; }
+    NotificationPopup {
+        id: popup
+        anchorRect: Qt.rect(0, 0, 124, 34)
+        dpr: 1
+        dashboardOpen: false
+        screenName: "test"
     }
-    PillPopup { id: popup; pill: pill; screenName: "test" }
     AlertsTab { id: alerts; width: 1000; height: 700; visible: false }
     SignalSpy { id: historyChanges; target: Notifications; signalName: "allChanged" }
 

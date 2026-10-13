@@ -13,7 +13,7 @@ test("notifications stay bounded and current in the QML engine", (t) => {
   fs.mkdirSync(path.join(repo, "scratchpad"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(repo, "scratchpad", "notification-qml-"));
   fs.cpSync(path.join(repo, "tests/fixtures/notification-qml"), dir, { recursive: true });
-  for (const name of ["logic", "notifications", "pill", "tabs/alerts"]) {
+  for (const name of ["logic", "notifications", "tabs/alerts"]) {
     fs.cpSync(path.join(repo, name), path.join(dir, "qs", name), { recursive: true });
   }
   const common = ["Icon", "PanelShadow", "ColorFade", "Fade", "HoverButton", "SpringMotion", "StandardMotion", "EmphasizedMotion", "ToggleSwitch"];
@@ -24,7 +24,7 @@ test("notifications stay bounded and current in the QML engine", (t) => {
   fs.writeFileSync(path.join(dir, "qs/common/qmldir"), "module qs.common\n" +
     [...common, "AlertsAppIcon"].map((name) => `${name} 1.0 ${name}.qml`).join("\n"));
   fs.writeFileSync(path.join(dir, "qs/notifications/qmldir"),
-    "module qs.notifications\nsingleton Notifications 1.0 Notifications.qml\n");
+    "module qs.notifications\nsingleton Notifications 1.0 Notifications.qml\nNotificationPopup 1.0 NotificationPopup.qml\n");
   const env = { ...process.env, QT_QPA_PLATFORM: "offscreen", QSG_RHI_BACKEND: "software", XDG_CACHE_HOME: path.join(dir, "cache") };
   delete env.LD_LIBRARY_PATH;
   const result = spawnSync(runner, ["-input", dir, "-import", dir], { env, encoding: "utf8", timeout: 60000 });
