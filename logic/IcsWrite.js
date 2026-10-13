@@ -65,8 +65,16 @@ function dateLines(item, isTodo, localZone) {
     if (!item.date) return lines;
     // A task imported with DUE alone must not gain a different DTSTART.
     if (sources.start || !sources.end || !isTodo) lines.push(dateProp("DTSTART", item.date, item.time, sources.start, localZone));
+    var duration = sources.duration;
+    if (duration && duration.date === item.date && duration.time === item.time &&
+        duration.endTime === item.end && duration.endDate === item.endDate) {
+        lines.push(duration.raw);
+        return lines;
+    }
+    // An unsupported duration stays raw and must not gain a competing end property.
+    if (item.raw.some(function (line) { return /^DURATION[;:]/i.test(line); })) return lines;
     var lastDay = item.endDate || item.date;
-    var endSource = sources.end || sources.start;
+    var endSource = sources.end || (duration && duration.end) || sources.start;
     if (isTodo) {
         lines.push(dateProp("DUE", lastDay, item.time === null ? null : (item.end || item.time), endSource, localZone));
     } else if (item.time === null) {

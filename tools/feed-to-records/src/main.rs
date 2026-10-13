@@ -4,6 +4,7 @@
 mod alarm;
 mod color;
 mod date;
+mod duration;
 mod json;
 mod model;
 mod overrides;

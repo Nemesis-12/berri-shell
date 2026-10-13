@@ -36,3 +36,23 @@ test("DURATION keeps the event span through an unrelated edit and save", () => {
     assert.equal(byUid["dst-hours"].end, "07:00");
   }
 });
+
+test("editing a duration end writes DTEND alone and keeps an unchanged end second", () => {
+  const document = calendar("DTSTART:20261008T230030", "DURATION:PT45S");
+  document.items[0] = Items.applyChanges(document.items[0], { time: "22:00" });
+  const text = Format.writeCalendar(document);
+  assert.doesNotMatch(text, /DURATION/);
+  assert.match(text, /DTEND:20261008T230115/);
+  assert.equal(saved(document).items[0].end, "23:01");
+  document.items[0] = Items.applyChanges(document.items[0], { end: "23:30" });
+  assert.match(Format.writeCalendar(document), /DTEND:20261008T233000/);
+  assert.equal(saved(document).items[0].end, "23:30");
+});
+
+test("an unsupported DURATION stays raw without a generated DTEND", () => {
+  const document = calendar("DTSTART;VALUE=DATE:20261008", "DURATION:P1Y");
+  const text = Format.writeCalendar(document);
+  assert.match(text, /DURATION:P1Y/);
+  assert.doesNotMatch(text, /DTEND/);
+  assert.equal(saved(document).items[0].raw[0], "DURATION:P1Y");
+});

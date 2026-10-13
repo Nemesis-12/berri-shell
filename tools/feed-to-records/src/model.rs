@@ -95,6 +95,7 @@ pub struct Record {
     pub location: String,
     pub start: Option<CalendarDate>,
     pub end_value: Option<CalendarDate>,
+    pub duration: Option<crate::duration::Duration>,
     pub color: String,
     pub own_color: bool,
     pub repeat: Repeat,

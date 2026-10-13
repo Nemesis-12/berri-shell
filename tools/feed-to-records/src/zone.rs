@@ -137,3 +137,24 @@ pub fn local_clock(date: &CalendarDate) -> Option<(String, Option<String>)> {
 pub fn local_day(date: &CalendarDate) -> Option<String> {
     local_clock(date).map(|(day, _)| day)
 }
+
+// Writes an instant as a source-zone clock for a duration-derived end.
+pub fn source_clock(seconds: c_long, zone: Option<&str>) -> Option<String> {
+    let _restore = zone.map(ZoneGuard::set);
+    let mut clock = Clock::default();
+    if unsafe { localtime_r(&seconds, &mut clock) }.is_null() {
+        return None;
+    }
+    if !(0..=9999).contains(&(clock.year + 1900)) {
+        return None;
+    }
+    Some(format!(
+        "{:04}{:02}{:02}T{:02}{:02}{:02}",
+        clock.year + 1900,
+        clock.month + 1,
+        clock.day,
+        clock.hour,
+        clock.minute,
+        clock.second
+    ))
+}

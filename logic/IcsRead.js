@@ -3,6 +3,7 @@
 .import "CalendarItems.js" as Items
 .import "IcsText.js" as Text
 .import "IcsZones.js" as Zones
+.import "IcsDuration.js" as Duration
 
 /** Reads iCalendar text into items, keeping unknown fields and source dates. */
 
@@ -188,6 +189,7 @@ function readProperty(read, p, localZone) {
     case "DTSTAMP": item.stamp = p.value; break;
     case "SUMMARY": item.title = Text.unescapeText(p.value); break;
     case "DTSTART": case "DTEND": case "DUE": readDateProperty(read, p, localZone); break;
+    case "DURATION": read.duration = p; break;
     case "CATEGORIES": readCategory(read, p); break;
     case "X-BERRI-COLOR": read.ownColor = p.value.trim(); break;
     case "RRULE": readRepeatRule(read, p, localZone); break;
@@ -228,18 +230,56 @@ function readChildren(item, children) {
     }
 }
 
+/** Adds nominal days in the source zone, then exact hours, minutes and seconds. */
+function endFromDuration(start, value, localZone) {
+    var duration = Duration.readDuration(value);
+    if (!start || !duration || duration.negative || duration.days * 86400 + duration.seconds <= 0) return null;
+    var day = start.value.slice(0, 4) + "-" + start.value.slice(4, 6) + "-" + start.value.slice(6, 8);
+    var next = Items.addDays(day, duration.days).replace(/-/g, "");
+    if (start.form === "date") return duration.seconds === 0 ? parseDateValue(next) : null;
+    var params = start.tzid ? { TZID: start.tzid } : null;
+    var clock = next + start.value.slice(8);
+    var end = parseDateValue(clock, params, localZone);
+    if (!end) return null;
+    if (end.instantMs !== null) {
+        var ms = end.instantMs + duration.seconds * 1000;
+        if (!isFinite(new Date(ms).getTime())) return null;
+        if (start.form === "zone") clock = Zones.zoneClock(ms, start.tzid, localZone);
+        else if (start.form === "utc") clock = Zones.utcClock(ms) + "Z";
+        else {
+            var local = new Date(ms);
+            clock = Items.toKey(local).replace(/-/g, "") + "T" + Times.pad(local.getHours()) +
+                Times.pad(local.getMinutes()) + Times.pad(local.getSeconds());
+        }
+    } else {
+        // Unknown zones have no instant. Add to the source clock without inventing an offset.
+        var wallMs = Zones.clockMs(clock) + duration.seconds * 1000;
+        if (!isFinite(new Date(wallMs).getTime())) return null;
+        clock = Zones.utcClock(wallMs);
+    }
+    return clock ? parseDateValue(clock, params, localZone) : null;
+}
+
 function parseItem(node, localZone) {
     var isTodo = node.name === "VTODO";
     var item = Items.blankItem();
     if (isTodo) item.kind = "task";
     var read = { item: item, isTodo: isTodo, start: null, endValue: null, sawDoneCompleted: false,
-        ownColor: null, legacyColor: null, sourceDates: { start: null, end: null, until: null, exdates: [] } };
+        ownColor: null, legacyColor: null, duration: null, sourceDates: { start: null, end: null, until: null, exdates: [] } };
     for (var i = 0; i < node.props.length; i++) readProperty(read, node.props[i], localZone);
-    setItemDates(item, read.start, read.endValue, isTodo);
+    var durationEnd = read.duration && !read.endValue ? endFromDuration(read.start, read.duration.value, localZone) : null;
+    if (durationEnd) durationEnd.raw = read.start.raw.slice(0, -read.start.value.length)
+        .replace(/^DTSTART/i, isTodo ? "DUE" : "DTEND") + durationEnd.value;
+    setItemDates(item, read.start, read.endValue || durationEnd, isTodo);
+    if (read.duration) {
+        if (durationEnd) read.sourceDates.duration = { raw: read.duration.raw, end: durationEnd,
+            date: item.date, time: item.time, endTime: item.end, endDate: item.endDate };
+        else if (!read.endValue) item.raw.push(read.duration.raw);
+    }
     read.sourceDates.start = read.start;
     read.sourceDates.end = read.endValue;
     item.sourceDates = read.sourceDates;
-    if (item.repeat !== "none" && read.start) item.zoned = zonedSeries(read.start, read.endValue, localZone);
+    if (item.repeat !== "none" && read.start) item.zoned = zonedSeries(read.start, read.endValue || durationEnd, localZone);
     if (item.uid === "") item.uid = Items.newUid();
     readChildren(item, node.children);
     if (read.sawDoneCompleted && item.repeat === "none" && item.date && item.doneDates.indexOf(item.date) < 0) item.doneDates.push(item.date);

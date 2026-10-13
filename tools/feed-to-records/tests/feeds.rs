@@ -293,10 +293,27 @@ fn unsupported_frequency_has_no_rule_rest() {
 // DURATION supplies the exclusive event end, including calendar days across DST.
 #[test]
 fn duration_supplies_event_end() {
-    let path = format!("{}/../../tests/fixtures/feeds/duration.ics", env!("CARGO_MANIFEST_DIR"));
+    let path = format!(
+        "{}/../../tests/fixtures/feeds/duration.ics",
+        env!("CARGO_MANIFEST_DIR")
+    );
     let json = convert(&path);
-    assert!(json.contains("\"date\":\"2026-10-08\",\"time\":null,\"end\":null,\"endDate\":\"2026-10-10\""), "{json}");
-    assert!(json.contains("\"time\":\"23:00\",\"end\":\"00:31\",\"endDate\":\"2026-10-09\""), "{json}");
-    assert!(json.contains("\"time\":\"07:00\",\"end\":\"08:00\",\"endDate\":\"2026-10-25\""), "{json}");
-    assert!(json.contains("\"time\":\"07:00\",\"end\":\"07:00\",\"endDate\":\"2026-10-25\""), "{json}");
+    assert!(
+        json.contains(
+            "\"date\":\"2026-10-08\",\"time\":null,\"end\":null,\"endDate\":\"2026-10-10\""
+        ),
+        "{json}"
+    );
+    assert!(
+        json.contains("\"time\":\"23:00\",\"end\":\"00:31\",\"endDate\":\"2026-10-09\""),
+        "{json}"
+    );
+    assert!(
+        json.contains("\"time\":\"07:00\",\"end\":\"08:00\",\"endDate\":\"2026-10-25\""),
+        "{json}"
+    );
+    assert!(
+        json.contains("\"time\":\"07:00\",\"end\":\"07:00\",\"endDate\":\"2026-10-25\""),
+        "{json}"
+    );
 }
