@@ -224,3 +224,15 @@ test("forecasts require real current conditions, an offset and matching arrays",
   assert.throws(() => lib.parse(badTime), /time/);
   assert.equal(lib.parse(sample).current.tempC, 18);
 });
+
+test("a selected date stays selected when the rolling forecast crosses midnight", () => {
+  const before = [{ date: "2026-09-30" }, { date: "2026-10-01" }, { date: "2026-10-02" }];
+  const after = [{ date: "2026-10-01" }, { date: "2026-10-02" }, { date: "2026-10-03" }];
+  assert.equal(lib.selectedDay(before, "2026-10-02"), 2);
+  assert.equal(lib.selectedDay(after, "2026-10-02"), 1);
+  assert.equal(lib.selectedDay(after, "2026-10-01"), 0);
+  assert.equal(lib.selectedDay(after, "2026-09-30"), 0);
+  assert.equal(lib.selectedDay([], "2026-10-02"), 0);
+  assert.equal(lib.selectedDay(after, ""), 0);
+  assert.equal(lib.dayDetail(lib.parse(sample), 7), null);
+});
