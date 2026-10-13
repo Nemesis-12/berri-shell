@@ -34,7 +34,7 @@ Item {
             + (hasNote ? " · " + note : "")
 
     width: ListView.view.width
-    height: Math.max(46, sourceDetails.implicitHeight + 16)
+    height: Math.ceil(Math.max(46, sourceDetails.implicitHeight + 16))
 
     Rectangle {
         anchors.bottom: parent.bottom
