@@ -21,7 +21,7 @@ Item {
     }
     function setText(value) {
         if (TestIo.failWrite || TestIo.deniedWrites[path]) { TestIo.note("write-failed"); saveFailed(FileViewError.PermissionDenied); }
-        else { TestIo.texts[path] = value; TestIo.writes = TestIo.writes.concat([path]); TestIo.note("write"); saved(); }
+        else { TestIo.texts[path] = value; TestIo.writes = TestIo.writes.concat([path]); TestIo.note("write"); if (TestIo.afterWrite) TestIo.afterWrite(path); saved(); }
     }
     function reload() {
         if (TestIo.heldReads[path]) return;

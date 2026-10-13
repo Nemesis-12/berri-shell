@@ -16,8 +16,10 @@ QtObject {
     property var readers: ({})
     /** Paths written by a FileView, in order. */
     property var writes: []
+    /** An external filesystem change that runs after an atomic write. */
+    property var afterWrite: null
     /** What happened, in order: "write", "write-failed" and entries that a test adds. */
     property var events: []
     function note(event) { events = events.concat([event]); }
-    function reset() { texts = ({}); failWrite = false; deniedWrites = ({}); downloads = []; deniedReads = ({}); heldReads = ({}); readers = ({}); writes = []; events = []; }
+    function reset() { texts = ({}); failWrite = false; deniedWrites = ({}); downloads = []; deniedReads = ({}); heldReads = ({}); readers = ({}); writes = []; afterWrite = null; events = []; }
 }

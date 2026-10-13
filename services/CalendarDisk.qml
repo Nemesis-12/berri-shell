@@ -57,11 +57,8 @@ QtObject {
         return saveAndRebuild(path);
     }
 
-    /** Writes the prepared text and lets Calendar apply the result. */
-    function saveAndRebuild(path: string, uids): bool {
-        var prepared = store.prepareCalendarWrite(path);
-        if (!prepared) return false;
-        // Refuse stale edits before either write, then show the current disk text.
+    /** Refuses stale edits and reloads the current file before a replacement. */
+    function checkCurrent(path: string, prepared: var, uids): bool {
         var currentText = files.readNow(path);
         var missingLocal = currentText === undefined && path === files.folder + "/berri.ics";
         if (currentText !== prepared.previousText && !(missingLocal && prepared.previousText === null)) {
@@ -72,12 +69,21 @@ QtObject {
             else store.acceptCalendarRead(path, currentText === null ? "" : currentText, currentText === null);
             return false;
         }
+        return true;
+    }
+
+    /** Writes the prepared text and lets Calendar apply the result. */
+    function saveAndRebuild(path: string, uids): bool {
+        var prepared = store.prepareCalendarWrite(path);
+        if (!prepared || !checkCurrent(path, prepared, uids)) return false;
         // One atomic backup must finish before the calendar is replaced. A new
         // local calendar has null previous text because no file exists yet.
         if (prepared.previousText !== null) {
             var backup = write(path + ".bak", prepared.previousText, prepared.previousText, prepared.failurePrefix + " backup");
             if (!backup.saved) return store.acceptCalendarWrite(path, backup, uids);
         }
+        // The backup write gives another process time to change the file.
+        if (!checkCurrent(path, prepared, uids)) return false;
         var written = write(path, prepared.nextText, prepared.previousText, prepared.failurePrefix);
         return store.acceptCalendarWrite(path, written, uids);
     }

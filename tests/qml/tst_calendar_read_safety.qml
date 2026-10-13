@@ -311,6 +311,26 @@ TestCase {
         compare(Calendar.lastError, "Not an .ics file");
     }
 
+    // A disk change during the backup must survive and replace the shown content.
+    function test_external_write_during_backup_refuses_the_save() {
+        const original = savedText();
+        const current = original.replace("SUMMARY:Kept", "SUMMARY:External");
+        TestIo.texts[berriPath] = original;
+        startReading();
+        TestIo.afterWrite = function(path) {
+            if (path === berriPath + ".bak") TestIo.texts[berriPath] = current;
+        };
+        compare(Calendar.add({ title: "Lost", date: "2026-10-06" }), false);
+        compare(TestIo.texts[berriPath], current);
+        compare(TestIo.texts[berriPath + ".bak"], original);
+        compare(Calendar.itemsOn("2026-10-05").map(item => item.title), ["External"]);
+        compare(Calendar.itemsOn("2026-10-06"), []);
+        verify(Calendar.lastError.includes("File changed on disk"));
+        TestIo.afterWrite = null;
+        compare(Calendar.add({ title: "After reload", date: "2026-10-06" }), true);
+        compare(TestIo.texts[berriPath + ".bak"], current);
+    }
+
     // A backup failure stops the replacement and restores the shown items.
     function test_a_failed_backup_refuses_the_save() {
         const original = savedText();
