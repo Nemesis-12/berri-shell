@@ -35,7 +35,10 @@ Scope {
     function readNow(path: string): var {
         var reader = importReader.createObject(root, { path: path });
         var text = null;
-        try { text = reader.text(); } catch (e) { text = null; }
+        try {
+            text = reader.text();
+            if (reader.readFailed) text = null;
+        } catch (e) { text = null; }
         reader.destroy();
         return text;
     }
@@ -131,7 +134,15 @@ Scope {
         for (var path in wanted) if (!present[path]) openReader(path);
     }
 
-    Component { id: importReader; FileView { blockLoading: true; printErrors: false } }
+    Component {
+        id: importReader
+        FileView {
+            property bool readFailed: false
+            blockLoading: true
+            printErrors: false
+            onLoadFailed: readFailed = true
+        }
+    }
     Component {
         id: calendarWriter
         FileView {

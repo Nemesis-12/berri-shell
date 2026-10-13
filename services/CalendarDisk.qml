@@ -61,6 +61,15 @@ QtObject {
     function saveAndRebuild(path: string, uids): bool {
         var prepared = store.prepareCalendarWrite(path);
         if (!prepared) return false;
+        // Refuse stale edits before either write, then show the current disk text.
+        var currentText = files.readNow(path);
+        if (currentText !== prepared.previousText) {
+            var error = currentText === null ? "Could not read the file" : "File changed on disk. Check the calendar and try again";
+            var refused = Save.writeOutcome(false, error, prepared.failurePrefix, prepared.previousText, prepared.nextText);
+            store.acceptCalendarWrite(path, refused, uids);
+            store.acceptCalendarRead(path, currentText === null ? "" : currentText, currentText === null);
+            return false;
+        }
         // One atomic backup must finish before the calendar is replaced. A new
         // local calendar has null previous text because no file exists yet.
         if (prepared.previousText !== null) {
