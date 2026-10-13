@@ -6,6 +6,7 @@
 // Wall times stay as API text. Instants use the location UTC offset, never the host zone.
 
 function uvLabel(uv) {
+    if (uv === null) return "";
     if (uv < 3) return "Low";
     if (uv < 6) return "Moderate";
     if (uv < 8) return "High";
@@ -16,8 +17,21 @@ function uvLabel(uv) {
 // Seconds -> "12h 13m".
 var daylightWording = { round: true, pad: false, days: false, lower: true };
 
+// Keeps missing API numbers separate from measured zero.
+function reading(value) {
+    return typeof value === "number" && isFinite(value) ? value : null;
+}
+
+// Rounds an API reading without converting missing data to zero.
+function rounded(value) {
+    var number = reading(value);
+    return number === null ? null : Math.round(number);
+}
+
+// Rounds millimetres and UV readings to one decimal place.
 function round1(value) {
-    return Math.round(value * 10) / 10;
+    var number = reading(value);
+    return number === null ? null : Math.round(number * 10) / 10;
 }
 
 // One entry for each hour of the response.
@@ -27,11 +41,11 @@ function readHours(h, utcOffsetSeconds) {
         hoursAll.push({
             time: h.time[i],
             timeMs: Date.parse(h.time[i] + "Z") - utcOffsetSeconds * 1000,
-            code: h.weather_code[i],
-            isDay: h.is_day[i] === 1,
-            tempC: Math.round(h.temperature_2m[i]),
-            precipProbability: h.precipitation_probability[i] || 0,
-            uvIndex: h.uv_index[i] || 0
+            code: reading(h.weather_code[i]),
+            isDay: reading(h.is_day[i]) === null ? null : h.is_day[i] === 1,
+            tempC: rounded(h.temperature_2m[i]),
+            precipProbability: reading(h.precipitation_probability[i]),
+            uvIndex: reading(h.uv_index[i])
         });
     }
     return hoursAll;
@@ -43,22 +57,22 @@ function readDays(d) {
     for (var j = 0; j < d.time.length; j++) {
         days.push({
             date: d.time[j],
-            code: d.weather_code[j],
-            minC: Math.round(d.temperature_2m_min[j]),
-            maxC: Math.round(d.temperature_2m_max[j]),
-            precipProbability: d.precipitation_probability_max[j] || 0,
-            precipMm: round1(d.precipitation_sum[j] || 0),
+            code: reading(d.weather_code[j]),
+            minC: rounded(d.temperature_2m_min[j]),
+            maxC: rounded(d.temperature_2m_max[j]),
+            precipProbability: reading(d.precipitation_probability_max[j]),
+            precipMm: round1(d.precipitation_sum[j]),
             sunrise: WeatherFormat.clock(d.sunrise[j], true),
             sunset: WeatherFormat.clock(d.sunset[j], true),
-            uvMax: round1(d.uv_index_max[j] || 0),
-            windMaxKmh: Math.round(d.wind_speed_10m_max[j]),
-            gustMaxKmh: Math.round(d.wind_gusts_10m_max[j]),
-            humidityMean: Math.round(d.relative_humidity_2m_mean[j]),
-            dewPointMean: Math.round(d.dew_point_2m_mean[j]),
-            feelsLikeMax: Math.round(d.apparent_temperature_max[j]),
+            uvMax: round1(d.uv_index_max[j]),
+            windMaxKmh: rounded(d.wind_speed_10m_max[j]),
+            gustMaxKmh: rounded(d.wind_gusts_10m_max[j]),
+            humidityMean: rounded(d.relative_humidity_2m_mean[j]),
+            dewPointMean: rounded(d.dew_point_2m_mean[j]),
+            feelsLikeMax: rounded(d.apparent_temperature_max[j]),
             windDirection: WeatherFormat.compass(d.wind_direction_10m_dominant[j], 16),
-            pressureHpa: Math.round(d.surface_pressure_mean[j]),
-            daylight: Times.duration(d.daylight_duration[j], daylightWording)
+            pressureHpa: rounded(d.surface_pressure_mean[j]),
+            daylight: reading(d.daylight_duration[j]) === null ? "" : Times.duration(d.daylight_duration[j], daylightWording)
         });
     }
     return days;
@@ -78,20 +92,20 @@ function readCurrent(cur, today, uv) {
     return {
         code: cur.weather_code,
         isDay: cur.is_day === 1,
-        tempC: Math.round(cur.temperature_2m),
+        tempC: rounded(cur.temperature_2m),
         minC: today.minC,
         maxC: today.maxC,
-        feelsLikeC: Math.round(cur.apparent_temperature),
-        humidity: Math.round(cur.relative_humidity_2m),
-        dewPointC: Math.round(cur.dew_point_2m),
-        windKmh: Math.round(cur.wind_speed_10m),
+        feelsLikeC: rounded(cur.apparent_temperature),
+        humidity: rounded(cur.relative_humidity_2m),
+        dewPointC: rounded(cur.dew_point_2m),
+        windKmh: rounded(cur.wind_speed_10m),
         windDirection: WeatherFormat.compass(cur.wind_direction_10m, 16),
-        gustKmh: Math.round(cur.wind_gusts_10m),
+        gustKmh: rounded(cur.wind_gusts_10m),
         precipMm: today.precipMm,
         precipProbability: today.precipProbability,
         uvIndex: round1(uv),
         uvLabel: uvLabel(uv),
-        pressureHpa: Math.round(cur.surface_pressure),
+        pressureHpa: rounded(cur.surface_pressure),
         sunrise: today.sunrise,
         sunset: today.sunset,
         daylight: today.daylight
@@ -107,7 +121,7 @@ function parse(data) {
     var utcOffsetSeconds = data.utc_offset_seconds;
     var days = readDays(data.daily);
     var nowIndex = currentHourIndex(data.current.time, data.hourly.time);
-    var uv = data.hourly.uv_index[nowIndex] || 0;
+    var uv = reading(data.hourly.uv_index[nowIndex]);
     return {
         current: readCurrent(data.current, days[0], uv),
         hoursAll: readHours(data.hourly, utcOffsetSeconds),
@@ -182,6 +196,7 @@ function placeFromGeocoding(results, lat, lon) {
 
 /** Buckets a WMO weather_code into one of the condition groups the icon/label share. */
 function weatherGroup(code) {
+    if (code === null || code === undefined) return "unknown";
     if (code === 0 || code === 1) return "clear";
     if (code === 2) return "partlyCloudy";
     if (code === 45 || code === 48) return "fog";
@@ -206,6 +221,7 @@ function iconForGroup(group, isDay) {
 
 function labelForGroup(group) {
     switch (group) {
+        case "unknown": return "-";
         case "clear": return "Clear";
         case "partlyCloudy": return "Partly cloudy";
         case "fog": return "Fog";

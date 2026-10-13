@@ -19,21 +19,17 @@ Item {
 
     readonly property var detail: Weather.dayDetail(root.day) || ({})
 
-    function num(v) {
-        return v === undefined || v === null ? "--" : Math.round(v).toString();
-    }
-
     readonly property var cells: [
-        { label: "HUMIDITY", icon: "droplet", value: root.num(root.detail.humidity), unit: "%",
-          sub: "Dew point " + root.num(root.detail.dewPointC) + "°" },
-        { label: "WIND", icon: "wind", value: root.num(root.detail.windKmh), unit: "km/h",
-          sub: (root.detail.windDirection === undefined ? "" : Fmt.compass(root.detail.windDirection) + " · ")
-               + "gusts " + root.num(root.detail.gustKmh) },
-        { label: "PRECIP", icon: "umbrella", value: root.num(root.detail.precipProbability), unit: "%",
+        { label: "HUMIDITY", icon: "droplet", value: Fmt.number(root.detail.humidity), unit: "%",
+          sub: "Dew point " + Fmt.number(root.detail.dewPointC) + "°" },
+        { label: "WIND", icon: "wind", value: Fmt.number(root.detail.windKmh), unit: "km/h",
+          sub: (!root.detail.windDirection ? "" : Fmt.compass(root.detail.windDirection) + " · ")
+               + "gusts " + Fmt.number(root.detail.gustKmh) },
+        { label: "PRECIP", icon: "umbrella", value: Fmt.number(root.detail.precipProbability), unit: "%",
           sub: Fmt.millimetres(root.detail.precipMm) + " mm expected" },
         root.showPressure
-            ? { label: "PRESSURE", icon: "gauge", value: root.num(root.detail.pressureHpa), unit: "hPa", sub: "" }
-            : { label: "UV INDEX", icon: "sun", value: root.num(root.detail.uvIndex), unit: "/ 11",
+            ? { label: "PRESSURE", icon: "gauge", value: Fmt.number(root.detail.pressureHpa), unit: "hPa", sub: "" }
+            : { label: "UV INDEX", icon: "sun", value: Fmt.number(root.detail.uvIndex), unit: "/ 11",
                 sub: (root.detail.uvLabel || "") + (root.detail.uvIndex >= 6 ? " · cover up midday" : "") }
     ]
 

@@ -39,14 +39,21 @@ function weekday(v) {
 // Wind direction: 8 points for display, 16 for parsed data; text stays as is.
 function compass(v, points) {
     if (typeof v === "string") return v;
+    if (typeof v !== "number" || !isFinite(v)) return "";
     var names = points === 16
         ? ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
         : ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
     return names[Math.round(((v % 360) + 360) % 360 / (360 / names.length)) % names.length];
 }
 
+// Formats a parsed reading with the existing missing-value placeholder.
+function number(v) {
+    return v === null || v === undefined ? "-" : Math.round(v).toString();
+}
+
 // Millimetres with one decimal, "0" when dry.
 function millimetres(v) {
+    if (v === null || v === undefined) return "-";
     return v > 0 ? (Math.round(v * 10) / 10).toString() : "0";
 }
 

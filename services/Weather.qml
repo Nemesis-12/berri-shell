@@ -52,18 +52,18 @@ Singleton {
     }
 
     // Other current readouts (same names as dayDetail(0)).
-    readonly property int feelsLikeC: current ? current.feelsLikeC : 0
-    readonly property int humidity: current ? current.humidity : 0
-    readonly property int dewPointC: current ? current.dewPointC : 0
-    readonly property int windKmh: current ? current.windKmh : 0
+    readonly property var feelsLikeC: current ? current.feelsLikeC : null
+    readonly property var humidity: current ? current.humidity : null
+    readonly property var dewPointC: current ? current.dewPointC : null
+    readonly property var windKmh: current ? current.windKmh : null
     readonly property string windDirection: current ? current.windDirection : ""
-    readonly property int gustKmh: current ? current.gustKmh : 0
+    readonly property var gustKmh: current ? current.gustKmh : null
     /** Expected precipitation for today, mm. */
-    readonly property real precipMm: current ? current.precipMm : 0
-    readonly property int precipProbability: current ? current.precipProbability : 0
-    readonly property real uvIndex: current ? current.uvIndex : 0
-    readonly property string uvLabel: current ? current.uvLabel : "Low"
-    readonly property int pressureHpa: current ? current.pressureHpa : 0
+    readonly property var precipMm: current ? current.precipMm : null
+    readonly property var precipProbability: current ? current.precipProbability : null
+    readonly property var uvIndex: current ? current.uvIndex : null
+    readonly property string uvLabel: current ? current.uvLabel : ""
+    readonly property var pressureHpa: current ? current.pressureHpa : null
     readonly property string sunrise: current ? current.sunrise : ""
     readonly property string sunset: current ? current.sunset : ""
     readonly property string daylight: current ? current.daylight : ""

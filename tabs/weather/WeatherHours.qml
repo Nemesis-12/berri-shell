@@ -74,6 +74,7 @@ Item {
             Icon {
                 x: 14
                 y: 14 + 9 + cell.spread
+                visible: cell.modelData.code !== null
                 name: Weather.iconForGroup(Weather.weatherGroup(cell.modelData.code), cell.modelData.isDay)
                 size: 20
                 strokeWidth: 1.6
@@ -82,7 +83,7 @@ Item {
             CondensedText {
                 x: 14
                 y: 14 + 9 + 20 + 2 * cell.spread + 13.6 - height / 2
-                text: Math.round(cell.modelData.tempC) + "°"
+                text: Fmt.number(cell.modelData.tempC) + "°"
                 font.pixelSize: 32
                 font.letterSpacing: -0.64
             }
