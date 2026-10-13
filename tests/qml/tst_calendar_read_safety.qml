@@ -219,6 +219,57 @@ TestCase {
         compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title), ["First"]);
     }
 
+    // Each replacement keeps exactly one previous version beside the calendar.
+    function test_saves_keep_one_backup_before_each_replacement() {
+        const original = savedText();
+        TestIo.texts[berriPath] = original;
+        startReading();
+        compare(Calendar.add({ title: "New", date: "2026-10-06" }), true);
+        compare(TestIo.texts[berriPath + ".bak"], original);
+        compare(TestIo.writes, [berriPath + ".bak", berriPath]);
+        const previous = TestIo.texts[berriPath];
+        compare(Calendar.remove(Items.itemKey("berri", "kept")), true);
+        compare(TestIo.texts[berriPath + ".bak"], previous);
+        compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title), ["New"]);
+        compare(Object.keys(TestIo.texts).filter(path => path.endsWith(".bak")), [berriPath + ".bak"]);
+        compare(Calendar.importFile(berriPath + ".bak"), "");
+        compare(Calendar.lastError, "Not an .ics file");
+    }
+
+    // A backup failure stops the replacement and restores the shown items.
+    function test_a_failed_backup_refuses_the_save() {
+        const original = savedText();
+        TestIo.texts[berriPath] = original;
+        TestIo.texts[berriPath + ".bak"] = "Older backup";
+        startReading();
+        TestIo.deniedWrites[berriPath + ".bak"] = true;
+        compare(Calendar.add({ title: "New", date: "2026-10-06" }), false);
+        compare(TestIo.texts[berriPath], original);
+        compare(TestIo.texts[berriPath + ".bak"], "Older backup");
+        compare(Calendar.itemsOn("2026-10-05").map(item => item.title), ["Kept"]);
+        compare(Calendar.itemsOn("2026-10-06"), []);
+        compare(failureSpy.count, 1);
+        verify(Calendar.lastError.includes("backup"));
+        TestIo.deniedWrites = ({});
+        compare(Calendar.add({ title: "After retry", date: "2026-10-06" }), true);
+        compare(TestIo.texts[berriPath + ".bak"], original);
+    }
+
+    // If the replacement fails after the backup, both files hold the previous text.
+    function test_a_failed_replacement_keeps_the_file_and_backup() {
+        const original = savedText();
+        TestIo.texts[berriPath] = original;
+        startReading();
+        TestIo.deniedWrites[berriPath] = true;
+        compare(Calendar.add({ title: "New", date: "2026-10-06" }), false);
+        compare(TestIo.texts[berriPath], original);
+        compare(TestIo.texts[berriPath + ".bak"], original);
+        compare(Calendar.itemsOn("2026-10-06"), []);
+        TestIo.deniedWrites = ({});
+        compare(Calendar.add({ title: "After retry", date: "2026-10-06" }), true);
+        compare(Calendar.itemsOn("2026-10-06").map(item => item.title), ["After retry"]);
+    }
+
     // Subscribe to the test feed through the service and finish its download.
     function subscribeFeed(records) {
         Calendar.subscribe(feed, "blue");

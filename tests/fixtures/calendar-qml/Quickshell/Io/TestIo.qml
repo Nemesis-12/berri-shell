@@ -5,6 +5,8 @@ import QtQml
 QtObject {
     property var texts: ({})
     property bool failWrite: false
+    /** Paths whose atomic writes fail. */
+    property var deniedWrites: ({})
     property var downloads: []
     /** Paths whose reads fail with a permission error. */
     property var deniedReads: ({})
@@ -15,5 +17,5 @@ QtObject {
     /** What happened, in order: "write", "write-failed" and entries that a test adds. */
     property var events: []
     function note(event) { events = events.concat([event]); }
-    function reset() { texts = ({}); failWrite = false; downloads = []; deniedReads = ({}); readers = ({}); writes = []; events = []; }
+    function reset() { texts = ({}); failWrite = false; deniedWrites = ({}); downloads = []; deniedReads = ({}); readers = ({}); writes = []; events = []; }
 }

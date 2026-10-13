@@ -20,7 +20,7 @@ Item {
         return TestIo.texts[path];
     }
     function setText(value) {
-        if (TestIo.failWrite) { TestIo.note("write-failed"); saveFailed(FileViewError.PermissionDenied); }
+        if (TestIo.failWrite || TestIo.deniedWrites[path]) { TestIo.note("write-failed"); saveFailed(FileViewError.PermissionDenied); }
         else { TestIo.texts[path] = value; TestIo.writes = TestIo.writes.concat([path]); TestIo.note("write"); saved(); }
     }
     function reload() {
