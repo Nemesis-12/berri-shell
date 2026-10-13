@@ -221,3 +221,13 @@ test("both readers use DURATION for all-day, overnight and DST event ends", () =
     assert.equal(byUid["dst-hours"].end, "07:00");
   }
 });
+
+test("both readers keep and mark an unknown zone without a UTC instant", () => {
+  const { editable, subscribed } = readBoth(path.join(feedsDir, "unknown-zone.ics"));
+  for (const reader of [editable, subscribed]) {
+    assert.equal(reader.unknown.time, "09:30");
+    assert.equal(reader.unknown.end, "10:30");
+    assert.deepEqual(reader.unknown.unknownZones, ["W. Europe Standard Time"]);
+    assert.equal(reader.unknown.zoned, null);
+  }
+});

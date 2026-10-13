@@ -72,3 +72,23 @@ test("alarm seconds survive edits, saving, compact expansion and the delivery sc
     assert.equal(due[0].dueMs, Date.UTC(2026, 9, 8, 8, 59));
   }
 });
+
+test("unknown zones keep edited source clocks, carry a note and never gain UTC", () => {
+  for (const zone of ["UTC", "America/Chicago"]) {
+    process.env.TZ = zone;
+    const document = calendar("DTSTART;TZID=W. Europe Standard Time:20261005T093027",
+      "DTEND;TZID=W. Europe Standard Time:20261005T103027", "RRULE:FREQ=DAILY");
+    document.items[0] = Items.applyChanges(document.items[0], { time: "10:00", end: "11:00", exdates: ["2026-10-06"] });
+    const text = Format.writeCalendar(document);
+    assert.match(text, /DTSTART;TZID=W\. Europe Standard Time:20261005T100000/);
+    assert.match(text, /DTEND;TZID=W\. Europe Standard Time:20261005T110000/);
+    assert.match(text, /EXDATE;TZID=W\. Europe Standard Time:20261006T100000/);
+    for (const read of [document, saved(document)]) {
+      assert.equal(read.items[0].sourceDates.start.instantMs, null);
+      assert.deepEqual(Array.from(read.items[0].unknownZones), ["W. Europe Standard Time"]);
+      const projection = Queries.projectStoredCalendars([{ id: "file", kind: "file", document: read }]);
+      assert.equal(projection.calendars[0].note, "Unknown time zone: W. Europe Standard Time. Source clocks are shown");
+    }
+  }
+  process.env.TZ = "UTC";
+});

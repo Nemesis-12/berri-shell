@@ -435,11 +435,11 @@ test("edited UTC, floating and date-only dates keep their forms", () => {
   }
 });
 
-test("an unknown zone stays intact until an edit, then uses UTC", () => {
+test("an unknown zone keeps its source clock and TZID after an edit", () => {
   const cal = importedCalendar(["DTSTART;TZID=Unknown/Zone:20261005T093027"]);
   assert.match(Format.writeCalendar(cal), /DTSTART;TZID=Unknown\/Zone:20261005T093027/);
   cal.items[0] = Items.applyChanges(cal.items[0], { time: "10:30" });
-  assert.match(Format.writeCalendar(cal), /DTSTART:20261005T153000Z/);
+  assert.match(Format.writeCalendar(cal), /DTSTART;TZID=Unknown\/Zone:20261005T103000/);
 });
 
 test("UNTIL, EXDATE and task DUE keep their source date forms", () => {
