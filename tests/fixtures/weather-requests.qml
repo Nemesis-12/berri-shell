@@ -25,7 +25,7 @@ Item {
 
     // Delays a request until the scenario chooses to complete it.
     function respond(process) {
-        if (config.scenario === "name-race" || config.scenario === "geocode-race") {
+        if (["name-race", "geocode-race", "name-failure"].indexOf(config.scenario) >= 0) {
             var url = process.command[process.command.length - 1];
             if (url.indexOf("api.open-meteo.com/v1/forecast") >= 0) {
                 finish(process, forecast(18));
@@ -33,6 +33,13 @@ Item {
                     stage = 1;
                     service.useCoords(38.7, -9.1);
                 }
+                return;
+            }
+            if (config.scenario === "name-failure") {
+                finish(process, "", 6);
+                if (!check(service.locationName === "", "A failed name request must leave the name empty")) return;
+                console.log("Weather checks passed for name failure");
+                Qt.exit(0);
                 return;
             }
             if (config.scenario === "geocode-race" && url.indexOf("wttr.in") >= 0) {

@@ -37,7 +37,7 @@ function runWeather(scenario) {
       .replace('FolderRoots.weatherSettings', '"/synthetic-home/.local/state/omarchy/settings/weather.json"');
     fs.writeFileSync(path.join(folder, "WeatherUnderTest.qml"), source);
     const config = { scenario, forecast, timeScale: Number(process.env.WEATHER_TEST_TIME_SCALE || 0.01) };
-    const runner = fs.readFileSync(path.join(fixture, scenario.endsWith("-race") ? "weather-requests.qml" : "weather-recovery.qml"), "utf8")
+    const runner = fs.readFileSync(path.join(fixture, scenario.endsWith("-race") || scenario.endsWith("-failure") ? "weather-requests.qml" : "weather-recovery.qml"), "utf8")
       .replace("TEST_CONFIG", JSON.stringify(config));
     const entry = path.join(folder, "test.qml");
     fs.writeFileSync(entry, runner);
@@ -47,6 +47,8 @@ function runWeather(scenario) {
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stderr, /Weather checks passed/);
+    if (scenario === "name-failure") assert.match(result.stderr, /weather name data failed \(offline\)/);
+    if (scenario === "geocode-failure") assert.match(result.stderr, /weather geocoding data failed \(bad data\)/);
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });
   }
@@ -90,4 +92,8 @@ test("weather ignores a late place-name reply after configured coordinates chang
 
 test("weather ignores a late geocoding reply after coordinates change", () => {
   runWeather("geocode-race");
+});
+
+test("weather logs a failed name request without response text or coordinates", () => {
+  runWeather("name-failure");
 });
