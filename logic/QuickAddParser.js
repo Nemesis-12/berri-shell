@@ -21,6 +21,9 @@
  * form updates. named.time is false when all-day rules clear the time.
  * Callers can use matches.color.text.toLowerCase() for the entered color tag.
  *
+ * Date words: "friday" and "this friday" include today. "next friday" is the first Friday after today, so on a Friday it is 7 days on.
+ * "feb 29" is the next Feb 29 that exists (never March 1). "YYYY-MM-DD" is read as written. A date that does not exist stays in the title.
+ *
  * referenceDate is "today" (words like "tomorrow" and weekday names count from
  * it). color is "#rrggbb" (lowercase) when the text has a #rgb or #rrggbb
  * word, else null (the caller keeps its current color). The hex word is cut
@@ -41,13 +44,21 @@ function keyToDate(key) {
     return new Date(a[0], a[1] - 1, a[2]);
 }
 
-// Month and day as the next such date. Null for 31 Feb and the like. A date more than 60 days back means next year.
+// True when the year has that month and day (no roll into the next month).
+function isRealDate(year, month, day) {
+    var d = new Date(year, month, day);
+    return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day;
+}
+
+// Month and day as the next such date. A date more than 60 days back means next year.
+// Feb 29 means the next leap year (looked up to 8 years ahead, which covers 2100). Null for 31 Feb and the like.
 function monthDay(month, day, today) {
     var year = keyToDate(today).getFullYear();
-    var key = Times.dayKey(new Date(year, month, day));
-    if (keyToDate(key).getMonth() !== month) return null;
-    if (Times.daysBetween(today, key) < -60) key = Times.dayKey(new Date(year + 1, month, day));
-    return key;
+    if (isRealDate(year, month, day) && Times.daysBetween(today, Times.dayKey(new Date(year, month, day))) < -60) year++;
+    for (var i = 0; i < 8; i++, year++) {
+        if (isRealDate(year, month, day)) return Times.dayKey(new Date(year, month, day));
+    }
+    return null;
 }
 
 // "Tue Sep 29".
@@ -56,10 +67,11 @@ function formatDay(key) {
     return Times.weekdaysShort[d.getDay()] + " " + Times.monthsShort[d.getMonth()] + " " + d.getDate();
 }
 
-// Next date with that weekday, today included.
-function nextWeekday(name, today) {
+// Next date with that weekday, today included. With `after` set, today does not count: "next friday" on a Friday is 7 days on.
+function nextWeekday(name, today, after) {
     var target = WEEKDAY_NUMBER[name.slice(0, 3).toLowerCase()];
-    return Times.addDays(today, (target - keyToDate(today).getDay() + 7) % 7);
+    var ahead = (target - keyToDate(today).getDay() + 7) % 7;
+    return Times.addDays(today, after && ahead === 0 ? 7 : ahead);
 }
 
 // "HH:MM" from a clock reading, or null when the hour or minute is out of range.
@@ -159,6 +171,11 @@ var STEPS = [
       accept: function (m, o, today) { o.date = Times.addDays(today, 7 * m[1]); } },
     { name: "next week", fields: ["date"], when: hasNoDate, pattern: /\snext\s+week\b/i,
       accept: function (m, o, today) { o.date = Times.addDays(today, 7); } },
+    { name: "ISO date", fields: ["date"], when: hasNoDate, pattern: /\s(?:on\s+)?(\d{4})-(\d{1,2})-(\d{1,2})(?=\s)/,
+      accept: function (m, o) {
+        if (!isRealDate(+m[1], +m[2] - 1, +m[3])) return false;
+        o.date = Times.dayKey(new Date(+m[1], +m[2] - 1, +m[3]));
+    } },
     { name: "month then day", fields: ["date"], when: hasNoDate,
       pattern: new RegExp("\\s(?:on\\s+)?" + MONTH_PATTERN + "\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b", "i"),
       accept: function (m, o, today) {
@@ -177,8 +194,8 @@ var STEPS = [
         if (!o.date) return false;
     } },
     { name: "weekday", fields: ["date"], when: hasNoDate,
-      pattern: new RegExp("\\s(?:on\\s+|next\\s+|this\\s+)?" + WEEKDAY_PATTERN + "\\b", "i"),
-      accept: function (m, o, today) { o.date = nextWeekday(m[1], today); } }
+      pattern: new RegExp("\\s(?:on\\s+|(next)\\s+|this\\s+)?" + WEEKDAY_PATTERN + "\\b", "i"),
+      accept: function (m, o, today) { o.date = nextWeekday(m[2], today, m[1] !== undefined); } }
 ];
 
 // Cuts the first accepted match of a rule out of the line and keeps its original range.
