@@ -27,6 +27,9 @@ Singleton {
     property real latitude: NaN
     property real longitude: NaN
     property bool locationPending: false
+    // Each coordinate change makes all earlier request replies obsolete.
+    property int locationRevision: 0
+    property bool forecastPending: false
 
     /** True once a real reading has been received at least once. */
     readonly property bool ready: current !== null
@@ -132,6 +135,13 @@ Singleton {
     function useCoords(lat, lon, name) {
         if (isNaN(lat) || isNaN(lon)) return false;
         var moved = lat !== root.latitude || lon !== root.longitude;
+        if (moved) {
+            root.locationRevision++;
+            root.model = null;
+            root.updatedAt = 0;
+            root.error = "";
+            root.locationName = "";
+        }
         root.latitude = lat;
         root.longitude = lon;
         root.locationPending = false;
@@ -151,7 +161,12 @@ Singleton {
     // Starts one forecast request and keeps the last result while it runs.
     function fetchWeather() {
         if (!hasCoords()) return;
-        if (weatherProc.running) return;
+        if (weatherProc.running) {
+            root.forecastPending = true;
+            return;
+        }
+        root.forecastPending = false;
+        weatherProc.locationRevision = root.locationRevision;
         root.loading = true;
         weatherProc.command = ["curl", "-fsS", "--max-time", "10",
             "https://api.open-meteo.com/v1/forecast?latitude=" + root.latitude
@@ -241,32 +256,25 @@ Singleton {
 
     Process {
         id: weatherProc
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: {
+        property int locationRevision: -1
+        stdout: StdioCollector { waitForEnd: true }
+        onExited: (code) => {
+            if (locationRevision === root.locationRevision) {
                 try {
-                    var m = WeatherParse.parse(JSON.parse(text));
-                    root.model = m;
+                    if (code !== 0) throw new Error("Offline");
+                    root.model = WeatherParse.parse(JSON.parse(stdout.text));
                     root.updatedAt = Date.now();
                     root.error = "";
                     retryTimer.stop();
                 } catch (e) {
-                    // Keep the last good data on failure.
-                    root.error = "Bad data";
-                    // An empty answer is logged at exit: the exit code tells offline from bad data.
-                    if (text !== "") root.logFailure("bad data");
+                    root.error = code !== 0 ? "Offline" : "Bad data";
+                    root.logFailure(code !== 0 ? "offline" : "bad data");
                     retryTimer.restart();
                 }
                 root.loading = false;
             }
-        }
-        onExited: (code) => {
-            if (code !== 0) {
-                root.error = "Offline";
-                root.logFailure("offline");
-                root.loading = false;
-                retryTimer.restart();
-            } else if (root.error === "Bad data") root.logFailure("bad data");
+            if (root.forecastPending || locationRevision !== root.locationRevision)
+                Qt.callLater(root.fetchWeather);
         }
     }
 
