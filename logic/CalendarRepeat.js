@@ -204,6 +204,8 @@ function startDays(item, fromN, toN, budget) {
         var step = stepStarts(item, c, k);
         if (step.base > hi) break;
         for (var i = 0; i < step.list.length; i++) {
+            // A yearly step may emit hundreds of starts, including starts before the query.
+            if (item.repeat === "yearly" && budget && !spend(budget, 1)) return out;
             var n = step.list[i];
             if (n < c.s) continue;
             if (item.repeat === "daily" && item.byDay.length && item.byDay.indexOf(weekdayOf(n)) < 0) continue;
