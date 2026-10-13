@@ -175,8 +175,21 @@ Item {
     Connections {
         target: Notifications
         function onArrived(item) { root._receive(item); }
+        function onHandedOver(item) { root._receive(item); }
         function onUpdated(item) { root._update(item); }
         function onRemoved(id) { root._drop(id); }
+    }
+
+    // Focus moved to another monitor: waiting cards go there. The card on screen finishes here.
+    Connections {
+        target: Hyprland
+        function onFocusedMonitorChanged() {
+            if (root._focusedHere || Hyprland.focusedMonitor === null || root._queue.length === 0) return;
+            var waiting = root._queue;
+            root._queue = [];
+            // The other monitor's focus binding may not have updated yet.
+            Qt.callLater(function () { Notifications.handOver(waiting); });
+        }
     }
 
     onDashboardOpenChanged: {

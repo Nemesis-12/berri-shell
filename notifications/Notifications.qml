@@ -25,6 +25,8 @@ import qs.services
  *   still stored and count as unread, silently. A transient notification
  *   arrives too but is never stored in history (its id only works for
  *   invokeAction and dismiss while the sender keeps it open).
+ *   handedOver(item): a waiting pop-up left a monitor that lost focus; the
+ *   focused monitor takes it. Only pop-ups listen to it.
  *   updated(item): replaces an open or waiting pop-up without adding a copy.
  *
  * berri starts the server after saved state loads. Quickshell keeps an
@@ -58,6 +60,7 @@ Singleton {
     property int snoozedCount: 0
 
     signal arrived(var item)
+    signal handedOver(var item)
     signal updated(var item)
     /** An item left the store or its sender closed it; pop-ups drop it. */
     signal removed(string id)
@@ -69,6 +72,11 @@ Singleton {
     property int counter: 0
     property bool pendingCommit: false
     property bool pendingSave: false
+
+    /** Gives waiting pop-ups, oldest first, to the monitor that has focus now. */
+    function handOver(items): void {
+        items.forEach(function (item) { root.handedOver(item); });
+    }
 
     function setDnd(on: bool): void {
         if (root.dnd === on) return;

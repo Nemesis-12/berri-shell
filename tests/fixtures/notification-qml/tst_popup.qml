@@ -1,5 +1,6 @@
 import QtQuick
 import QtTest
+import Quickshell.Hyprland
 import qs.notifications
 
 // Tests the pop-up's public inputs without a Pill object or desktop window.
@@ -28,6 +29,15 @@ TestCase {
         }
     }
 
+    NotificationPopup {
+        id: other
+        anchors.fill: parent
+        anchorRect: Qt.rect(101, 10, 124, 30)
+        dpr: 1
+        dashboardOpen: false
+        screenName: "other"
+    }
+
     // Supplies a snapshot at the same interface used by the notification store.
     function item(id, urgency) {
         return { id: id, urgency: urgency || "critical", appName: "Test", appIcon: "", summary: id,
@@ -38,6 +48,9 @@ TestCase {
     function init() {
         popup._hideNow();
         popup._queue = [];
+        other._hideNow();
+        other._queue = [];
+        Hyprland.focusedMonitor = { name: "test" };
         popup.anchorRect = Qt.rect(101, 10, 124, 30);
         popup.dpr = 1;
         popup.dashboardOpen = false;
@@ -128,6 +141,33 @@ TestCase {
         popup._receive(item("here"));
         compare(popup._current.id, "here");
         verify(popup.active);
+    }
+
+    // Waiting cards follow the focus. The card on screen finishes where it is.
+    function test_waitingCardsFollowFocusToTheOtherMonitor() {
+        popup._receive(item("first"));
+        popup._receive(item("second"));
+        popup._receive(item("third"));
+        compare(popup._queue.map(function (n) { return n.id; }), ["first", "second"]);
+        Hyprland.focusedMonitor = { name: "other" };
+        tryVerify(function () { return other._current !== null; }, 1000);
+        compare(popup._queue.length, 0);
+        compare(popup._current.id, "third");
+        compare(other._current.id, "second");
+        compare(other._queue.map(function (n) { return n.id; }), ["first"]);
+        tryCompare(popup, "_progress", 1, 1000);
+        popup._close();
+        tryCompare(popup, "cardWidth", 0, 1000);
+        compare(popup._current, null);
+    }
+
+    // Without a focused monitor nothing can take the cards, so they wait.
+    function test_waitingCardsStayWhenNoMonitorHasFocus() {
+        popup._receive(item("first"));
+        popup._receive(item("second"));
+        Hyprland.focusedMonitor = null;
+        wait(50);
+        compare(popup._queue.map(function (n) { return n.id; }), ["first"]);
     }
 
     // Fullscreen drops normal cards and keeps critical ones, current or waiting.
