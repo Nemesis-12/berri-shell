@@ -22,9 +22,8 @@ Rectangle {
     property real pick: root.selected ? 1 : 0
 
     Behavior on pick {
-        NumberAnimation {
-            duration: Theme.stateMs
-            easing.type: Easing.OutCubic
+        StandardMotion {
+            duration: 200
         }
     }
 

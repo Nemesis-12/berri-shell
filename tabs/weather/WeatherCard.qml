@@ -122,7 +122,7 @@ Item {
                 id: big
                 text: Fmt.number(root.detail.tempC)
                 color: root.stale ? Theme.dim : Theme.fg
-                Behavior on color { ColorAnimation { duration: Theme.stateMs; easing.type: Easing.OutCubic } }
+                Behavior on color { StandardColorMotion { duration: Theme.stateMs } }
                 font.pixelSize: 128
                 font.letterSpacing: -5.12
                 x: -2
@@ -146,7 +146,7 @@ Item {
                 size: 48
                 strokeWidth: 1.4
                 color: root.stale ? Theme.dim : Theme.accentLight
-                Behavior on color { ColorAnimation { duration: Theme.stateMs; easing.type: Easing.OutCubic } }
+                Behavior on color { StandardColorMotion { duration: Theme.stateMs } }
             }
         }
 
