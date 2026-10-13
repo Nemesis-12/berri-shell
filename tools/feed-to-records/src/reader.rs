@@ -101,7 +101,9 @@ impl Reader {
 
     // Puts a finished record in the feed, or in the overrides when it has a RECURRENCE-ID.
     fn finish(&mut self, mut record: Record) {
-        if record.end_value.is_none() {
+        if record.end_value.is_some() {
+            record.duration = None; // An explicit end takes precedence over an invalid competing duration.
+        } else {
             record.end_value = record
                 .start
                 .as_ref()

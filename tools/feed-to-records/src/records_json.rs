@@ -121,6 +121,9 @@ fn zoned_json(output: &mut String, zoned: Option<&ZonedSeries>) {
         .map(|(day, offset)| format!("[\"{day}\",{offset}]"))
         .collect();
     list(output, "offsets", &offsets);
+    if let Some((days, seconds)) = zoned.duration {
+        output.push_str(&format!("\"duration\":{{\"days\":{days},\"seconds\":{seconds}}},"));
+    }
     output.pop();
     output.push_str("},");
 }

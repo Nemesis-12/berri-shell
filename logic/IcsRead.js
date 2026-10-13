@@ -94,7 +94,7 @@ var ZONE_SCAN_STEP = 21;
  * [first day, offset] changes. A repeat takes its time from the source zone, so the shown time
  * follows the daylight-saving changes of that zone. Null when the zone is unknown.
  */
-function zonedSeries(start, endValue, localZone) {
+function zonedSeries(start, endValue, localZone, duration) {
     if ((start.form !== "zone" && start.form !== "utc") || start.instantMs === null) return null;
     var hhmm = start.value.slice(9, 13);
     function offsetOn(dayN) {
@@ -119,8 +119,10 @@ function zonedSeries(start, endValue, localZone) {
         before = n;
     }
     var length = endValue && endValue.instantMs !== null ? Math.round((endValue.instantMs - start.instantMs) / 60000) : null;
-    return { date: Times.keyOfDayNum(first), time: start.value.slice(9, 11) + ":" + start.value.slice(11, 13),
+    var series = { date: Times.keyOfDayNum(first), time: start.value.slice(9, 11) + ":" + start.value.slice(11, 13),
         length: length !== null && length >= 0 ? length : null, offsets: offsets };
+    if (duration) series.duration = { days: duration.days, seconds: duration.seconds };
+    return series;
 }
 
 /** DTSTART, or DTEND for events and DUE for tasks. A date that cannot be read stays raw. */
@@ -298,7 +300,8 @@ function parseItem(node, localZone) {
         if (source && source.form === "zone" && source.instantMs === null && item.unknownZones.indexOf(source.tzid) < 0)
             item.unknownZones.push(source.tzid);
     });
-    if (item.repeat !== "none" && read.start) item.zoned = zonedSeries(read.start, read.endValue || durationEnd, localZone);
+    if (item.repeat !== "none" && read.start) item.zoned = zonedSeries(read.start, read.endValue || durationEnd, localZone,
+        durationEnd ? Duration.readDuration(read.duration.value) : null);
     if (item.uid === "") item.uid = Items.newUid();
     readChildren(item, node.children);
     if (read.sawDoneCompleted && item.repeat === "none" && item.date && item.doneDates.indexOf(item.date) < 0) item.doneDates.push(item.date);

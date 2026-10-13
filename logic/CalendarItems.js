@@ -25,7 +25,8 @@
  *   ruleRest (retained RRULE parts, written back unchanged),
  *   zoned (repeating event in UTC or a named time zone: { date, time, length, offsets }, the first source clock,
  *   the length in minutes and the [first day, UTC offset in seconds] changes of that zone, so each
- *   occurrence follows the daylight-saving changes of the zone; null otherwise),
+ *   occurrence follows the daylight-saving changes of the zone; null otherwise).
+ *   A zoned DURATION also keeps { days, seconds }, so later starts add nominal days before exact seconds,
  *   changedOccurrences (RECURRENCE-ID components of a repeating event: { from, cancelled, title, date, time, end, endDate },
  *   from = the day the occurrence had, date null = not moved; the component also stays in rawComponents),
  *   raw (unknown property lines, kept as is), rawChildren (unknown nested components),
@@ -240,7 +241,13 @@ var fieldChecks = {
             if (!Array.isArray(o) || !isDayKey(o[0]) || !isWhole(Math.abs(o[1]), 0)) return undefined;
             offsets.push([o[0], o[1]]);
         }
-        return { date: v.date, time: v.time, length: v.length, offsets: offsets };
+        var zoned = { date: v.date, time: v.time, length: v.length, offsets: offsets };
+        if (v.duration) {
+            if (!isWhole(v.duration.days, 0) || !isWhole(v.duration.seconds, 0) ||
+                v.duration.days * 86400 + v.duration.seconds > 9007199254740991) return undefined;
+            zoned.duration = { days: v.duration.days, seconds: v.duration.seconds };
+        }
+        return zoned;
     },
     changedOccurrences: listOf(function (c) {
         return !!c && isDayKey(c.from) && typeof c.cancelled === "boolean" && orNull(isText)(c.title) &&
