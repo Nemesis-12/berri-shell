@@ -283,13 +283,17 @@ function curlError(code) {
 function recurrenceNote(items) {
     var names = [];
     for (var i = 0; i < items.length; i++) {
+        var unsupported = Repeat.unsupportedYearlyParts(items[i]);
+        for (var p = 0; p < unsupported.length; p++) {
+            if (names.indexOf(unsupported[p]) < 0) names.push(unsupported[p]);
+        }
         var raw = items[i].raw || [];
         for (var r = 0; r < raw.length; r++) {
             var match = /^(RDATE|EXRULE)[;:]/i.exec(raw[r]);
             if (match && names.indexOf(match[1].toUpperCase()) < 0) names.push(match[1].toUpperCase());
         }
     }
-    names.sort().reverse(); // RDATE before EXRULE, independent of file order.
+    names.sort().reverse(); // Stable order, with RDATE before EXRULE.
     return names.length ? names.join(" and ") + (names.length === 1 ? " is" : " are") + " not supported" : "";
 }
 

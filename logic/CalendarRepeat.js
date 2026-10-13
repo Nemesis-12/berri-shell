@@ -61,6 +61,13 @@ function retainedRuleParts(item) {
     return parts;
 }
 
+/** Names yearly parts that prevent complete expansion, also used by source notes. */
+function unsupportedYearlyParts(item) {
+    if (item.repeat !== "yearly") return [];
+    var supported = ["BYMONTH", "BYMONTHDAY", "BYDAY", "BYSETPOS", "WKST"];
+    return Object.keys(retainedRuleParts(item)).filter(function (name) { return supported.indexOf(name) < 0; });
+}
+
 /** Reads yearly weekday lists, including ordinals retained by both feed readers. */
 function yearlyWeekdays(item, parts) {
     if (!parts.BYDAY) return item.byDay.map(function (day) { return { nth: 0, day: day }; });
@@ -163,6 +170,7 @@ function yearlyStep(item, c, k) {
     var days = [];
     for (var mo = 1; mo <= 12; mo++) {
         if (!c.months.length && !c.monthDays.length && !c.yearlyWeekdays.length && mo !== c.sm) continue;
+        if (c.months.length && c.months.indexOf(mo) < 0) continue;
         days = days.concat(monthStarts(item, c, yr, mo));
     }
     return { base: dayOfUtc(yr, 1, 1), list: selectedPositions(days, c.positions) };
@@ -377,6 +385,7 @@ function addChangedOccurrences(scan) {
 }
 
 function expandWithin(item, fromKey, toKey, budget) {
+    if (unsupportedYearlyParts(item).length) return [];
     var scan = { item: item, fromN: Times.dayNum(fromKey), toN: Times.dayNum(toKey), budget: budget, out: [] };
     if (item.zoned && item.repeat !== "none") addZonedStarts(scan);
     else addPlainStarts(scan);

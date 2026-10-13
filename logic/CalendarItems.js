@@ -58,8 +58,10 @@
  * A zoned series follows its zone for ten years from its first day.
  * A moved occurrence without DTEND has no end time. Deleting a moved occurrence of an editable calendar
  * leaves its RECURRENCE-ID component in the file.
- * Monthly BYMONTH, BYMONTHDAY and BYSETPOS use retained rule parts.
- * A BYDAY list with week numbers and other retained rule parts are ignored.
+ * Monthly and yearly BYMONTH, BYMONTHDAY and BYSETPOS use retained rule parts.
+ * Yearly BYDAY ordinals count within BYMONTH months, or within the year otherwise.
+ * Unsupported yearly parts stop expansion and add a calendar source note.
+ * Other retained rule parts are ignored.
  * RDATE and EXRULE stay raw and are not applied. The calendar source row shows a note.
  * A cancelled item (STATUS:CANCELLED) has no occurrences, also in an editable calendar.
  */
