@@ -137,3 +137,27 @@ test("weather clocks and weekday names keep their display format", () => {
   assert.equal(format.weekday("2026-09-30"), "WED");
   assert.equal(format.weekday("2026-10-04"), "SUN");
 });
+
+// The host changes to DST on March 8; Honolulu keeps UTC minus ten hours.
+test("remote clock text and instants use the API offset across host DST", () => {
+  const previousZone = process.env.TZ;
+  process.env.TZ = "America/Chicago";
+  try {
+    const remote = structuredClone(sample);
+    remote.utc_offset_seconds = -36000;
+    remote.current.time = "2026-03-08T02:15";
+    remote.hourly.time = hourTimes.map((time) => time.replace("2026-09-30", "2026-03-08").replace("2026-10-01", "2026-03-09"));
+    remote.daily.time = ["2026-03-08", "2026-03-09"];
+    remote.daily.sunrise = ["2026-03-08T02:30", "2026-03-09T02:30"];
+    const model = lib.parse(remote);
+    assert.equal(model.utcOffsetSeconds, -36000);
+    assert.equal(model.hoursAll[2].timeMs, Date.UTC(2026, 2, 8, 12));
+    assert.deepEqual(Array.from(model.hoursAll.slice(1, 4), (hour) => format.hourLabel(hour.time, true)), ["01", "02", "03"]);
+    assert.equal(model.days[0].sunrise, "02:30");
+    assert.equal(format.weekday(model.days[0].date), "SUN");
+    assert.equal(lib.hoursFor(model, 0).length, 22);
+  } finally {
+    if (previousZone === undefined) delete process.env.TZ;
+    else process.env.TZ = previousZone;
+  }
+});
