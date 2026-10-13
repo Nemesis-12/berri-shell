@@ -371,7 +371,7 @@ function moveOccurrence(item, fromDate, toDate, changes) {
  * Where a reminder snooze puts it, counted from its alert time (start minus
  * alarmMinutes), or from now when the alert time is past. amount is minutes
  * or "1d". Returns { date, time, alarmMinutes }: a minute snooze clears the
- * alarm offset, a day snooze keeps it.
+ * alarm offset, a day snooze keeps it. Seconds round up to the next minute.
  */
 function snoozeReminder(time, dateKey, alarmMinutes, amount, nowKey, nowTime) {
     var t = time || "09:00";
@@ -379,7 +379,7 @@ function snoozeReminder(time, dateKey, alarmMinutes, amount, nowKey, nowTime) {
     if (amount === "1d") return { date: addDays(dateKey, 1), time: t, alarmMinutes: alarm };
     var start = Times.dayNum(dateKey) * 1440 + +t.slice(0, 2) * 60 + +t.slice(3, 5);
     var now = Times.dayNum(nowKey) * 1440 + +nowTime.slice(0, 2) * 60 + +nowTime.slice(3, 5);
-    var at = Math.max(start - alarm, now) + amount;
+    var at = Math.ceil(Math.max(start - alarm, now) + amount);
     var day = Math.floor(at / 1440);
     return { date: addDays(dateKey, day - Times.dayNum(dateKey)), time: Times.pad(Math.floor(at % 1440 / 60)) + ":" + Times.pad(at % 60), alarmMinutes: 0 };
 }
