@@ -56,3 +56,19 @@ test("an unsupported DURATION stays raw without a generated DTEND", () => {
   assert.doesNotMatch(text, /DTEND/);
   assert.equal(saved(document).items[0].raw[0], "DURATION:P1Y");
 });
+
+test("alarm seconds survive edits, saving, compact expansion and the delivery scan", () => {
+  const document = Format.readCalendar(fs.readFileSync(new URL("./fixtures/feeds/alarm-seconds.ics", import.meta.url), "utf8"));
+  document.items[0] = Items.applyChanges(document.items[0], { title: "Edited" });
+  const text = Format.writeCalendar(document);
+  assert.match(text, /TRIGGER:-PT90S/);
+  assert.match(text, /TRIGGER:-PT1S/);
+  assert.match(text, /TRIGGER:PT30S/);
+  for (const read of [document, saved(document)]) {
+    assert.equal(read.items[0].alarmMinutes, 1.5);
+    assert.equal(Format.expandCompactItem(read.items[1]).alarmMinutes, 1 / 60);
+    assert.equal(read.items[2].alarmMinutes, null);
+    const due = Items.dueBetween(read.items, Date.UTC(2026, 9, 8, 8, 58, 59), Date.UTC(2026, 9, 8, 8, 59));
+    assert.equal(due[0].dueMs, Date.UTC(2026, 9, 8, 8, 59));
+  }
+});

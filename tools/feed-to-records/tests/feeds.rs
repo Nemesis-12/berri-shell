@@ -317,3 +317,12 @@ fn duration_supplies_event_end() {
         "{json}"
     );
 }
+
+// Seconds remain fractional minutes, and a positive seconds trigger is not taken over.
+#[test]
+fn alarm_seconds_keep_their_sign_and_offset() {
+    for (trigger, expected) in [("-PT90S", "1.5"), ("-PT1S", "0.016666666666666666"), ("PT30S", "null")] {
+        let alarm = format!("BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:{trigger}\r\nEND:VALARM\r\n");
+        assert_eq!(alarm_field(trigger, &[&alarm]), expected);
+    }
+}
