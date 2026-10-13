@@ -267,3 +267,28 @@ test("yearly ordinal weekday lists count within months or the year", () => {
     }
   }
 });
+
+// An unsupported yearly part must stop the rule, rather than produce partial dates.
+test("unsupported yearly parts stop expansion and use the source note in both reader paths", () => {
+  for (const part of ["BYYEARDAY=278", "BYWEEKNO=40", "BYHOUR=9"]) {
+    const doc = calendar("DTSTART:20261005T090000", `RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=MO;${part}`);
+    doc.items[0] = Items.applyChanges(doc.items[0], { title: "Edited" });
+    for (const read of [doc, saved(doc)]) {
+      const name = part.split("=")[0];
+      assert.ok(Format.writeCalendar(read).includes(part));
+      assert.deepEqual(monthDates(read.items[0], 2027, 10), [], part);
+      for (const source of [
+        { id: "repeat", name: "Repeat", kind: "file", document: read },
+        { id: "repeat", name: "Repeat", kind: "link", records: read.items },
+      ]) {
+        const projection = Queries.projectStoredCalendars([source]);
+        assert.equal(projection.calendars[0].note, `${name} is not supported`);
+        assert.equal(projection.calendars[0].error, "");
+        assert.deepEqual(Object.keys(Queries.storedItemsInMonth(projection, 2027, 10)), []);
+      }
+    }
+  }
+  const supported = calendar("DTSTART:20261005T090000", "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=MO");
+  assert.deepEqual(monthDates(supported.items[0], 2027, 10), ["2027-10-04", "2027-10-11", "2027-10-18", "2027-10-25"]);
+  assert.equal(Queries.projectStoredCalendars([{ id: "repeat", kind: "file", document: supported }]).calendars[0].note, "");
+});
