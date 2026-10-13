@@ -87,3 +87,7 @@ test("weather discards an in-flight old-place forecast and immediately requests 
 test("weather ignores a late place-name reply after configured coordinates change", () => {
   runWeather("name-race");
 });
+
+test("weather ignores a late geocoding reply after coordinates change", () => {
+  runWeather("geocode-race");
+});
