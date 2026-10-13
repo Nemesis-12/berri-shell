@@ -27,7 +27,14 @@ TestCase {
         local.text = Format.writeCalendar(local.document);
         var list = [local].concat(extras || []);
         var stored = {};
-        list.forEach(function (entry) { stored[entry.id] = entry; });
+        list.forEach(function (entry) {
+            stored[entry.id] = entry;
+            if (entry.kind !== "link") {
+                entry.document = Object.assign(Format.emptyCalendar(), entry.document);
+                entry.text = Format.writeCalendar(entry.document);
+                TestIo.texts[entry.path] = entry.text;
+            }
+        });
         Calendar.ready = false;
         Calendar._stateRead = false;
         Calendar.lastError = "";
