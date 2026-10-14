@@ -208,6 +208,13 @@ class MalformedDataTests(unittest.TestCase):
                 self.assertEqual(usage.claude_usage({"claude": bad}), empty)
                 self.assertEqual(usage.codex_usage({"codex": bad}), empty)
 
+    def test_cached_bucket_with_a_bad_percent_is_dropped(self):
+        for percent in ("x", None, True, float("nan")):
+            with self.subTest(percent=percent):
+                bucket = {"percent": percent, "resetsAt": "2099-01-01T00:00:00Z"}
+                self.assertEqual(usage.cached_buckets({"session": bucket, "weekly": bucket}),
+                                 {"session": None, "weekly": None})
+
     def test_codex_window_with_bad_numbers_gives_no_reading(self):
         for window in ({"usedPercent": "bad", "resetsAt": 1893456000},
                        {"usedPercent": 5, "resetsAt": 1e30},

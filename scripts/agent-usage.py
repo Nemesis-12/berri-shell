@@ -20,6 +20,7 @@ Output shape:
 import contextlib
 import datetime as dt
 import json
+import math
 import os
 import select
 import shutil
@@ -63,8 +64,11 @@ def parse_iso(value) -> dt.datetime | None:
 
 
 def bucket_still_fresh(bucket) -> bool:
-    """A cached bucket is worth showing while its reset time is still ahead of us."""
+    """A cached bucket is worth showing while its percent is a real number and its reset time is still ahead of us."""
     if not isinstance(bucket, dict):
+        return False
+    percent = bucket.get("percent")
+    if isinstance(percent, bool) or not isinstance(percent, (int, float)) or not math.isfinite(percent):
         return False
     reset = parse_iso(bucket.get("resetsAt"))
     return reset is not None and reset > now_utc()
