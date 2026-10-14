@@ -101,9 +101,21 @@ Singleton {
             Qt.callLater(function() { root.addFinished(""); });
             return;
         }
-        addProc.wasEmpty = root.library.length === 0;
-        addProc.srcPath = path;
-        addProc.command = ["sh", Quickshell.shellPath("scripts/add-wallpaper.sh"), path, root.wallpapersDir];
+        root.addQueue = root.addQueue.concat([{ path: path, wasEmpty: root.library.length === 0 }]);
+        root.startNextAdd();
+    }
+
+    property var addQueue: []
+
+    /** Starts the next requested copy after the active copy exits. */
+    function startNextAdd() {
+        if (addProc.running || root.addQueue.length === 0) return;
+        var request = root.addQueue[0];
+        root.addQueue = root.addQueue.slice(1);
+        addProc.wasEmpty = request.wasEmpty;
+        addProc.srcPath = request.path;
+        addProc.command = ["sh", Quickshell.shellPath("scripts/add-wallpaper.sh"),
+                           request.path, root.wallpapersDir];
         addProc.running = true;
     }
 
@@ -118,19 +130,23 @@ Singleton {
             if (exitCode !== 0) {
                 console.warn("Wallpapers.add: copy failed for " + addProc.srcPath);
                 root.addFinished("");
-                return;
-            }
-            var dest = addStdout.text.trim();
-            if (!dest) { root.addFinished(""); return; }
-            root.library = root.library.concat([dest]);
-            if (addProc.wasEmpty && root.currentThemeUnassigned()) {
-                var names = [];
-                for (var i = 0; i < root.monitors.length; i++) names.push(root.monitors[i].name);
-                root.assign(dest, names);
             } else {
-                root.save();
+                var dest = addStdout.text.trim();
+                if (!dest) {
+                    root.addFinished("");
+                } else {
+                    root.library = root.library.concat([dest]);
+                    if (addProc.wasEmpty && root.currentThemeUnassigned()) {
+                        var names = [];
+                        for (var i = 0; i < root.monitors.length; i++) names.push(root.monitors[i].name);
+                        root.assign(dest, names);
+                    } else {
+                        root.save();
+                    }
+                    root.addFinished(dest);
+                }
             }
-            root.addFinished(dest);
+            root.startNextAdd();
         }
     }
 
