@@ -27,6 +27,8 @@ CACHE_PATH = answer_path("commits.json")
 GITHUB_PATH = answer_path("github.json")
 CACHE_FRESH_S = 10 * 60
 SEP = "\x1f"
+# CachedSource kills a script after 120 s. Past this time no new repo starts, so the commits found so far still print.
+SCAN_BUDGET_S = 90
 
 
 def git(repo: Path, *args: str) -> str:
@@ -68,12 +70,16 @@ def author_patterns() -> list[str]:
     return sorted({a for a in found if a})
 
 
-def local_commits() -> list[dict]:
+def local_commits(budget_s: float = SCAN_BUDGET_S) -> list[dict]:
+    """Newest commits of the user in all local repos. Repos not started within `budget_s` seconds are skipped."""
+    deadline = time.monotonic() + budget_s
     authors = author_patterns()
     if not authors:
         return []
     found = []
     for repo in find_repos(ROOT):
+        if time.monotonic() >= deadline:
+            break
         args = ["log", "--all", "--since=90.days", "-n", "20", "--regexp-ignore-case",
                 f"--format=%H{SEP}%s{SEP}%aI"]
         for a in authors:
