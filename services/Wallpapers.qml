@@ -160,11 +160,25 @@ Singleton {
             console.warn("Wallpapers.remove: not deleting a file outside the wallpaper folder: " + path);
             return;
         }
+        root.removeQueue = root.removeQueue.concat([path]);
+        root.startNextRemoval();
+    }
+
+    property var removeQueue: []
+
+    /** Starts the next trusted library-file deletion after the active one exits. */
+    function startNextRemoval() {
+        if (removeProc.running || root.removeQueue.length === 0) return;
+        var path = root.removeQueue[0];
+        root.removeQueue = root.removeQueue.slice(1);
         removeProc.command = ["rm", "-f", "--", path];
         removeProc.running = true;
     }
 
-    Process { id: removeProc }
+    Process {
+        id: removeProc
+        onExited: root.startNextRemoval()
+    }
 
     /** For the current theme, points every screen in screenNames at path. Other screens keep their own wallpaper. */
     function assign(path, screenNames) {
