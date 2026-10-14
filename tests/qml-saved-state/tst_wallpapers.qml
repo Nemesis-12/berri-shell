@@ -31,4 +31,14 @@ TestCase {
         // The unsafe entries still leave the saved list when the user removes them.
         compare(Wallpapers.library.length, 0);
     }
+
+    function test_rapid_removals_delete_every_library_copy() {
+        var paths = [dir + "/a.png", dir + "/b.png", dir + "/c.png"];
+        Wallpapers.library = paths.slice();
+
+        for (var i = 0; i < paths.length; i++) Wallpapers.remove(paths[i]);
+
+        tryVerify(() => deletes().length === paths.length);
+        compare(deletes(), paths.map(path => ["rm", "-f", "--", path]));
+    }
 }
