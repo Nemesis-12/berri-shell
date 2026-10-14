@@ -46,6 +46,26 @@ CardCarousel {
     readonly property var library: Wallpapers.library
     readonly property bool focusIsAdd: root.focusIndex >= root.library.length
     readonly property string focusedPath: root.focusIsAdd ? "" : (root.library[root.focusIndex] || "")
+    property string lastFocusedPath: ""
+
+    onFocusIndexChanged: root.rememberFocusedPath()
+    onLibraryChanged: root.restoreFocus()
+
+    /** Remembers the selected path so another monitor's library edits keep the same card selected. */
+    function rememberFocusedPath() {
+        if (root.focusIndex >= 0 && root.focusIndex < root.library.length)
+            root.lastFocusedPath = root.library[root.focusIndex];
+        else if (root.focusIsAdd)
+            root.lastFocusedPath = "";
+    }
+
+    /** Restores a selected path after a shared library edit, or focuses a valid neighboring card. */
+    function restoreFocus() {
+        var selectedIndex = root.library.indexOf(root.lastFocusedPath);
+        root.focusIndex = selectedIndex === -1
+            ? Math.min(root.focusIndex, root.library.length) : selectedIndex;
+        root.rememberFocusedPath();
+    }
 
     /** Sets focus to the wallpaper shown on screenName, else index 0 (also covers the empty-library case: index 0 is then the Add card). */
     function focusToCurrent() {
