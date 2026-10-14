@@ -36,6 +36,18 @@ class RecentAnswerTests(unittest.TestCase):
             self.assertEqual(read_recent_answer(path), '{"count": 1}')
             self.assertEqual([p.name for p in path.parent.iterdir()], ["data.json"])
 
+    def test_old_temp_files_of_the_same_answer_are_deleted_on_save(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "berri-shell" / "data.json"
+            save_answer(path, '{"count": 1}')
+            stale = path.parent / "data.json.abcd1234"
+            other = path.parent / "other.json.abcd1234"
+            for leftover in (stale, other):
+                leftover.write_text("half", encoding="utf-8")
+                os.utime(leftover, (0, 0))
+            save_answer(path, '{"count": 2}')
+            self.assertEqual(sorted(p.name for p in path.parent.iterdir()), ["data.json", "other.json.abcd1234"])
+
     def test_broken_text_is_not_saved_over_a_good_answer(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "berri-shell" / "data.json"

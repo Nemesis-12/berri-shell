@@ -1,5 +1,6 @@
 """Recent answers of the data scripts: where they are kept, how to read and save them."""
 import contextlib
+import glob
 import json
 import os
 import tempfile
@@ -24,6 +25,18 @@ def read_recent_answer(path: Path, max_age: float | None = None) -> str | None:
         return None
 
 
+STALE_TEMP_S = 60
+
+
+def remove_stale_temp_files(path: Path) -> None:
+    """Delete temp files that a killed save left behind; a young one may belong to a save that still runs."""
+    for leftover in path.parent.glob(glob.escape(path.name) + ".*"):
+        with contextlib.suppress(OSError):
+            # mkstemp adds exactly 8 random characters.
+            if len(leftover.name) == len(path.name) + 9 and time.time() - leftover.stat().st_mtime >= STALE_TEMP_S:
+                leftover.unlink()
+
+
 def save_answer(path: Path, text: str) -> None:
     """Save JSON text. The old answer stays until the new one is complete; a failed write must not stop a script."""
     temp = None
@@ -31,6 +44,7 @@ def save_answer(path: Path, text: str) -> None:
         json.loads(text)
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(path.parent, 0o700)
+        remove_stale_temp_files(path)
         # Answers are private: the file is owner-only, whatever the creation mask is.
         fd, temp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".")
         with os.fdopen(fd, "w", encoding="utf-8") as f:
