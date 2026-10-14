@@ -224,7 +224,7 @@ Item {
     function openItem(day, uid, occurrenceDate) {
         root.pick(day);
         root.itemClicked(uid, occurrenceDate);
-        detailsForm.openEdit(uid, occurrenceDate);
+        detailsForm.openEdit(uid, occurrenceDate, Times.dayKey(day));
     }
 
     function selectToday() {
@@ -380,7 +380,7 @@ Item {
         onDragAborted: root.abortDrag()
         onItemClicked: (uid, occurrenceDate) => {
             root.itemClicked(uid, occurrenceDate);
-            detailsForm.openEdit(uid, occurrenceDate);
+            detailsForm.openEdit(uid, occurrenceDate, Times.dayKey(root.selectedDate));
         }
     }
 

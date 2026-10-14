@@ -137,11 +137,12 @@ Item {
     }
 
     /** A click on an item: edit the stored item (view it, when it comes from a subscribed link). */
-    function openEdit(itemUid: string, occurrenceDate: string) {
+    function openEdit(itemUid: string, occurrenceDate: string, displayDate: string) {
         var item = Calendar.getItem(itemUid);
         if (!item) return;
-        var shown = (Calendar.itemsOn(occurrenceDate || item.date) || []).filter(function (o) { return o.uid === itemUid; })[0];
+        var shown = (Calendar.itemsOn(displayDate || occurrenceDate || item.date) || []).filter(function (o) { return o.uid === itemUid; })[0];
         var readOnly = shown ? !!shown.readOnly : !!item.readOnly;
+        var details = readOnly && shown ? shown : item;
         var calendarId = shown ? shown.calendarId : item.calendarId;
         var calendar = (Calendar.calendars || []).filter(function (c) { return c.id === calendarId; })[0];
         root.original = item;
@@ -153,14 +154,14 @@ Item {
         root.calendarKind = calendar ? calendar.kind : "";
         root.hasOwnColor = readOnly && !!(shown ? shown.hasOwnColor : item.hasOwnColor);
         root.openDraft({
-            type: item.kind === "event" && item.time === null ? "allday" : item.kind,
-            date: item.date,
-            time: item.time || "",
-            end: item.end || "",
+            type: item.kind === "event" && details.time === null ? "allday" : item.kind,
+            date: details.date,
+            time: details.time || "",
+            end: details.end || "",
             color: (shown && shown.color) || item.color || CalendarColors.lastColor,
             repeat: item.repeat || "none",
             byDay: item.byDay || []
-        }, item.title);
+        }, details.title);
     }
 
     function close() {
