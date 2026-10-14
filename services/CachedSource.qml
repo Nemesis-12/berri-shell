@@ -15,7 +15,11 @@ import "../logic/SourceFailures.js" as SourceFailures
  * `answered(data)`. An empty or unreadable answer keeps the last data and
  * writes one line to the shell log (see SourceFailures.js). A source with
  * `keepWhenIdle` also takes answers that arrive while not active. A script
- * that runs longer than `runLimit` is killed; the next cycle runs it again.
+ * that runs longer than `runLimit` gets SIGTERM, then SIGKILL after
+ * `killGrace`; the next cycle runs it again. Process.signal() signals the
+ * script process only, not its group. A script that starts programs (git,
+ * gh) must put them in its own process group and end the group on SIGTERM
+ * (see scripts/child_cleanup.py), or they keep running after the kill.
  */
 Scope {
     id: root
@@ -39,8 +43,11 @@ Scope {
     /** True when the last data stays after the last view hides. */
     property bool keepWhenIdle: false
 
-    /** Longest run time of the script in milliseconds. A script that runs longer is killed, and the next cycle runs it again. */
+    /** Longest run time of the script in milliseconds. A script that runs longer is stopped, and the next cycle runs it again. */
     property int runLimit: 120000
+
+    /** Time in milliseconds between SIGTERM and SIGKILL for a script that runs too long. */
+    property int killGrace: 3000
 
     /** True when another source must finish first. */
     property bool blocked: false
@@ -123,6 +130,7 @@ Scope {
         id: process
         onExited: {
             watchdog.stop();
+            forceKill.stop();
             root.exited();
         }
         stdout: StdioCollector {
@@ -150,7 +158,16 @@ Scope {
     Timer {
         id: watchdog
         interval: root.runLimit
-        onTriggered: process.signal(9)
+        onTriggered: {
+            process.signal(15);
+            forceKill.restart();
+        }
+    }
+
+    Timer {
+        id: forceKill
+        interval: root.killGrace
+        onTriggered: if (process.running) process.signal(9)
     }
 
     Timer {

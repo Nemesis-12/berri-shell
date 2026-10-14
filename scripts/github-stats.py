@@ -20,6 +20,7 @@ import json
 import subprocess
 import sys
 
+from child_cleanup import stop_children_with_script
 from recent_answers import answer_path, read_recent_answer, save_answer
 
 CACHE_PATH = answer_path("github.json")
@@ -106,4 +107,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    stop_children_with_script()
     main()

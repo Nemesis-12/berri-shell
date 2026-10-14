@@ -1,6 +1,6 @@
 import QtQuick
 
-// Starts a script that never exits. Only a signal ends it, like a real hung child.
+// Starts a script that never exits. Only SIGKILL ends it: SIGTERM is ignored, like a stuck child.
 Item {
     property var command: []
     property bool running: false
@@ -18,6 +18,7 @@ Item {
 
     function signal(number) {
         owner().signals.push(number);
+        if (number !== 9) return;
         running = false;
         stdout.streamFinished();
         exited(number);
