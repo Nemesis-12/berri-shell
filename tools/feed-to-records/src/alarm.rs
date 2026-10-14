@@ -1,7 +1,7 @@
 //! Alarms (VALARM blocks) and the minutes before the start that they give.
 
-use crate::text::Params;
 use crate::duration::read_duration;
+use crate::text::Params;
 
 /// One VALARM block while it is read. Only the simple form berri writes is used.
 #[derive(Default)]
