@@ -77,6 +77,9 @@ pub fn source_zone(zone: Option<&str>, utc: bool) -> Option<&str> {
 
 // The instant of a source clock "YYYYMMDDTHHMMSS" in `zone`, or in the system zone for None.
 pub fn instant_of(value: &str, zone: Option<&str>) -> Option<c_long> {
+    if zone.is_some_and(|name| !zone_known(name)) {
+        return None;
+    }
     let mut clock = Clock {
         year: value[..4].parse::<i32>().ok()? - 1900,
         month: value[4..6].parse::<i32>().ok()? - 1,
@@ -114,7 +117,7 @@ pub fn local_clock(date: &CalendarDate) -> Option<(String, Option<String>)> {
         }
         CalendarDate::DateTime { value, zone, utc } => (value, zone, utc),
     };
-    if zone.as_deref().is_some_and(|name| !zone_known(name)) {
+    if !utc && zone.as_deref().is_some_and(|name| !zone_known(name)) {
         return Some(written_clock(value));
     }
     let instant = instant_of(value, source_zone(zone.as_deref(), *utc))?;
@@ -136,4 +139,25 @@ pub fn local_clock(date: &CalendarDate) -> Option<(String, Option<String>)> {
 // The local day of a source date, or None when it cannot be converted.
 pub fn local_day(date: &CalendarDate) -> Option<String> {
     local_clock(date).map(|(day, _)| day)
+}
+
+// Writes an instant as a source-zone clock for a duration-derived end.
+pub fn source_clock(seconds: c_long, zone: Option<&str>) -> Option<String> {
+    let _restore = zone.map(ZoneGuard::set);
+    let mut clock = Clock::default();
+    if unsafe { localtime_r(&seconds, &mut clock) }.is_null() {
+        return None;
+    }
+    if !(0..=9999).contains(&(clock.year + 1900)) {
+        return None;
+    }
+    Some(format!(
+        "{:04}{:02}{:02}T{:02}{:02}{:02}",
+        clock.year + 1900,
+        clock.month + 1,
+        clock.day,
+        clock.hour,
+        clock.minute,
+        clock.second
+    ))
 }

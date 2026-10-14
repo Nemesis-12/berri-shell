@@ -79,6 +79,14 @@ Click the bottom-center notch to open the theme and wallpaper picker. Select a t
 
 Local commit discovery uses `~/Programming` by default. Set `BERRI_PROGRAMMING_ROOT` in the shell launch environment to use another folder.
 
+## Calendar file limits
+
+An unknown TZID keeps its source clock and zone name when read or edited. The calendar source note marks the unknown zone. berri does not assign a UTC offset to it. An edited repeat end that needs this conversion is refused: berri undoes the edit and shows "Could not save" with the reason.
+
+A non-ASCII BYDAY value gives a converter error in stderr and the JSON `errors` list. Only that repeat rule is ignored. The event and other events still convert. Editable calendars keep the rejected source rule on save.
+
+A reminder that fell due while berri was off is delivered on the next start. A repeating reminder that fell due several times delivers each missed alert, up to the limit of 10 below. A new reminder that is already past (saved late, imported or added by a feed) delivers its latest alert from the past seven days once. The first start with no saved state delivers no backlog. A new alarm time on an old repeating reminder delivers nothing old. One check delivers at most 10 alerts and logs one line for the rest. Older reminders stay visible in the calendar.
+
 ## Saved data
 
 Back up these folders before you change or remove saved data:

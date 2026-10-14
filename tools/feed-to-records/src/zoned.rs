@@ -9,6 +9,8 @@ pub struct ZonedSeries {
     pub date: String,
     pub time: String,
     pub length: Option<i64>,
+    // Nominal days and exact seconds when the source used DURATION.
+    pub duration: Option<(u64, u64)>,
     // Offset from UTC in seconds from each source day on: (first day, offset).
     pub offsets: Vec<(String, i64)>,
 }
@@ -111,6 +113,7 @@ pub fn zoned_series(record: &Record) -> Option<ZonedSeries> {
         date: day_key(first),
         time: format!("{}:{}", &value[9..11], &value[11..13]),
         length: series_length(record, start),
+        duration: record.duration.as_ref().map(|duration| (duration.days, duration.seconds)),
         offsets,
     })
 }

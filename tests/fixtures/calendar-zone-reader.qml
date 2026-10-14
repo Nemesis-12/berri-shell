@@ -33,4 +33,16 @@ TestCase {
         compare(Zones.zoneClock(expected, "Europe/Berlin", Zone.instant), "20261005T093027");
         compare(Format.readCalendar(output, Zone.instant).items[0].sourceDates.start.instantMs, expected);
     }
+    // Qt must also keep an unknown source clock when an edited date is saved.
+    function test_unknown_zone_edit() {
+        const text = "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:unknown\nDTSTART;TZID=Unknown/Zone:20261005T093027\nDTEND;TZID=Unknown/Zone:20261005T103027\nEND:VEVENT\nEND:VCALENDAR\n";
+        const calendar = Format.readCalendar(text, Zone.instant);
+        compare(calendar.items[0].time, "09:30");
+        compare(calendar.items[0].sourceDates.start.instantMs, null);
+        compare(calendar.items[0].unknownZones, ["Unknown/Zone"]);
+        calendar.items[0].time = "10:00";
+        const output = Format.writeCalendar(calendar, Zone.instant);
+        verify(output.indexOf("DTSTART;TZID=Unknown/Zone:20261005T100000") >= 0);
+        compare(Format.readCalendar(output, Zone.instant).items[0].time, "10:00");
+    }
 }

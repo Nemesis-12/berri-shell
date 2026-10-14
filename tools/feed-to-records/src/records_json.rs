@@ -5,7 +5,7 @@ use crate::json::{field, json_string, list, number, number_list, string_list};
 use crate::model::{Feed, Record, Status};
 use crate::overrides::ChangedOccurrence;
 use crate::timing::{timing, Timing};
-use crate::zone::{instant_of, local_day, source_zone};
+use crate::zone::{instant_of, local_day, source_zone, zone_known};
 use crate::zoned::{zoned_series, ZonedSeries};
 
 // The local days of a list of source dates.
@@ -35,6 +35,19 @@ fn month_weekday_json(output: &mut String, month_weekday: Option<(i32, usize)>) 
     }
 }
 
+// Names of unknown source zones, used by the same calendar source note as editable files.
+fn unknown_zones(record: &Record) -> Vec<String> {
+    let mut zones = Vec::new();
+    for date in record.start.iter().chain(record.end_value.iter()).chain(record.until.iter()).chain(record.exdates.iter()) {
+        if let CalendarDate::DateTime { zone: Some(zone), utc: false, .. } = date {
+            if !zone_known(zone) && !zones.contains(zone) {
+                zones.push(zone.clone());
+            }
+        }
+    }
+    zones
+}
+
 // Writes one record with the field names used by CalendarFormat.js.
 fn record_json(output: &mut String, record: &Record) {
     let Timing {
@@ -62,7 +75,9 @@ fn record_json(output: &mut String, record: &Record) {
     number(output, "count", record.count);
     string_list(output, "exdates", &local_days(&record.exdates));
     string_list(output, "doneDates", &done_dates);
-    number(output, "alarmMinutes", record.alarm_minutes);
+    output.push_str("\"alarmMinutes\":");
+    output.push_str(&record.alarm_minutes.map_or_else(|| "null".to_owned(), |minutes| minutes.to_string()));
+    output.push(',');
     field(output, "status", record.status.as_ref().and_then(Status::shown));
     field(output, "ruleRest", record.rule_rest.as_deref());
     month_weekday_json(output, record.month_weekday);
@@ -82,6 +97,7 @@ fn record_json(output: &mut String, record: &Record) {
         _ => Some(0),
     };
     number(output, "startSecond", start_second);
+    string_list(output, "unknownZones", &unknown_zones(record));
     string_list(output, "raw", &record.raw);
     output.pop();
     output.push('}');
@@ -105,6 +121,9 @@ fn zoned_json(output: &mut String, zoned: Option<&ZonedSeries>) {
         .map(|(day, offset)| format!("[\"{day}\",{offset}]"))
         .collect();
     list(output, "offsets", &offsets);
+    if let Some((days, seconds)) = zoned.duration {
+        output.push_str(&format!("\"duration\":{{\"days\":{days},\"seconds\":{seconds}}},"));
+    }
     output.pop();
     output.push_str("},");
 }
@@ -144,6 +163,12 @@ pub fn feed_json(feed: &Feed) -> String {
         }
         record_json(&mut output, record);
     }
-    output.push_str("]}");
+    output.push(']');
+    if !feed.errors.is_empty() {
+        output.push(',');
+        string_list(&mut output, "errors", &feed.errors);
+        output.pop();
+    }
+    output.push('}');
     output
 }

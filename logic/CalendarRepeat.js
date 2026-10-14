@@ -266,7 +266,13 @@ function zonedVariant(item, wallN) {
     shown.end = null;
     shown.endDate = null;
     if (zoned.length) {
-        var end = new Date(startMs + zoned.length * 60000);
+        var endMs = startMs + zoned.length * 60000;
+        if (zoned.duration) {
+            var lastWall = Times.keyOfDayNum(wallN + zoned.duration.days);
+            endMs = startMs + zoned.duration.days * 86400000 + zoned.duration.seconds * 1000 -
+                (zoneOffsetOn(zoned.offsets, lastWall) - zoneOffsetOn(zoned.offsets, wall)) * 1000;
+        }
+        var end = new Date(endMs);
         shown.end = clockOfDate(end);
         if (Times.dayKey(end) !== shown.date) shown.endDate = Times.dayKey(end);
     }

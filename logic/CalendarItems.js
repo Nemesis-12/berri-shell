@@ -21,15 +21,17 @@
  *   byDay (plain weekdays, 0 = Sunday), monthWeekday (monthly only: { nth, day }, nth 1 to 5 or -1 for the last,
  *   day 0 = Sunday; from BYDAY=2TU), until, untilMs (inclusive timed bound), count,
  *   exdates (skipped occurrence dates), doneDates (occurrence dates ticked off),
- *   alarmMinutes (VALARM minutes before start, null = none), status, stamp,
+ *   alarmMinutes (VALARM minutes before start, including fractional minutes for seconds; null = none), status, stamp,
  *   ruleRest (retained RRULE parts, written back unchanged),
  *   zoned (repeating event in UTC or a named time zone: { date, time, length, offsets }, the first source clock,
  *   the length in minutes and the [first day, UTC offset in seconds] changes of that zone, so each
- *   occurrence follows the daylight-saving changes of the zone; null otherwise),
+ *   occurrence follows the daylight-saving changes of the zone; null otherwise).
+ *   A zoned DURATION also keeps { days, seconds }, so later starts add nominal days before exact seconds,
  *   changedOccurrences (RECURRENCE-ID components of a repeating event: { from, cancelled, title, date, time, end, endDate },
  *   from = the day the occurrence had, date null = not moved; the component also stays in rawComponents),
  *   raw (unknown property lines, kept as is), rawChildren (unknown nested components),
- *   sourceDates (imported DTSTART, DTEND/DUE, UNTIL and EXDATE source forms).
+ *   sourceDates (imported DTSTART, DTEND/DUE, DURATION, UNTIL and EXDATE source forms),
+ *   unknownZones (unknown TZIDs; source clocks are shown and edited without conversion).
  *   This is the stored item. CalendarItems.js checks it when it is built (storedItem).
  *   A projected item is a copy with calendarId, readOnly and hasOwnColor (projectedItem).
  *   A shown item is a copy for QML with a pair key in uid and the file UID in sourceUid (shownItem).
@@ -54,7 +56,8 @@
  * CATEGORIES from other apps stay as raw lines.
  *
  * Month numbers are 1 to 12 everywhere.
- * Known limits: unknown TZIDs keep their source clock for display until edited.
+ * Known limits: unknown TZIDs keep their source clock and TZID on display and edits.
+ * The calendar source note marks them. A UTC conversion for an edited UNTIL is refused.
  * A zoned series follows its zone for ten years from its first day.
  * A moved occurrence without DTEND has no end time. Deleting a moved occurrence of an editable calendar
  * leaves its RECURRENCE-ID component in the file.
@@ -221,7 +224,10 @@ var fieldChecks = {
     count: function (v) { return v === null || isWhole(v, 1) ? v : undefined; },
     exdates: listOf(isDayKey),
     doneDates: listOf(isDayKey),
-    alarmMinutes: function (v) { return v === null || isWhole(v, 0) ? v : undefined; },
+    alarmMinutes: function (v) {
+        return v === null || typeof v === "number" && isFinite(v) && v >= 0 &&
+            v * 60 <= 9007199254740991 ? v : undefined;
+    },
     status: function (v) { return v === null || isText(v) ? v : undefined; },
     stamp: function (v) { return v === null || isText(v) ? v : undefined; },
     ruleRest: function (v) { return v === null || isText(v) ? v : undefined; },
@@ -235,12 +241,19 @@ var fieldChecks = {
             if (!Array.isArray(o) || !isDayKey(o[0]) || !isWhole(Math.abs(o[1]), 0)) return undefined;
             offsets.push([o[0], o[1]]);
         }
-        return { date: v.date, time: v.time, length: v.length, offsets: offsets };
+        var zoned = { date: v.date, time: v.time, length: v.length, offsets: offsets };
+        if (v.duration) {
+            if (!isWhole(v.duration.days, 0) || !isWhole(v.duration.seconds, 0) ||
+                v.duration.days * 86400 + v.duration.seconds > 9007199254740991) return undefined;
+            zoned.duration = { days: v.duration.days, seconds: v.duration.seconds };
+        }
+        return zoned;
     },
     changedOccurrences: listOf(function (c) {
         return !!c && isDayKey(c.from) && typeof c.cancelled === "boolean" && orNull(isText)(c.title) &&
             orNull(isDayKey)(c.date) && orNull(isClock)(c.time) && orNull(isClock)(c.end) && orNull(isDayKey)(c.endDate);
     }),
+    unknownZones: listOf(isText),
     raw: listOf(isText),
     rawChildren: listOf(function (c) { return Array.isArray(c); })
 };
@@ -266,7 +279,7 @@ function blankItem() {
         color: "accent", repeat: "none", interval: 1, byDay: [], monthWeekday: null, until: null, untilMs: null, count: null,
         exdates: [], doneDates: [], alarmMinutes: null, status: null, stamp: null, ruleRest: null,
         zoned: null, changedOccurrences: [],
-        raw: [], rawChildren: []
+        unknownZones: [], raw: [], rawChildren: []
     };
 }
 
@@ -365,7 +378,7 @@ function moveOccurrence(item, fromDate, toDate, changes) {
  * Where a reminder snooze puts it, counted from its alert time (start minus
  * alarmMinutes), or from now when the alert time is past. amount is minutes
  * or "1d". Returns { date, time, alarmMinutes }: a minute snooze clears the
- * alarm offset, a day snooze keeps it.
+ * alarm offset, a day snooze keeps it. Seconds round up to the next minute.
  */
 function snoozeReminder(time, dateKey, alarmMinutes, amount, nowKey, nowTime) {
     var t = time || "09:00";
@@ -373,7 +386,7 @@ function snoozeReminder(time, dateKey, alarmMinutes, amount, nowKey, nowTime) {
     if (amount === "1d") return { date: addDays(dateKey, 1), time: t, alarmMinutes: alarm };
     var start = Times.dayNum(dateKey) * 1440 + +t.slice(0, 2) * 60 + +t.slice(3, 5);
     var now = Times.dayNum(nowKey) * 1440 + +nowTime.slice(0, 2) * 60 + +nowTime.slice(3, 5);
-    var at = Math.max(start - alarm, now) + amount;
+    var at = Math.ceil(Math.max(start - alarm, now) + amount);
     var day = Math.floor(at / 1440);
     return { date: addDays(dateKey, day - Times.dayNum(dateKey)), time: Times.pad(Math.floor(at % 1440 / 60)) + ":" + Times.pad(at % 60), alarmMinutes: 0 };
 }
@@ -400,7 +413,7 @@ function dueBetween(items, fromMs, toMs) {
             var occ = list[j];
             if (occ.done) continue;
             var dueMs = new Date(+occ.date.slice(0, 4), +occ.date.slice(5, 7) - 1, +occ.date.slice(8, 10),
-                +occ.time.slice(0, 2), +occ.time.slice(3, 5)).getTime() - alarm * 60000;
+                +occ.time.slice(0, 2), +occ.time.slice(3, 5), item.startSecond || 0).getTime() - Math.round(alarm * 60000);
             if (dueMs > fromMs && dueMs <= toMs)
                 out.push({ calendarId: occ.calendarId, uid: occ.uid, occurrenceDate: occ.occurrenceDate,
                     title: occ.title, time: occ.time, dueMs: dueMs });

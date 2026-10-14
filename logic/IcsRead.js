@@ -3,6 +3,7 @@
 .import "CalendarItems.js" as Items
 .import "IcsText.js" as Text
 .import "IcsZones.js" as Zones
+.import "IcsDuration.js" as Duration
 
 /** Reads iCalendar text into items, keeping unknown fields and source dates. */
 
@@ -77,12 +78,11 @@ function parseAlarm(node) {
     if (extra || node.children.length || action !== "DISPLAY" || !trigger) return null;
     if (trigger.params.VALUE && trigger.params.VALUE.toUpperCase() !== "DURATION") return null;
     if (trigger.params.RELATED && trigger.params.RELATED.toUpperCase() !== "START") return null;
-    var m = /^(-?)P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(trigger.value.trim());
-    if (!m) return null;
-    var minutes = (+m[2] || 0) * 10080 + (+m[3] || 0) * 1440 + (+m[4] || 0) * 60 + (+m[5] || 0);
-    if (!(minutes <= 9007199254740991)) return null; // too large to count exactly
-    if (m[1] !== "-" && minutes > 0) return null; // alarm after the start
-    return minutes;
+    var duration = Duration.readDuration(trigger.value);
+    if (!duration) return null;
+    var seconds = duration.days * 86400 + duration.seconds;
+    if (!duration.negative && seconds > 0) return null; // alarm after the start stays raw
+    return seconds / 60;
 }
 
 var ZONE_SCAN_DAYS = 3660; // a zoned series is followed for ten years
@@ -94,7 +94,7 @@ var ZONE_SCAN_STEP = 21;
  * [first day, offset] changes. A repeat takes its time from the source zone, so the shown time
  * follows the daylight-saving changes of that zone. Null when the zone is unknown.
  */
-function zonedSeries(start, endValue, localZone) {
+function zonedSeries(start, endValue, localZone, duration) {
     if ((start.form !== "zone" && start.form !== "utc") || start.instantMs === null) return null;
     var hhmm = start.value.slice(9, 13);
     function offsetOn(dayN) {
@@ -119,8 +119,10 @@ function zonedSeries(start, endValue, localZone) {
         before = n;
     }
     var length = endValue && endValue.instantMs !== null ? Math.round((endValue.instantMs - start.instantMs) / 60000) : null;
-    return { date: Times.keyOfDayNum(first), time: start.value.slice(9, 11) + ":" + start.value.slice(11, 13),
+    var series = { date: Times.keyOfDayNum(first), time: start.value.slice(9, 11) + ":" + start.value.slice(11, 13),
         length: length !== null && length >= 0 ? length : null, offsets: offsets };
+    if (duration) series.duration = { days: duration.days, seconds: duration.seconds };
+    return series;
 }
 
 /** DTSTART, or DTEND for events and DUE for tasks. A date that cannot be read stays raw. */
@@ -140,9 +142,23 @@ function readCategory(read, p) {
     else read.item.raw.push(p.raw);
 }
 
+/** Reports an invalid weekday before interpreting any part of its repeat rule. */
+function repeatRuleError(value) {
+    var parts = value.split(";");
+    for (var i = 0; i < parts.length; i++) {
+        var eq = parts[i].indexOf("=");
+        if (parts[i].slice(0, eq).toUpperCase() === "BYDAY") {
+            var day = parts[i].slice(eq + 1);
+            if (/[^\x00-\x7F]/.test(day)) return "non-ASCII BYDAY value: " + day;
+        }
+    }
+    return null;
+}
+
 /** The first usable RRULE fills the repeat fields. A second or unusable one stays raw. */
 function readRepeatRule(read, p, localZone) {
     var item = read.item;
+    if (repeatRuleError(p.value)) { item.raw.push(p.raw); return; }
     var repeatRule = { interval: 1, byDay: [], monthWeekday: null, until: null, count: null };
     var rule = parseRule(p.value, repeatRule, localZone);
     if (!rule.freq || item.repeat !== "none") { item.raw.push(p.raw); return; }
@@ -188,6 +204,7 @@ function readProperty(read, p, localZone) {
     case "DTSTAMP": item.stamp = p.value; break;
     case "SUMMARY": item.title = Text.unescapeText(p.value); break;
     case "DTSTART": case "DTEND": case "DUE": readDateProperty(read, p, localZone); break;
+    case "DURATION": if (read.duration) item.raw.push(p.raw); else read.duration = p; break;
     case "CATEGORIES": readCategory(read, p); break;
     case "X-BERRI-COLOR": read.ownColor = p.value.trim(); break;
     case "RRULE": readRepeatRule(read, p, localZone); break;
@@ -228,18 +245,63 @@ function readChildren(item, children) {
     }
 }
 
+/** Adds nominal days in the source zone, then exact hours, minutes and seconds. */
+function endFromDuration(start, value, localZone) {
+    var duration = Duration.readDuration(value);
+    if (!start || !duration || duration.negative || duration.days * 86400 + duration.seconds <= 0) return null;
+    var day = start.value.slice(0, 4) + "-" + start.value.slice(4, 6) + "-" + start.value.slice(6, 8);
+    var next = Items.addDays(day, duration.days).replace(/-/g, "");
+    if (start.form === "date") return duration.seconds === 0 ? parseDateValue(next) : null;
+    var params = start.tzid ? { TZID: start.tzid } : null;
+    var clock = next + start.value.slice(8);
+    var end = parseDateValue(clock, params, localZone);
+    if (!end) return null;
+    if (end.instantMs !== null) {
+        var ms = end.instantMs + duration.seconds * 1000;
+        if (!isFinite(new Date(ms).getTime())) return null;
+        if (start.form === "zone") clock = Zones.zoneClock(ms, start.tzid, localZone);
+        else if (start.form === "utc") clock = Zones.utcClock(ms) + "Z";
+        else {
+            var local = new Date(ms);
+            clock = Items.toKey(local).replace(/-/g, "") + "T" + Times.pad(local.getHours()) +
+                Times.pad(local.getMinutes()) + Times.pad(local.getSeconds());
+        }
+    } else {
+        // Unknown zones have no instant. Add to the source clock without inventing an offset.
+        var wallMs = Zones.clockMs(clock) + duration.seconds * 1000;
+        if (!isFinite(new Date(wallMs).getTime())) return null;
+        clock = Zones.utcClock(wallMs);
+    }
+    return clock ? parseDateValue(clock, params, localZone) : null;
+}
+
 function parseItem(node, localZone) {
     var isTodo = node.name === "VTODO";
     var item = Items.blankItem();
     if (isTodo) item.kind = "task";
     var read = { item: item, isTodo: isTodo, start: null, endValue: null, sawDoneCompleted: false,
-        ownColor: null, legacyColor: null, sourceDates: { start: null, end: null, until: null, exdates: [] } };
+        ownColor: null, legacyColor: null, duration: null, sourceDates: { start: null, end: null, until: null, exdates: [] } };
     for (var i = 0; i < node.props.length; i++) readProperty(read, node.props[i], localZone);
-    setItemDates(item, read.start, read.endValue, isTodo);
+    var durationEnd = read.duration && !read.endValue ? endFromDuration(read.start, read.duration.value, localZone) : null;
+    if (durationEnd) durationEnd.raw = read.start.raw.slice(0, -read.start.value.length)
+        .replace(/^DTSTART/i, isTodo ? "DUE" : "DTEND") + durationEnd.value;
+    setItemDates(item, read.start, read.endValue || durationEnd, isTodo);
+    if (read.duration) {
+        if (durationEnd) read.sourceDates.duration = { raw: read.duration.raw, end: durationEnd,
+            date: item.date, time: item.time, endTime: item.end, endDate: item.endDate };
+        else if (!read.endValue) item.raw.push(read.duration.raw);
+    }
     read.sourceDates.start = read.start;
     read.sourceDates.end = read.endValue;
     item.sourceDates = read.sourceDates;
-    if (item.repeat !== "none" && read.start) item.zoned = zonedSeries(read.start, read.endValue, localZone);
+    var dates = [read.start, read.endValue, read.sourceDates.until];
+    read.sourceDates.exdates.forEach(function (group) { dates = dates.concat(group.values); });
+    dates.forEach(function (source) {
+        if (source && source.form === "zone" && source.instantMs === null && item.unknownZones.indexOf(source.tzid) < 0)
+            item.unknownZones.push(source.tzid);
+    });
+    if (item.repeat !== "none" && read.start) item.zoned = zonedSeries(read.start, read.endValue || durationEnd, localZone,
+        durationEnd ? Duration.readDuration(read.duration.value) : null);
     if (item.uid === "") item.uid = Items.newUid();
     readChildren(item, node.children);
     if (read.sawDoneCompleted && item.repeat === "none" && item.date && item.doneDates.indexOf(item.date) < 0) item.doneDates.push(item.date);
@@ -279,7 +341,17 @@ function readCalendar(text, localZone) {
         for (var c = 0; c < root.children.length; c++) {
             var node = root.children[c];
             var hasOverride = node.props.some(function (q) { return q.name === "RECURRENCE-ID"; });
-            if ((node.name === "VEVENT" || node.name === "VTODO") && !hasOverride) cal.items.push(parseItem(node, localZone));
+            if ((node.name === "VEVENT" || node.name === "VTODO") && !hasOverride) {
+                var item = parseItem(node, localZone);
+                cal.items.push(item);
+                node.props.forEach(function (property) {
+                    var error = property.name === "RRULE" ? repeatRuleError(property.value) : null;
+                    if (error) {
+                        if (!cal.errors) cal.errors = [];
+                        cal.errors.push(item.uid + ": " + error);
+                    }
+                });
+            }
             else cal.rawComponents.push(node.lines);
         }
         // The changed occurrences stay in rawComponents as they were; the series also gets a short form of each.

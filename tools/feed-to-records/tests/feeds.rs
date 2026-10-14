@@ -203,6 +203,7 @@ fn unknown_zone_keeps_the_written_clock() {
     for uid in ["windows", "escape"] {
         assert!(json.contains(&format!("\"uid\":\"{uid}\",\"kind\":\"event\",\"title\":\"{uid}\",\"location\":\"\",\"date\":\"2026-10-05\",\"time\":\"10:00\",\"end\":\"11:30\"")), "{uid}: {json}");
     }
+    assert!(json.contains("\"unknownZones\":[\"Eastern Standard Time\"]"), "{json}");
     assert!(json.contains("\"uid\":\"berlin\",\"kind\":\"event\",\"title\":\"berlin\",\"location\":\"\",\"date\":\"2026-10-05\",\"time\":\"03:00\""));
 }
 
@@ -288,4 +289,52 @@ fn unsupported_frequency_has_no_rule_rest() {
         assert!(json.contains(&format!("\"repeat\":\"{repeat}\"")), "{json}");
         assert!(json.contains(&format!("\"ruleRest\":{rest}")), "{json}");
     }
+}
+
+// DURATION supplies the exclusive event end, including calendar days across DST.
+#[test]
+fn duration_supplies_event_end() {
+    let path = format!(
+        "{}/../../tests/fixtures/feeds/duration.ics",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let json = convert(&path);
+    assert!(
+        json.contains(
+            "\"date\":\"2026-10-08\",\"time\":null,\"end\":null,\"endDate\":\"2026-10-10\""
+        ),
+        "{json}"
+    );
+    assert!(
+        json.contains("\"time\":\"23:00\",\"end\":\"00:31\",\"endDate\":\"2026-10-09\""),
+        "{json}"
+    );
+    assert!(
+        json.contains("\"time\":\"07:00\",\"end\":\"08:00\",\"endDate\":\"2026-10-25\""),
+        "{json}"
+    );
+    assert!(
+        json.contains("\"time\":\"07:00\",\"end\":\"07:00\",\"endDate\":\"2026-10-25\""),
+        "{json}"
+    );
+}
+
+// Seconds remain fractional minutes, and a positive seconds trigger is not taken over.
+#[test]
+fn alarm_seconds_keep_their_sign_and_offset() {
+    for (trigger, expected) in [("-PT90S", "1.5"), ("-PT1S", "0.016666666666666666"), ("PT30S", "null")] {
+        let alarm = format!("BEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:{trigger}\r\nEND:VALARM\r\n");
+        assert_eq!(alarm_field(trigger, &[&alarm]), expected);
+    }
+}
+
+// A malformed Unicode weekday reports an item error, without aborting conversion.
+#[test]
+fn non_ascii_byday_reports_error_and_keeps_other_items() {
+    let path = format!("{}/../../tests/fixtures/feeds/non-ascii-byday.ics", env!("CARGO_MANIFEST_DIR"));
+    let json = convert(&path);
+    assert!(json.contains("\"errors\":[\"bad-day: non-ASCII BYDAY value: éA\"]"), "{json}");
+    assert_eq!(json.matches("\"uid\":").count(), 3);
+    assert!(json.contains("\"uid\":\"good-before\""));
+    assert!(json.contains("\"uid\":\"good-after\""));
 }

@@ -19,8 +19,9 @@ function icsDateTime(key, time) {
 /**
  * Unchanged dates keep the exact source line, including seconds and TZID.
  * Edited dates keep DATE, floating, UTC or the source zone. The new local
- * clock is converted to that zone. If conversion fails, write the instant
- * as UTC. A change between date-only and timed uses DATE or floating time.
+ * clock is converted to that zone. An unknown zone keeps the edited source
+ * clock and TZID; it has no UTC instant. A change between date-only and
+ * timed uses DATE or floating time.
  */
 function dateProp(name, key, time, source, localZone) {
     if (source && source.date === key && source.time === time && source.raw && source.raw.split(/[;:]/)[0] === name)
@@ -29,8 +30,9 @@ function dateProp(name, key, time, source, localZone) {
     if (!source || source.form === "date" || source.form === "floating") return name + ":" + icsDateTime(key, time);
     var local = new Date(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10), +time.slice(0, 2), +time.slice(3, 5));
     if (source.form === "zone") {
-        var value = Zones.zoneClock(local.getTime(), source.tzid, localZone);
-        if (value) return name + ";TZID=" + (/[:;,]/.test(source.tzid) ? '"' + source.tzid + '"' : source.tzid) + ":" + value;
+        var value = source.instantMs === null ? icsDateTime(key, time) : Zones.zoneClock(local.getTime(), source.tzid, localZone);
+        if (!value) throw new Error("Cannot convert time in zone: " + source.tzid);
+        return name + ";TZID=" + (/[:;,]/.test(source.tzid) ? '"' + source.tzid + '"' : source.tzid) + ":" + value;
     }
     return name + ":" + Zones.utcClock(local.getTime()) + "Z";
 }
@@ -41,6 +43,9 @@ function untilValue(item, localZone) {
     var start = item.sourceDates && item.sourceDates.start;
     if (source && source.date === item.until) return source.value;
     if (item.time === null) return icsDate(item.until);
+    if ((start && start.form === "zone" && start.instantMs === null) ||
+        (source && source.form === "zone" && source.instantMs === null))
+        throw new Error("Cannot convert repeat end in an unknown time zone");
     var inUtc = (source && source.form === "utc") || (start && (start.form === "utc" || start.form === "zone"));
     if (!inUtc) return icsDate(item.until) + "T235959";
     var endMs = new Date(+item.until.slice(0, 4), +item.until.slice(5, 7) - 1, +item.until.slice(8, 10), 23, 59, 59).getTime();
@@ -65,8 +70,20 @@ function dateLines(item, isTodo, localZone) {
     if (!item.date) return lines;
     // A task imported with DUE alone must not gain a different DTSTART.
     if (sources.start || !sources.end || !isTodo) lines.push(dateProp("DTSTART", item.date, item.time, sources.start, localZone));
+    var duration = sources.duration;
+    if (duration && duration.date === item.date && duration.time === item.time &&
+        duration.endTime === item.end && duration.endDate === item.endDate) {
+        lines.push(duration.raw);
+        return lines;
+    }
+    // A duration kept raw must not gain a competing end property. An end edit
+    // cannot be written beside it, so refuse instead of losing the edit.
+    if (item.raw.some(function (line) { return /^DURATION[;:]/i.test(line); })) {
+        if (item.end || item.endDate) throw new Error("Cannot change the end of an event with an extra DURATION line");
+        return lines;
+    }
     var lastDay = item.endDate || item.date;
-    var endSource = sources.end || sources.start;
+    var endSource = sources.end || (duration && duration.end) || sources.start;
     if (isTodo) {
         lines.push(dateProp("DUE", lastDay, item.time === null ? null : (item.end || item.time), endSource, localZone));
     } else if (item.time === null) {
@@ -131,8 +148,10 @@ function statusLines(item, isTodo, recurring) {
 
 function alarmLines(item) {
     if (item.alarmMinutes === null) return [];
+    var seconds = Math.round(item.alarmMinutes * 60);
+    var trigger = seconds === 0 ? "PT0S" : seconds % 60 === 0 ? "-PT" + seconds / 60 + "M" : "-PT" + seconds + "S";
     return ["BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + Text.escapeText(item.title),
-        "TRIGGER:" + (item.alarmMinutes > 0 ? "-PT" + item.alarmMinutes + "M" : "PT0S"), "END:VALARM"];
+        "TRIGGER:" + trigger, "END:VALARM"];
 }
 
 function itemLines(item, localZone) {

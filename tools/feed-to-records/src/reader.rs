@@ -3,6 +3,7 @@
 use crate::alarm::Alarm;
 use crate::color::{category_color, clean_color};
 use crate::date::calendar_date;
+use crate::duration::{end_from_duration, read_duration};
 use crate::model::{Feed, Kind, Record, Status};
 use crate::overrides::attach_overrides;
 use crate::recurrence::repeat_rule;
@@ -100,9 +101,19 @@ impl Reader {
 
     // Puts a finished record in the feed, or in the overrides when it has a RECURRENCE-ID.
     fn finish(&mut self, mut record: Record) {
+        if record.end_value.is_some() {
+            record.duration = None; // An explicit end takes precedence over an invalid competing duration.
+        } else {
+            record.end_value = record
+                .start
+                .as_ref()
+                .zip(record.duration.as_ref())
+                .and_then(|(start, duration)| end_from_duration(start, duration));
+        }
         if record.uid.is_empty() {
             record.uid = format!("missing-{}", self.feed.records.len());
         }
+        self.feed.errors.extend(record.errors.iter().map(|error| format!("{}: {error}", record.uid)));
         if !record.repeats() {
             record.interval = 1;
             record.by_day.clear();
@@ -149,7 +160,12 @@ fn read_item_property(record: &mut Record, name: &str, params: &Params, value: &
         "DTSTART" => record.start = calendar_date(value, params),
         "DTEND" if !record.is_todo => record.end_value = calendar_date(value, params),
         "DUE" if record.is_todo => record.end_value = calendar_date(value, params),
-        "RRULE" => repeat_rule(record, value),
+        "DURATION" => record.duration = read_duration(value),
+        "RRULE" => {
+            if let Err(error) = repeat_rule(record, value) {
+                record.errors.push(error);
+            }
+        }
         "EXDATE" => record
             .exdates
             .extend(value.split(',').filter_map(|date| calendar_date(date, params))),

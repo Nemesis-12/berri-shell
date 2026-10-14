@@ -95,6 +95,7 @@ pub struct Record {
     pub location: String,
     pub start: Option<CalendarDate>,
     pub end_value: Option<CalendarDate>,
+    pub duration: Option<crate::duration::Duration>,
     pub color: String,
     pub own_color: bool,
     pub repeat: Repeat,
@@ -108,7 +109,7 @@ pub struct Record {
     pub rule_rest: Option<String>,
     pub exdates: Vec<CalendarDate>,
     pub done_dates: Vec<CalendarDate>,
-    pub alarm_minutes: Option<usize>,
+    pub alarm_minutes: Option<f64>,
     pub status: Option<Status>,
     // Set on a RECURRENCE-ID component: the start of the occurrence it replaces.
     pub recurrence_id: Option<CalendarDate>,
@@ -116,6 +117,8 @@ pub struct Record {
     pub changed: Vec<ChangedOccurrence>,
     // Unsupported RDATE and EXRULE source lines for the calendar source note.
     pub raw: Vec<String>,
+    // Property errors reported after the UID has been read.
+    pub errors: Vec<String>,
 }
 
 impl Record {
@@ -139,6 +142,7 @@ impl Record {
 #[derive(Default)]
 pub struct Feed {
     pub name: String,
+    pub errors: Vec<String>,
     pub records: Vec<Record>,
     // RECURRENCE-ID components, until they are attached to their repeating event.
     pub overrides: Vec<Record>,
