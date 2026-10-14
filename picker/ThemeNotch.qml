@@ -113,15 +113,14 @@ Item {
 
     readonly property bool hovered: pointerInside && !pickerOpen
 
-    /** Which picker tab is showing: "themes" (ThemesCarousel) or "walls" (WallpapersCarousel + SHOW ON row). */
+    /** Which picker tab is showing: themes or wallpapers. */
     property string pickerTab: "themes"
     /** The tab whose motion runs: the tab showing when the open or the close started. Only the Themes motion shows the palette strip. */
     property string motionTab: "themes"
     /** The notch bars return only after a Walls close has finished. */
     property real wallRestOpacity: 1
-    // Refocuses the wallpapers carousel each time the walls tab is switched
-    // into, on the wallpaper shown on this notch's own monitor (or index 0).
-    onPickerTabChanged: if (root.pickerTab === "walls") wallsBody.carousel.focusToCurrent();
+    // Refocuses the wallpaper body on this monitor's assigned image when selected.
+    onPickerTabChanged: if (root.pickerTab === "walls") wallsBody.focusToCurrent();
 
     /** Output scale (2 on eDP-2, 1 on HDMI-A-1); used to snap the notch to whole device pixels. */
     readonly property real dpr: PixelGrid.dpr(Screen.devicePixelRatio)
@@ -159,7 +158,7 @@ Item {
         root.wallRestOpacity = 1;
         root.motionTab = root.pickerTab;
         slide.openSlide();
-        if (root.pickerTab === "walls") wallsBody.carousel.focusToCurrent();
+        if (root.pickerTab === "walls") wallsBody.focusToCurrent();
         else themesCarousel.focusToCurrent();
     }
 
@@ -183,7 +182,6 @@ Item {
     // this Overlay panel, so the picker closes first (normal animated close),
     // the dialog opens once the picker is at rest, and the picker reopens on
     // the Wallpapers tab when the dialog is done.
-    property int focusBeforeAdd: 0
 
     // The shadow at rest or under the pointer; the open motion deepens it.
     PanelShadow {
@@ -357,15 +355,10 @@ Item {
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: root.wallsBottomExtra
                     onAddRequested: {
-                        root.focusBeforeAdd = wallsBody.carousel.focusIndex;
-                        slide.runAfterClose(() => wallsBody.carousel.chooseFile());
+                        slide.runAfterClose(() => wallsBody.chooseFile());
                         root.closePicker();
                     }
-                    onAddDone: path => {
-                        root.openPicker();
-                        wallsBody.carousel.focusIndex = root.focusBeforeAdd;
-                        wallsBody.carousel.focusPath(path);
-                    }
+                    onAddDone: root.openPicker()
                 }
             }
         }
@@ -379,39 +372,17 @@ Item {
             focus: root.pickerOpen
             Keys.onEscapePressed: root.closePicker()
             Keys.onPressed: (event) => {
-                var carousel = root.pickerTab === "themes" ? themesCarousel
-                    : root.pickerTab === "walls" ? wallsBody.carousel : null;
-                if (carousel) {
+                if (root.pickerTab === "themes") {
                     if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
-                        carousel.moveFocus(event.key === Qt.Key_Left ? -1 : 1);
+                        themesCarousel.moveFocus(event.key === Qt.Key_Left ? -1 : 1);
                         event.accepted = true;
                         return;
                     } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                        carousel.applyFocused();
+                        themesCarousel.applyFocused();
                         event.accepted = true;
                         return;
                     }
-                }
-                if (root.pickerTab === "walls") {
-                    if (event.key >= Qt.Key_1 && event.key <= Qt.Key_9) {
-                        var digit = event.key - Qt.Key_0;
-                        var hasMonitor = false;
-                        for (var i = 0; i < Wallpapers.monitors.length; i++) {
-                            if (Wallpapers.monitors[i].number === digit) { hasMonitor = true; break; }
-                        }
-                        if (hasMonitor) wallsBody.carousel.assignFocusedToMonitor(digit);
-                        event.accepted = true;
-                        return;
-                    } else if (event.key === Qt.Key_A) {
-                        wallsBody.carousel.assignFocusedToAll();
-                        event.accepted = true;
-                        return;
-                    } else if (event.key === Qt.Key_I) {
-                        Wallpapers.identify();
-                        event.accepted = true;
-                        return;
-                    }
-                }
+                } else if (root.pickerTab === "walls" && wallsBody.handleKey(event)) return;
                 if (event.key === Qt.Key_Tab) {
                     root.pickerTab = root.pickerTab === "themes" ? "walls" : "themes";
                     event.accepted = true;
