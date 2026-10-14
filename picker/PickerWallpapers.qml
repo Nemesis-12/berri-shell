@@ -8,6 +8,7 @@ Item {
     property string screenName: ""
     property bool shown: false
     property int rowGap: 15
+    property bool keepFocusOnNextOpen: false
 
     readonly property string focusedPath: wallpapersCarousel.focusedPath
     readonly property bool focusIsAdd: wallpapersCarousel.focusIsAdd
@@ -17,6 +18,10 @@ Item {
 
     /** Focuses the wallpaper assigned to this monitor, or the first card. */
     function focusToCurrent() {
+        if (root.keepFocusOnNextOpen) {
+            root.keepFocusOnNextOpen = false;
+            return;
+        }
         wallpapersCarousel.focusToCurrent();
     }
 
@@ -81,6 +86,7 @@ Item {
         onAddRequested: root.addRequested()
         onAddDone: path => {
             if (path) wallpapersCarousel.focusPath(path);
+            root.keepFocusOnNextOpen = true;
             root.addDone(path);
         }
     }

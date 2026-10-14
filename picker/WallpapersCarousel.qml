@@ -11,18 +11,13 @@ import qs.services
  * plus a trailing "Add wallpaper" card. Mirrors the mock's Wallpapers tab
  * body (Berri Desktop v2.dc.html: wcards markup ~103-116, wOff ~419).
  *
- * Hosted by ThemeNotch.qml's picker body, the same way ThemesCarousel is
- * hosted in the Themes body. ThemeNotch owns keyboard input (Left/Right/
- * Enter/1..9/A/I/Tab, gated to while the picker is open on the walls tab)
- * and calls focusToCurrent()/moveFocus()/applyFocused()/
- * assignFocusedToMonitor()/assignFocusedToAll() here; the SHOW ON row
- * itself is built in ThemeNotch.qml, next to this carousel, since it reads
- * Wallpapers.monitors directly.
+ * Hosted by PickerWallpapers, which owns keyboard actions and the SHOW ON
+ * row. This carousel owns card focus and asks the host to open the file dialog.
  */
 CardCarousel {
     id: root
 
-    /** Set by ThemeNotch.qml; the monitor the picker opened on, used by focusToCurrent(). */
+    /** Set by PickerWallpapers; used to focus the image assigned to this monitor. */
     property string screenName: ""
 
     // focusIndex is an index into (library + 1); the last index is the Add card.
