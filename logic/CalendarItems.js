@@ -358,22 +358,30 @@ function withoutOccurrence(item, occurrenceDate) {
  */
 function moveOccurrence(item, fromDate, toDate, changes) {
     var wasDone = item.doneDates.indexOf(item.repeat === "none" ? item.date : fromDate) >= 0;
-    var span = item.endDate ? Times.dayNum(item.endDate) - Times.dayNum(item.date) : 0;
+    var source = item;
+    for (var c = 0; c < item.changedOccurrences.length; c++) {
+        var changed = item.changedOccurrences[c];
+        if (changed.from !== fromDate || changed.cancelled || changed.date === null) continue;
+        source = applyChanges(item, {
+            title: changed.title === null ? item.title : changed.title,
+            date: changed.date, time: changed.time, end: changed.end, endDate: changed.endDate
+        });
+        break;
+    }
+    var span = source.endDate ? Times.dayNum(source.endDate) - Times.dayNum(source.date) : 0;
     var extra = {};
     for (var k in changes) extra[k] = changes[k];
     extra.date = toDate;
-    extra.endDate = item.endDate ? addDays(toDate, span) : null;
+    extra.endDate = source.endDate ? addDays(toDate, span) : null;
     if (item.repeat === "none") {
         extra.doneDates = wasDone ? [toDate] : [];
         return { item: applyChanges(item, extra), created: null };
     }
-    var single = applyChanges(item, extra);
+    extra.repeat = "none";
+    extra.doneDates = wasDone ? [toDate] : [];
+    var single = applyChanges(source, extra);
     single.uid = newUid();
-    single.repeat = "none";
-    single.doneDates = wasDone ? [toDate] : [];
-    single.raw = single.raw.filter(function (l) { return !/^RRULE[;:]/i.test(l); });
-    single.exdates = [];
-    return { item: withoutOccurrence(item, fromDate), created: normalize(single) };
+    return { item: withoutOccurrence(item, fromDate), created: single };
 }
 
 /**
