@@ -83,6 +83,17 @@ TestCase {
         compare([moved.title, moved.time, moved.end], ["Changed", "15:00", "16:00"]);
     }
 
+    function test_recovered_read_clears_the_error_row_when_text_is_unchanged() {
+        const text = savedText();
+        TestIo.texts[berriPath] = text;
+        Calendar.acceptCalendarRead(berriPath, text, false);
+        Calendar.acceptCalendarRead(berriPath, "", true);
+        compare(Calendar.calendars[0].error, "Could not read berri");
+        Calendar.acceptCalendarRead(berriPath, text, false);
+        compare(Calendar.calendars[0].error, "");
+        compare(Calendar.itemsOn("2026-10-05").map(item => item.title), ["Kept"]);
+    }
+
     // A file color change must retry the read before it changes the cached items.
     function test_whole_calendar_color_after_a_failed_read_writes_nothing() {
         const meta = Calendar._addCalendar("work", "file", "Work", "work.ics", "", "blue");
