@@ -317,6 +317,8 @@ function applyChanges(item, changes) {
     }
     takeCheckedFields(next, allowed);
     for (var extra in allowed) if (!(extra in fieldChecks)) next[extra] = allowed[extra];
+    if (item.repeat === "none" && next.date !== item.date && item.doneDates.indexOf(item.date) >= 0)
+        next.doneDates = item.doneDates.map(function (day) { return day === item.date ? next.date : day; });
     if (allowed.repeat !== undefined && next.repeat !== item.repeat) {
         next.raw = next.raw.filter(function (l) { return !/^RRULE[;:]/i.test(l); });
         next.ruleRest = null;
