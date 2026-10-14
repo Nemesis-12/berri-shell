@@ -4,8 +4,9 @@ import Quickshell.Widgets
 import qs.services
 
 /**
- * The icon of one app: the notification's own icon when it resolves, else a
- * Lucide icon picked from the app name (bell when the name is unknown).
+ * The icon of one app: the notification's own icon when it loads, else a
+ * Lucide icon picked from the app name (bell when the name is unknown). A
+ * missing or broken icon file also gives the Lucide icon.
  */
 Item {
     id: root
@@ -34,18 +35,22 @@ Item {
         return "bell";
     }
 
+    /** True when the Lucide icon shows: no icon, or the icon file did not load. */
+    readonly property bool showsFallback: root.resolved === "" || image.status === Image.Error
+
     implicitWidth: size
     implicitHeight: size
 
     IconImage {
+        id: image
         anchors.fill: parent
         source: root.resolved
-        visible: root.resolved !== ""
+        visible: !root.showsFallback
     }
 
     Icon {
         anchors.fill: parent
-        visible: root.resolved === ""
+        visible: root.showsFallback
         name: root.fallbackName
         size: root.size
         strokeWidth: root.strokeWidth
