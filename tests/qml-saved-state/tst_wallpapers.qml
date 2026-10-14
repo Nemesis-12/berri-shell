@@ -11,6 +11,7 @@ TestCase {
 
     readonly property string dir: "/home/tester/.local/share/berri-shell/wallpapers"
     property var addResults: []
+    SignalSpy { id: saveFailures; target: Wallpapers; signalName: "saveFailed" }
 
     function init() { Disk.reset(); addResults = []; }
     function initTestCase() {
@@ -59,5 +60,15 @@ TestCase {
         compare(added.map(command => command[2]), [first, second]);
         compare(addResults, [dir + "/first.png", dir + "/second.png"]);
         compare(Wallpapers.library, [dir + "/first.png", dir + "/second.png"]);
+    }
+
+    function test_saved_wallpaper_state_failures_are_reported() {
+        Disk.failBackup = true;
+        saveFailures.clear();
+
+        Wallpapers.save();
+
+        tryCompare(saveFailures, "count", 1);
+        compare(saveFailures.signalArguments[0][0], "Backup failed");
     }
 }
