@@ -56,6 +56,12 @@ test("a second DURATION line is not lost on save", () => {
   assert.deepEqual(lines.sort(), ["DURATION:P2D", "DURATION:P3D"]);
 });
 
+test("editing the end of an event with two DURATION lines refuses the save", () => {
+  const document = calendar("DTSTART:20261008T100000", "DURATION:PT1H", "DURATION:PT2H");
+  document.items[0] = Items.applyChanges(document.items[0], { end: "12:00" });
+  assert.throws(() => Format.writeCalendar(document), /DURATION/);
+});
+
 test("an unsupported DURATION stays raw without a generated DTEND", () => {
   const document = calendar("DTSTART;VALUE=DATE:20261008", "DURATION:P1Y");
   const text = Format.writeCalendar(document);

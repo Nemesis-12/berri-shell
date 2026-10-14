@@ -20,7 +20,8 @@ function icsDateTime(key, time) {
  * Unchanged dates keep the exact source line, including seconds and TZID.
  * Edited dates keep DATE, floating, UTC or the source zone. The new local
  * clock is converted to that zone. An unknown zone keeps the edited source
- * clock and TZID; it has no UTC instant. A change between date-only and timed uses DATE or floating time.
+ * clock and TZID; it has no UTC instant. A change between date-only and
+ * timed uses DATE or floating time.
  */
 function dateProp(name, key, time, source, localZone) {
     if (source && source.date === key && source.time === time && source.raw && source.raw.split(/[;:]/)[0] === name)
@@ -75,8 +76,12 @@ function dateLines(item, isTodo, localZone) {
         lines.push(duration.raw);
         return lines;
     }
-    // An unsupported duration stays raw and must not gain a competing end property.
-    if (item.raw.some(function (line) { return /^DURATION[;:]/i.test(line); })) return lines;
+    // A duration kept raw must not gain a competing end property. An end edit
+    // cannot be written beside it, so refuse instead of losing the edit.
+    if (item.raw.some(function (line) { return /^DURATION[;:]/i.test(line); })) {
+        if (item.end || item.endDate) throw new Error("Cannot change the end of an event with an extra DURATION line");
+        return lines;
+    }
     var lastDay = item.endDate || item.date;
     var endSource = sources.end || (duration && duration.end) || sources.start;
     if (isTodo) {
