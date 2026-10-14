@@ -222,6 +222,45 @@ Scope {
     }
 ''')
 
+    def test_wallpaper_path_with_space_and_hash_loads_in_picker_and_background(self):
+        self.use_offscreen_wallpaper_window()
+        library = self.home / ".local/share/berri-shell/wallpapers"
+        library.mkdir(parents=True, exist_ok=True)
+        image = library / "wallpaper space # one.png"
+        write_png(image, (40, 120, 210))
+        (self.state / "wallpapers.json").write_text(json.dumps({"library": [str(image)]}))
+        self.env["PICKER_SPECIAL_PATH"] = str(image)
+        self.run_qml('''
+    WallpaperLayer { id: wallpapers }
+    FloatingWindow {
+        implicitWidth: 1000; implicitHeight: 500
+        ThemeNotch { id: notch; anchors.centerIn: parent; pickerTab: "walls" }
+    }
+    property bool started: false
+    Timer {
+        interval: 20; running: true; repeat: true
+        onTriggered: {
+            if (!Wallpapers.loaded || wallpapers.instances.length === 0) return;
+            if (!started) {
+                notch.openPicker();
+                wallpapers.instances[0].show(Quickshell.env("PICKER_SPECIAL_PATH"));
+                started = true;
+            }
+            var card = find(notch, "QQuickImage");
+            var layer = wallpapers.instances[0];
+            if (card && card.status === Image.Ready && layer.currentPath === Quickshell.env("PICKER_SPECIAL_PATH")) {
+                if (!check(card.source.toString().indexOf("%20") !== -1
+                           && card.source.toString().indexOf("%23") !== -1,
+                           "picker image URL did not encode spaces and #")) return;
+                if (!check(layer.screenImage.status === Image.Ready
+                           && layer.screenImage.source.toString().indexOf("%23") !== -1,
+                           "desktop image URL did not load the encoded path")) return;
+                console.log("TEST PASS"); Qt.quit();
+            }
+        }
+    }
+''')
+
     def test_sticker_watcher_detects_changes_without_loading_bytes(self):
         write_png(self.config / "sticker.png")
         replacement = self.folder / "replacement.png"
