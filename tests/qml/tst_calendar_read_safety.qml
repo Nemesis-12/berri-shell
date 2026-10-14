@@ -29,6 +29,16 @@ TestCase {
             items: [Items.makeItem({ uid: "kept", title: "Kept", date: "2026-10-05" })] }));
     }
 
+    // One repeat has an occurrence changed by its source file.
+    function changedOccurrenceText() {
+        return ["BEGIN:VCALENDAR", "VERSION:2.0",
+            "BEGIN:VEVENT", "UID:series", "SUMMARY:Master", "DTSTART:20261001T090000",
+            "DTEND:20261001T100000", "RRULE:FREQ=DAILY;COUNT=4", "END:VEVENT",
+            "BEGIN:VEVENT", "UID:series", "RECURRENCE-ID:20261002T090000", "SUMMARY:Changed",
+            "DTSTART:20261009T150000", "DTEND:20261009T160000", "END:VEVENT",
+            "END:VCALENDAR", ""].join("\r\n");
+    }
+
     // Start the actual service with only the local calendar, not read yet.
     function init() {
         TestIo.reset();
@@ -59,6 +69,18 @@ TestCase {
         TestIo.readers[berriPath].loaded();
         compare(Calendar.add({ title: "New", date: "2026-10-06" }), true);
         compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title).sort(), ["Kept", "New"]);
+    }
+
+    function test_moving_a_changed_repeat_keeps_its_displayed_fields() {
+        const text = changedOccurrenceText();
+        TestIo.texts[berriPath] = text;
+        Calendar.acceptCalendarRead(berriPath, text, false);
+        const uid = Items.itemKey("berri", "series");
+        const occurrence = Calendar.itemsOn("2026-10-09").find(item => item.uid === uid);
+        compare([occurrence.title, occurrence.time, occurrence.end], ["Changed", "15:00", "16:00"]);
+        compare(Calendar.move(uid, occurrence.occurrenceDate, "2026-11-02", {}), true);
+        const moved = Calendar.itemsOn("2026-11-02").find(item => item.uid !== uid);
+        compare([moved.title, moved.time, moved.end], ["Changed", "15:00", "16:00"]);
     }
 
     // A file color change must retry the read before it changes the cached items.
