@@ -559,12 +559,25 @@ Singleton {
     function _locate(uid: string, forEdit: bool): var {
         var identity = Items.itemIdentity(uid);
         var meta = identity ? _calendars[identity.calendarId] : null;
-        if (!meta || forEdit && meta.kind === "link") return null;
+        if (!meta || forEdit && meta.kind === "link") {
+            if (forEdit) _failEdit();
+            return null;
+        }
         if (forEdit && !canWriteCalendar(meta.id)) return null;
         var doc = meta.document;
         var items = doc ? doc.items : meta.records || [];
         var index = Items.itemIndex(items, uid, meta.id);
-        return index < 0 ? null : { path: meta.path, doc: doc, meta: meta, index: index };
+        if (index < 0) {
+            if (forEdit) _failEdit();
+            return null;
+        }
+        return { path: meta.path, doc: doc, meta: meta, index: index };
+    }
+
+    /** Shows an error when an edit target disappeared or became read-only. */
+    function _failEdit(): void {
+        root.lastError = "This calendar item is no longer available to edit";
+        root.saveFailed(root.lastError);
     }
 
     function _idOfPath(path: string): string {

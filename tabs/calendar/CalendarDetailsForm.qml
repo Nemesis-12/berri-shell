@@ -247,8 +247,8 @@ Item {
     }
 
     function remove() {
-        if (root.isEdit && !root.readOnly) Calendar.remove(root.uid);
-        root.close();
+        if (!root.isEdit || root.readOnly) return;
+        if (Calendar.remove(root.uid)) root.close();
     }
 
     // One reversible reveal per row or action. Each part draws from value.

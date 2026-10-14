@@ -11,6 +11,9 @@ TestCase {
     name: "CalendarInterface"
 
     SignalSpy { id: failedSaves; target: Calendar; signalName: "saveFailed" }
+    property string failureMessage: ""
+    Connections { target: Calendar; function onSaveFailed(message) { tests.failureMessage = message; } }
+    CalendarSaveError { id: saveError; width: 600; message: tests.failureMessage }
 
     Component {
         id: detailsFormComponent
@@ -21,6 +24,7 @@ TestCase {
     function init() {
         TestIo.reset();
         failedSaves.clear();
+        failureMessage = "";
         const files = Calendar.children.find(child => child instanceof CalendarFiles);
         files.paths = [];
         Calendar.ready = false;
@@ -34,6 +38,7 @@ TestCase {
     function test_read_result_prepares_the_same_document_for_writing() {
         const text = Format.writeCalendar(Object.assign(Format.emptyCalendar(), {
             items: [Items.makeItem({ uid: "kept", title: "Kept", date: "2026-10-05" })] }));
+        TestIo.texts[Calendar.defaultPath] = text;
         Calendar.acceptCalendarRead(Calendar.defaultPath, text, false);
         compare(Calendar.itemsOn("2026-10-05").map(item => item.title), ["Kept"]);
         const write = Calendar.prepareCalendarWrite(Calendar.defaultPath);
@@ -133,7 +138,40 @@ TestCase {
         form.save();
         compare(form.shown, true);
         compare([form.title, form.date], ["Draft to keep", "2026-10-06"]);
+        verify(saveError.message !== "");
+        compare(saveError.message, Calendar.lastError);
         compare(Calendar.itemsOn("2026-10-06"), []);
+    }
+
+    function test_failed_remove_keeps_the_form_open_and_shows_the_error() {
+        const form = createTemporaryObject(detailsFormComponent, tests);
+        verify(form !== null);
+        const text = Format.writeCalendar(Object.assign(Format.emptyCalendar(), {
+            items: [Items.makeItem({ uid: "kept", title: "Kept", date: "2026-10-05" })] }));
+        TestIo.texts[Calendar.defaultPath] = text;
+        Calendar.acceptCalendarRead(Calendar.defaultPath, text, false);
+        TestIo.failWrite = true;
+        form.openEdit(Items.itemKey("berri", "kept"), "2026-10-05", "2026-10-05");
+        form.remove();
+        compare(form.shown, true);
+        verify(saveError.message !== "");
+        compare(saveError.message, Calendar.lastError);
+        compare(Calendar.itemsOn("2026-10-05").map(item => item.title), ["Kept"]);
+    }
+
+    function test_missing_item_save_keeps_the_form_open_and_shows_the_error() {
+        const form = createTemporaryObject(detailsFormComponent, tests);
+        verify(form !== null);
+        const text = Format.writeCalendar(Object.assign(Format.emptyCalendar(), {
+            items: [Items.makeItem({ uid: "kept", title: "Kept", date: "2026-10-05" })] }));
+        Calendar.acceptCalendarRead(Calendar.defaultPath, text, false);
+        form.openEdit(Items.itemKey("berri", "kept"), "2026-10-05", "2026-10-05");
+        Calendar.acceptCalendarRead(Calendar.defaultPath, Format.writeCalendar(Format.emptyCalendar()), false);
+        form.title = "Edited after reload";
+        form.save();
+        compare(form.shown, true);
+        verify(saveError.message !== "");
+        compare(saveError.message, Calendar.lastError);
     }
 
     function test_read_only_details_show_the_clicked_changed_occurrence() {
