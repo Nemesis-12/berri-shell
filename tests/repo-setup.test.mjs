@@ -44,7 +44,7 @@ test("new-worktree.sh copies AGENTS.md into a new worktree", () => {
   git(main, "add", ".");
   git(main, "-c", "user.name=t", "-c", "user.email=t@example.test", "commit", "-q", "-m", "init");
   const target = path.join(dir, "wt");
-  const result = spawnSync("sh", ["tools/new-worktree.sh", "topic", target], { cwd: main, encoding: "utf8", env });
+  const result = spawnSync("sh", ["tools/new-worktree.sh", "topic", target, "main"], { cwd: main, encoding: "utf8", env });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(fs.readFileSync(path.join(target, "AGENTS.md"), "utf8"), "rules\n");
   assert.equal(git(target, "ls-files", "AGENTS.md").stdout, "");
@@ -108,7 +108,7 @@ test("temp-repo steps ignore an inherited GIT_DIR", () => {
     git(main, "init", "-q", "-b", "main");
     git(main, "add", ".");
     git(main, "-c", "user.name=t", "-c", "user.email=t@example.test", "commit", "-q", "-m", "init");
-    spawnSync("sh", ["tools/new-worktree.sh", "topic", path.join(dir, "wt")], { cwd: main, encoding: "utf8", env: cleanEnv() });
+    spawnSync("sh", ["tools/new-worktree.sh", "topic", path.join(dir, "wt"), "main"], { cwd: main, encoding: "utf8", env: cleanEnv() });
   } finally {
     if (savedGitDir === undefined) delete process.env.GIT_DIR;
     else process.env.GIT_DIR = savedGitDir;
