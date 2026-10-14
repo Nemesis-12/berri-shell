@@ -241,8 +241,8 @@ Item {
         if (ok) {
             CalendarColors.lastColor = root.color;
             root.saved(root.date);
+            root.close();
         }
-        root.close();
     }
 
     function remove() {
