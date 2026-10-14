@@ -238,6 +238,8 @@ Singleton {
         saved.save({ library: root.library, assignments: root.assignments });
     }
 
+    signal saveFailed(string message)
+
     SavedState {
         id: saved
         name: "wallpapers"
@@ -246,5 +248,6 @@ Singleton {
             if (values.assignments) root.assignments = values.assignments;
             root.loaded = true;
         }
+        onSaveFailed: message => root.saveFailed(message)
     }
 }

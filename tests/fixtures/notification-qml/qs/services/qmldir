@@ -1,3 +1,5 @@
 module qs.services
 singleton Theme 1.0 Theme.qml
 SavedState 1.0 SavedState.qml
+singleton Calendar 1.0 Calendar.qml
+singleton Wallpapers 1.0 Wallpapers.qml
