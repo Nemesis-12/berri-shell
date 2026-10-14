@@ -19,9 +19,13 @@ import qs.services
  * the next tick checks the real time.
  *
  * ~/.local/state/berri-shell/reminders.json keeps the time of the last check
- * and the alerts already shown ({ lastCheck, shown: [key] }). Reminders that
- * fell due while the shell was off, or were saved late, show once (up to a
- * week back). Older reminders stay visible in the calendar.
+ * and the alerts already shown ({ lastCheck, shown: [key] }). A sweep looks
+ * only at alerts due since the last check, so a new alarm lead or time on an
+ * old repeating reminder sends nothing old. A reminder that is new since the
+ * last check (saved late, imported, or added while the shell was off) shows
+ * its latest alert from the past week once. The first start has no last check
+ * and shows no backlog. One sweep shows at most `maxAlertsPerSweep` alerts
+ * and logs one line for the rest. Older reminders stay visible in the calendar.
  */
 Singleton {
     id: root
@@ -30,11 +34,13 @@ Singleton {
     readonly property real missedWindowMs: 7 * 86400000
     readonly property real horizonDays: 400
     readonly property int retryMs: 30000
+    readonly property int maxAlertsPerSweep: 10
 
     property bool _started: false
     property bool _stateRead: false
     property real _lastCheck: 0
     property var _alreadyShown: []      // keys like "[calendarId, uid]|dueMs"
+    property var _knownItems: ({})      // item keys the last sweep saw
     property real _nextDueMs: 0  // 0 = no reminder ahead
 
     Connections {
@@ -47,27 +53,54 @@ Singleton {
         if (_started || !_stateRead || !Calendar.ready) return;
         _started = true;
         var now = Date.now();
-        // Saved shown keys, rather than the last check, decide which past alerts remain unseen.
-        _sweep(now - missedWindowMs, now);
+        // First run: nothing to catch up, so every item counts as seen. Later runs:
+        // an item saved after the last check is new.
+        var firstRun = _lastCheck <= 0;
+        var items = Calendar.allItems();
+        _rememberItems(items.filter(function (item) {
+            var savedAt = Delivery.stampMs(item.stamp);
+            return firstRun || savedAt === null || savedAt <= _lastCheck;
+        }));
+        if (firstRun) _lastCheck = now;
+        _sweep(now);
     }
 
-    // The calendar changed: also catch newly saved past alerts. Shown keys prevent repeats.
+    // The calendar changed: alerts just due show now, and new items show their latest past alert.
     function _onCalendarChanged(): void {
         if (!_started) return;
-        var now = Date.now();
-        _sweep(now - missedWindowMs, now);
+        _sweep(Date.now());
     }
 
-    // Shows every unshown alert due in (from, now], saves the state, waits for the next.
-    function _sweep(from: real, now: real): void {
-        var due = Items.dueBetween(Calendar.allItems(), from, now);
+    function _itemKey(item: var): string { return Items.itemKey(item.calendarId, item.uid); }
+
+    function _rememberItems(items: var): void {
+        _knownItems = {};
+        for (var i = 0; i < items.length; i++) _knownItems[_itemKey(items[i])] = true;
+    }
+
+    // Shows the unshown alerts due since the last check and the latest alert of each new item, saves the state, waits for the next.
+    function _sweep(now: real): void {
+        var items = Calendar.allItems();
+        var oldest = now - missedWindowMs;
+        var seen = items.filter(function (item) { return _knownItems[_itemKey(item)]; });
+        var fresh = items.filter(function (item) { return !_knownItems[_itemKey(item)]; });
+        var due = Items.dueBetween(seen, Math.max(_lastCheck, oldest), now)
+            .concat(Delivery.latestPerItem(Items.dueBetween(fresh, oldest, now)))
+            .sort(function (a, b) { return a.dueMs - b.dueMs; });
+        _rememberItems(items);
+        var unshown = [];
         for (var i = 0; i < due.length; i++) {
             var key = Items.itemKey(due[i].calendarId, due[i].uid) + "|" + due[i].dueMs;
             var keyWithoutCalendar = due[i].uid + "|" + due[i].dueMs;
             if (_alreadyShown.indexOf(key) >= 0 || _alreadyShown.indexOf(keyWithoutCalendar) >= 0) continue;
             _alreadyShown.push(key);
-            _notify(due[i], key);
+            unshown.push({ alert: due[i], key: key });
         }
+        // Skipped alerts stay in the shown keys, so a later sweep does not send them.
+        var sent = Delivery.newestAlerts(unshown, maxAlertsPerSweep);
+        if (sent.skipped > 0)
+            console.warn("ReminderNotifier: " + unshown.length + " reminders were due, " + sent.shown.length + " shown, " + sent.skipped + " skipped");
+        for (var s = 0; s < sent.shown.length; s++) _notify(sent.shown[s].alert, sent.shown[s].key);
         _lastCheck = now;
         var cutoff = now - missedWindowMs;
         _alreadyShown = _alreadyShown.filter(function (k) { return +k.slice(k.lastIndexOf("|") + 1) > cutoff; });
@@ -91,7 +124,7 @@ Singleton {
         id: timer
         onTriggered: {
             var now = Date.now();
-            if (root._nextDueMs > 0 && now >= root._nextDueMs) root._sweep(Math.max(root._lastCheck, now - root.missedWindowMs), now);
+            if (root._nextDueMs > 0 && now >= root._nextDueMs) root._sweep(now);
             else root._wait();
         }
     }

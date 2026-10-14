@@ -39,3 +39,22 @@ function nextWake(dueMs, nowMs, retryMs) {
     if (dueMs <= 0) return 0;
     return dueMs <= nowMs ? nowMs + retryMs : dueMs;
 }
+
+/** The time (ms) of an iCalendar UTC stamp such as "20261005T093000Z", or null when it has another form. */
+function stampMs(stamp) {
+    var m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(stamp || "");
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) : null;
+}
+
+/** The last alert of each item. `alerts` is oldest first, as `Items.dueBetween` returns it. */
+function latestPerItem(alerts) {
+    var last = {};
+    for (var i = 0; i < alerts.length; i++) last[alerts[i].calendarId + "|" + alerts[i].uid] = alerts[i];
+    return alerts.filter(function (alert) { return last[alert.calendarId + "|" + alert.uid] === alert; });
+}
+
+/** The newest `limit` alerts of an oldest-first list, and how many older ones are left out. */
+function newestAlerts(alerts, limit) {
+    var skipped = Math.max(0, alerts.length - limit);
+    return { shown: alerts.slice(skipped), skipped: skipped };
+}
