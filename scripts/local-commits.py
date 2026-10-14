@@ -30,7 +30,11 @@ SEP = "\x1f"
 
 
 def git(repo: Path, *args: str) -> str:
-    out = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=15)
+    """Run git in a repo; a slow, missing or failing git gives an empty answer."""
+    try:
+        out = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=15)
+    except (subprocess.TimeoutExpired, OSError):
+        return ""
     return out.stdout.strip() if out.returncode == 0 else ""
 
 
