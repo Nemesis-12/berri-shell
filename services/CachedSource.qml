@@ -14,7 +14,8 @@ import "../logic/SourceFailures.js" as SourceFailures
  * has ended and sets a timer for the time left. A new version fires
  * `answered(data)`. An empty or unreadable answer keeps the last data and
  * writes one line to the shell log (see SourceFailures.js). A source with
- * `keepWhenIdle` also takes answers that arrive while not active.
+ * `keepWhenIdle` also takes answers that arrive while not active. A script
+ * that runs longer than `runLimit` is killed; the next cycle runs it again.
  */
 Scope {
     id: root
@@ -37,6 +38,9 @@ Scope {
 
     /** True when the last data stays after the last view hides. */
     property bool keepWhenIdle: false
+
+    /** Longest run time of the script in milliseconds. A script that runs longer is killed, and the next cycle runs it again. */
+    property int runLimit: 120000
 
     /** True when another source must finish first. */
     property bool blocked: false
@@ -66,6 +70,7 @@ Scope {
         process.command = ["python3", Quickshell.shellPath("scripts/" + root.script)]
             .concat(root.args).concat(force ? ["--force"] : []);
         process.running = true;
+        watchdog.restart();
     }
 
     /** The first view shows: start an old source, or wait for the cache time to end. */
@@ -116,7 +121,10 @@ Scope {
 
     Process {
         id: process
-        onExited: root.exited()
+        onExited: {
+            watchdog.stop();
+            root.exited();
+        }
         stdout: StdioCollector {
             waitForEnd: true
             onStreamFinished: {
@@ -137,6 +145,12 @@ Scope {
                 root.schedule();
             }
         }
+    }
+
+    Timer {
+        id: watchdog
+        interval: root.runLimit
+        onTriggered: process.signal(9)
     }
 
     Timer {
