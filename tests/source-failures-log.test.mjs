@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 
 const repo = fileURLToPath(new URL("../", import.meta.url));
 const forecast = {
+  utc_offset_seconds: 0,
   current: { time: "2026-09-30T06:15", temperature_2m: 17.5, apparent_temperature: 19.5,
     relative_humidity_2m: 96, dew_point_2m: 16.8, weather_code: 2, is_day: 0,
     wind_speed_10m: 2.9, wind_direction_10m: 315, wind_gusts_10m: 8.6, surface_pressure: 1004.9 },
@@ -35,6 +36,7 @@ function run(service, file, rounds) {
       .replace(/^import Quickshell.Io\n/m, "")
       .replace(/^import qs\.common\n/m, "")
       .replace(/Quickshell\.shellPath\(/g, "(")
+      .replaceAll('Clock.minute.getTime()', 'testSource.now')
       .replace('FolderRoots.weatherSettings', '"/synthetic-home/.local/state/omarchy/settings/weather.json"')
       .replace(/"\.\.\/logic\/([A-Za-z]+\.js)"/g, (_, name) => JSON.stringify(path.join(repo, "logic", name)));
     fs.writeFileSync(path.join(folder, "ServiceUnderTest.qml"), prepare(`services/${file}`));

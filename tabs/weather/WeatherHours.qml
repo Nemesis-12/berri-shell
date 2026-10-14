@@ -18,7 +18,9 @@ Item {
     /** Number of hour columns. */
     readonly property int columns: 6
 
-    readonly property var hours: (Weather.stripHours(root.day) || []).slice(0, root.columns)
+    readonly property var hours: (Weather.stripHours(root.day, Clock.minute.getTime()) || []).slice(0, root.columns)
+    WhileVisible { service: Clock }
+
     readonly property bool isNow: root.day === 0
 
     Rectangle {
@@ -74,6 +76,9 @@ Item {
             Icon {
                 x: 14
                 y: 14 + 9 + cell.spread
+                opacity: cell.modelData.code === null || cell.modelData.isDay === null ? 0 : 1
+                visible: opacity > 0.001
+                Fade on opacity { duration: Theme.stateMs }
                 name: Weather.iconForGroup(Weather.weatherGroup(cell.modelData.code), cell.modelData.isDay)
                 size: 20
                 strokeWidth: 1.6
@@ -82,7 +87,7 @@ Item {
             CondensedText {
                 x: 14
                 y: 14 + 9 + 20 + 2 * cell.spread + 13.6 - height / 2
-                text: Math.round(cell.modelData.tempC) + "°"
+                text: Fmt.number(cell.modelData.tempC) + "°"
                 font.pixelSize: 32
                 font.letterSpacing: -0.64
             }

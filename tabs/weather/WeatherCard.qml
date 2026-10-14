@@ -23,17 +23,16 @@ Item {
     /** True while the last refresh failed: the readout turns dim and a chip shows the age. */
     readonly property bool stale: Weather.error !== ""
     readonly property bool byDay: root.detail.isDay === undefined ? (root.isNow ? Weather.isDay : true) : root.detail.isDay
-    readonly property string group: Weather.weatherGroup(root.detail.code === undefined ? 3 : root.detail.code)
+    readonly property string group: Weather.weatherGroup(root.detail.code)
     readonly property bool hasFeelsLike: root.detail.feelsLikeC !== undefined && root.detail.feelsLikeC !== null
 
+    // Labels the selected calendar date without dereferencing an absent day.
     function whenLabel() {
         if (root.isNow) return "NOW";
-        var date = Fmt.toDate(Weather.days[root.day].date);
-        return Fmt.weekday(date) + " " + date.getDate();
-    }
-
-    function temp(v) {
-        return v === undefined || v === null ? "--" : Math.round(v).toString();
+        var day = Weather.days[root.day];
+        if (!day) return "-";
+        var date = Fmt.toDate(day.date);
+        return Fmt.weekday(date) + " " + date.getUTCDate();
     }
 
     SideLabel {
@@ -121,7 +120,7 @@ Item {
 
             CondensedText {
                 id: big
-                text: root.temp(root.detail.tempC)
+                text: Fmt.number(root.detail.tempC)
                 color: root.stale ? Theme.dim : Theme.fg
                 Behavior on color { StandardColorMotion { duration: Theme.stateMs } }
                 font.pixelSize: 128
@@ -140,6 +139,9 @@ Item {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: 4
+                opacity: root.group === "unknown" ? 0 : 1
+                visible: opacity > 0.001
+                Fade on opacity { duration: Theme.stateMs }
                 name: Weather.iconForGroup(root.group, root.byDay)
                 size: 48
                 strokeWidth: 1.4
@@ -158,8 +160,8 @@ Item {
                 font.pixelSize: 22
             }
             MonoText {
-                text: (root.hasFeelsLike ? "Feels like " + root.temp(root.detail.feelsLikeC) + "° · " : "")
-                    + "H " + root.temp(root.detail.maxC) + "° L " + root.temp(root.detail.minC) + "°"
+                text: (root.hasFeelsLike ? "Feels like " + Fmt.number(root.detail.feelsLikeC) + "° · " : "")
+                    + "H " + Fmt.number(root.detail.maxC) + "° L " + Fmt.number(root.detail.minC) + "°"
                 color: Theme.accentLight
                 font.letterSpacing: 0.54
                 font.capitalization: Font.AllUppercase
@@ -171,12 +173,12 @@ Item {
                 Row {
                     spacing: 5
                     Icon { name: "sunrise"; size: 12; strokeWidth: 1.8; color: Theme.accentLight }
-                    MonoText { text: Fmt.clock(root.detail.sunrise, root.clock24); color: Theme.accentLight }
+                    MonoText { text: Fmt.clock(root.detail.sunrise, root.clock24) || "-"; color: Theme.accentLight }
                 }
                 Row {
                     spacing: 5
                     Icon { name: "sunset"; size: 12; strokeWidth: 1.8; color: Theme.accentLight }
-                    MonoText { text: Fmt.clock(root.detail.sunset, root.clock24); color: Theme.accentLight }
+                    MonoText { text: Fmt.clock(root.detail.sunset, root.clock24) || "-"; color: Theme.accentLight }
                 }
             }
         }

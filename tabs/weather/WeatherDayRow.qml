@@ -60,6 +60,9 @@ Rectangle {
     Icon {
         x: 14 + 48 + 10
         anchors.verticalCenter: parent.verticalCenter
+        opacity: root.day.code === null ? 0 : 1
+        visible: opacity > 0.001
+        Fade on opacity { duration: Theme.stateMs }
         name: Weather.iconForGroup(Weather.weatherGroup(root.day.code), true)
         size: 18
         strokeWidth: 1.6
@@ -80,7 +83,7 @@ Rectangle {
 
         CondensedText {
             anchors.baseline: high.baseline
-            text: Math.round(root.day.minC) + "°"
+            text: Fmt.number(root.day.minC) + "°"
             font.pixelSize: 14
             color: Theme.dim
         }
@@ -88,7 +91,7 @@ Rectangle {
             id: high
             width: Math.max(26, implicitWidth)
             horizontalAlignment: Text.AlignRight
-            text: Math.round(root.day.maxC) + "°"
+            text: Fmt.number(root.day.maxC) + "°"
             font.pixelSize: 20
         }
     }

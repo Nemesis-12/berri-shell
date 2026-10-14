@@ -1,5 +1,6 @@
 pragma Singleton
 import QtQuick
+import "../logic/WeatherParse.js" as WeatherParse
 
 // Stand-in for the weather service: only the values the views read.
 QtObject {
@@ -13,8 +14,8 @@ QtObject {
     property string conditionLabel: "Cloudy"
     readonly property var days: []
     function dayDetail(i) { void updatedAt; return { tempC: 24, feelsLikeC: 25, maxC: 26, minC: 17, code: 3, isDay: true }; }
-    function weatherGroup(code) { return "cloud"; }
-    function iconForGroup(group, isDay) { return "cloud"; }
-    function labelForGroup(group) { return "Cloudy"; }
+    function weatherGroup(code) { return WeatherParse.weatherGroup(code); }
+    function iconForGroup(group, isDay) { return WeatherParse.iconForGroup(group, isDay); }
+    function labelForGroup(group) { return WeatherParse.labelForGroup(group); }
     function refresh() {}
 }

@@ -127,7 +127,7 @@ Item {
         Text {
             textFormat: Text.PlainText
             anchors.verticalCenter: parent.verticalCenter
-            text: Weather.ready ? Weather.temperatureC + "°" : "--°"
+            text: Weather.ready ? Weather.temperatureC + "°" : "-°"
             font.family: Theme.mono
             font.weight: Font.Medium
             font.pixelSize: 10

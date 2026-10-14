@@ -42,8 +42,12 @@ Item {
     }
 
     function chipText(view) {
-        var it = textItem(view, /AGO$|^NO DATA$|^JUST NOW$/);
-        return it ? it.text : "";
+        var found = "";
+        walk(view, function(it) {
+            if (it.visible && typeof it.text === "string" && /AGO$|^-$|^JUST NOW$/.test(it.text)
+                && it.parent.implicitHeight === 16) found = it.text;
+        });
+        return found;
     }
 
     function tempColor(view, pattern) {
@@ -84,7 +88,7 @@ Item {
             expect(chipText(card), "3 H AGO", "Chip age follows the minute clock (card)");
             Weather.updatedAt = 0;
         } else if (step === 3) {
-            expect(chipText(cell), "NO DATA", "Chip text before the first reading");
+            expect(chipText(cell), "-", "Chip text before the first reading");
             Weather.error = "";
             Weather.updatedAt = base;
         } else if (step === 4) {

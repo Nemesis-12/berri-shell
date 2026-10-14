@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 const repo = fileURLToPath(new URL("../", import.meta.url));
 const fixture = path.join(repo, "tests/fixtures");
 const forecast = {
+  utc_offset_seconds: 0,
   current: { time: "2026-09-30T06:15", temperature_2m: 17.5, apparent_temperature: 19.5,
     relative_humidity_2m: 96, dew_point_2m: 16.8, weather_code: 2, is_day: 0,
     wind_speed_10m: 2.9, wind_direction_10m: 315, wind_gusts_10m: 8.6, surface_pressure: 1004.9 },
@@ -33,10 +34,17 @@ function runWeather(scenario) {
       .replace(/^import Quickshell.Io\n/m, "")
       .replace('"../logic/WeatherParse.js"', JSON.stringify(path.join(repo, "logic/WeatherParse.js")))
       .replace('"../logic/SourceFailures.js"', JSON.stringify(path.join(repo, "logic/SourceFailures.js")))
+      .replaceAll('Clock.minute.getTime()', 'testSource.now')
       .replace('FolderRoots.weatherSettings', '"/synthetic-home/.local/state/omarchy/settings/weather.json"');
     fs.writeFileSync(path.join(folder, "WeatherUnderTest.qml"), source);
-    const config = { scenario, forecast, timeScale: Number(process.env.WEATHER_TEST_TIME_SCALE || 0.01) };
-    const runner = fs.readFileSync(path.join(fixture, "weather-recovery.qml"), "utf8")
+    const response = structuredClone(forecast);
+    if (["clock", "partial", "missing-primary", "missing-hour"].includes(scenario)) {
+      response.hourly.time.push("2026-09-30T07:00");
+      for (const field of Object.keys(response.hourly))
+        if (field !== "time") response.hourly[field].push(response.hourly[field][0]);
+    }
+    const config = { scenario, forecast: response, timeScale: Number(process.env.WEATHER_TEST_TIME_SCALE || 0.01) };
+    const runner = fs.readFileSync(path.join(fixture, scenario.endsWith("-race") || scenario.endsWith("-failure") || scenario === "backoff" ? "weather-requests.qml" : "weather-recovery.qml"), "utf8")
       .replace("TEST_CONFIG", JSON.stringify(config));
     const entry = path.join(folder, "test.qml");
     fs.writeFileSync(entry, runner);
@@ -46,6 +54,8 @@ function runWeather(scenario) {
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stderr, /Weather checks passed/);
+    if (scenario === "name-failure") assert.match(result.stderr, /weather name data failed \(offline\)/);
+    if (scenario === "geocode-failure") assert.match(result.stderr, /weather geocoding data failed \(bad data\)/);
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });
   }
@@ -77,4 +87,48 @@ test("weather retries an IP location response without usable coordinates", () =>
 
 test("weather keeps the last good result during a failed refresh and then recovers", () => {
   runWeather("retained");
+});
+
+test("weather discards an in-flight old-place forecast and immediately requests the new place", () => {
+  runWeather("forecast-race");
+});
+
+test("weather ignores a late place-name reply after configured coordinates change", () => {
+  runWeather("name-race");
+});
+
+test("weather ignores a late geocoding reply after coordinates change", () => {
+  runWeather("geocode-race");
+});
+
+test("weather logs a failed name request without response text or coordinates", () => {
+  runWeather("name-failure");
+});
+
+test("weather logs malformed geocoding while keeping the fallback place name", () => {
+  runWeather("geocode-failure");
+});
+
+test("retained forecast hours follow the minute clock without a network request", () => {
+  runWeather("clock");
+});
+
+test("a partial forecast keeps missing readings in the service properties", () => {
+  runWeather("partial");
+});
+
+test("a missing primary reading preserves the last good service model and timestamp", () => {
+  runWeather("missing-primary");
+});
+
+test("a missing current hour preserves the last good service model and timestamp", () => {
+  runWeather("missing-hour");
+});
+
+test("weather doubles the retry wait for repeated bad data and resets it after a good reply", () => {
+  runWeather("backoff");
+});
+
+test("weather reports a non-JSON location reply as bad data, not a missing place", () => {
+  runWeather("portal");
 });

@@ -5,6 +5,7 @@ import QtQuick
 Item {
     id: test
     property var config: TEST_CONFIG
+    property real now: Date.UTC(2026, 8, 30, 6, 15)
     property var service
     property int round: 0
     property int answered: 0
