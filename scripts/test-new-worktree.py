@@ -10,8 +10,14 @@ HELPER = Path(__file__).resolve().parents[1] / "tools/new-worktree.sh"
 IDENTITY = ["-c", "user.name=t", "-c", "user.email=t@example.test"]
 
 
+def clean_env():
+    """The environment without GIT_* variables; a git hook sets them, and they point git at the wrong repository."""
+    return {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+
+
 def git(repo, *args):
-    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True).stdout.strip()
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, check=True,
+                          env=clean_env()).stdout.strip()
 
 
 class WorktreeBaseTests(unittest.TestCase):
@@ -33,9 +39,8 @@ class WorktreeBaseTests(unittest.TestCase):
         self.second = git(self.repo, "rev-parse", "HEAD")
 
     def run_helper(self, *args):
-        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
         return subprocess.run(["sh", "tools/new-worktree.sh", *args], cwd=self.repo,
-                              capture_output=True, text=True, env=env)
+                              capture_output=True, text=True, env=clean_env())
 
     def test_local_branch_tag_and_hash_bases_are_used(self):
         for index, base in enumerate(("main", "first-tag", self.first)):
