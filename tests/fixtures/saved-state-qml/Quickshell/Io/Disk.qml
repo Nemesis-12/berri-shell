@@ -13,6 +13,12 @@ QtObject {
     function log(kind, value) { events = events.concat([{ kind: kind, value: value }]); }
     /** Commands that were started, as arrays. */
     function commands() { return events.filter(e => e.kind === "run").map(e => e.value); }
+    /** Output returned by the add script in the process test double. */
+    function output(command) {
+        if (command[1] && command[1].indexOf("add-wallpaper.sh") >= 0)
+            return command[3] + "/" + command[2].split("/").pop();
+        return "";
+    }
     /** Does what the real command does and returns its exit code. */
     function run(command) {
         if (command[1] && command[1].indexOf("backup-saved.sh") >= 0) {

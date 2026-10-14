@@ -10,8 +10,12 @@ TestCase {
     when: windowShown
 
     readonly property string dir: "/home/tester/.local/share/berri-shell/wallpapers"
+    property var addResults: []
 
-    function init() { Disk.reset(); }
+    function init() { Disk.reset(); addResults = []; }
+    function initTestCase() {
+        Wallpapers.addFinished.connect(path => tests.addResults = tests.addResults.concat([path]));
+    }
 
     // Delete commands that were started.
     function deletes() { return Disk.commands().filter(c => c[0] === "rm"); }
@@ -40,5 +44,20 @@ TestCase {
 
         tryVerify(() => deletes().length === paths.length);
         compare(deletes(), paths.map(path => ["rm", "-f", "--", path]));
+    }
+
+    function test_adds_requested_during_a_copy_are_both_kept() {
+        var first = "/tmp/berri-wallpaper-test/first.png";
+        var second = "/tmp/berri-wallpaper-test/second.png";
+        Wallpapers.add(first);
+        Wallpapers.add(second);
+
+        tryVerify(() => addResults.length === 2);
+        var added = Disk.commands().filter(command => command[1]
+            && command[1].endsWith("add-wallpaper.sh"));
+        compare(added.length, 2);
+        compare(added.map(command => command[2]), [first, second]);
+        compare(addResults, [dir + "/first.png", dir + "/second.png"]);
+        compare(Wallpapers.library, [dir + "/first.png", dir + "/second.png"]);
     }
 }

@@ -16,6 +16,7 @@ Item {
         id: finish
         interval: 1
         onTriggered: {
+            if (root.stdout) root.stdout.text = Disk.output(root.command);
             var code = Disk.run(root.command);
             root.running = false;
             root.exited(code, 0);
