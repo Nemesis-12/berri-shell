@@ -204,7 +204,7 @@ function readProperty(read, p, localZone) {
     case "DTSTAMP": item.stamp = p.value; break;
     case "SUMMARY": item.title = Text.unescapeText(p.value); break;
     case "DTSTART": case "DTEND": case "DUE": readDateProperty(read, p, localZone); break;
-    case "DURATION": read.duration = p; break;
+    case "DURATION": if (read.duration) item.raw.push(p.raw); else read.duration = p; break;
     case "CATEGORIES": readCategory(read, p); break;
     case "X-BERRI-COLOR": read.ownColor = p.value.trim(); break;
     case "RRULE": readRepeatRule(read, p, localZone); break;
