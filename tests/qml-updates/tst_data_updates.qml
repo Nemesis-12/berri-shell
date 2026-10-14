@@ -1,5 +1,6 @@
 import QtQuick
 import QtTest
+import Quickshell.Io
 import qs.services
 import qs.tabs.calendar
 import qs.tabs.weather
@@ -26,8 +27,9 @@ TestCase {
         document.items = [Items.makeItem({ uid: "one", title: "Before", date: "2026-10-05" })];
         Calendar._calendars = {
             berri: { id: "berri", name: "berri", kind: "local", color: "accent", hidden: false,
-                path: Calendar.defaultPath, file: "berri.ics", document: document, text: Format.writeCalendar(document) }
+                path: Calendar.defaultPath, file: "berri.ics", loaded: true, document: document, text: Format.writeCalendar(document) }
         };
+        TestIo.texts[Calendar.defaultPath] = Calendar._calendars.berri.text;
         Calendar._order = ["berri"];
         Calendar._rebuild();
         const panel = createTemporaryObject(dayPanel, tests);

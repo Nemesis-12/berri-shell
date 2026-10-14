@@ -136,7 +136,7 @@ Singleton {
         if (fields.calendarId && (!target || target.kind === "link")) return false;
         if (target) path = dir + "/" + target.file;
         var calendar = target || _calendars[Identity.LOCAL_ID];
-        if (!canWriteCalendar(calendar.id)) return false;
+        if (!calendar || !canWriteCalendar(calendar.id)) return false;
         var doc = calendar.document || Format.emptyCalendar();
         var item = Items.makeItem(Catalog.cleanDates(fields));
         doc.items.push(item);
@@ -266,6 +266,7 @@ Singleton {
         var meta = _calendars[id];
         var clean = Items.cleanColor(color);
         if (!meta || meta.kind === "local" || !clean) return false;
+        if (meta.kind === "file" && !canWriteCalendar(id)) return false;
         var previousColor = meta.color;
         meta.color = clean;
         var path = dir + "/" + meta.file;
@@ -293,21 +294,29 @@ Singleton {
     // ---- helper interface. Helpers pass results; Calendar owns stored state and notification order.
 
     /**
-     * True when an edit may write this calendar. After a failed read, the
+     * True when an edit may write this calendar after its first read. After a failed read, the
      * file may hold changes berri never saw, so a write could overwrite them.
      * Such a calendar reads the file again first. If that fails, the
      * edit is refused and `saveFailed` carries the read error.
      */
     function canWriteCalendar(id: string): bool {
         var calendar = _calendars[id];
-        if (!calendar) return false;
+        if (!calendar || calendar.kind === "link") return false;
+        if (!calendar.loaded) {
+            root.lastError = root.readErrorText(calendar.name);
+            root.saveFailed(root.lastError);
+            return false;
+        }
         if (!calendar.readFailed) return true;
         var text = calendarFiles.readNow(calendar.path);
-        if (text !== null) {
+        if (text === undefined) {
+            acceptCalendarMissing(calendar.path);
+            if (!calendar.readFailed) return true;
+        } else if (text !== null) {
             acceptCalendarRead(calendar.path, text, false);
-            return true;
+            if (!calendar.readFailed) return true;
         }
-        root.lastError = root.readErrorText(calendar.name);
+        root.lastError = calendar.error || root.readErrorText(calendar.name);
         root.saveFailed(root.lastError);
         return false;
     }
@@ -322,9 +331,28 @@ Singleton {
     }
 
     // A file could not be read. Keep any cached document for display, but refuse edits until a read succeeds.
-    function _readFailed(calendar: var): void {
+    function _readFailed(calendar: var, message: string): void {
         calendar.readFailed = true;
-        calendar.error = root.readErrorText(calendar.name);
+        calendar.error = message;
+        calendar.loaded = true;
+        _rebuild();
+        _checkReady();
+    }
+
+    /**
+     * A missing local file starts empty, including after saved state or deletion.
+     * A missing imported file is a read error. Null text means there is no file
+     * to back up on the next local save.
+     */
+    function acceptCalendarMissing(path: string): void {
+        var calendar = _calendars[_idOfPath(path)];
+        if (!calendar) return;
+        if (calendar.kind !== "local") { _readFailed(calendar, root.readErrorText(calendar.name)); return; }
+        calendar.document = Format.emptyCalendar();
+        calendar.text = null;
+        calendar.signature = "";
+        calendar.error = "";
+        calendar.readFailed = false;
         calendar.loaded = true;
         _rebuild();
         _checkReady();
@@ -347,7 +375,15 @@ Singleton {
         var id = _idOfPath(path);
         if (!id) return;
         var calendar = _calendars[id];
-        if (failed && calendar.kind !== "link") { _readFailed(calendar); return; }
+        // Read success alone is not parse success. Empty or incomplete text and
+        // OS errors keep the last valid document and refuse writes. A complete
+        // empty VCALENDAR is valid. Unknown fields remain the reader's concern.
+        if (calendar.kind !== "link" && (failed || !Format.isCompleteCalendar(text))) {
+            var message = !failed && text === "" ? "Calendar file is empty: " + calendar.name : root.readErrorText(calendar.name);
+            _readFailed(calendar, message);
+            return;
+        }
+        var wasFailed = calendar.readFailed;
         if (!failed) { calendar.readFailed = false; if (calendar.kind !== "link") calendar.error = ""; }
         var signature = text.length + ":" + Items.shortHash(text);
         if (failed && calendar.kind === "link") { _recordsFailed(calendar, calendar.convertError || root.parserError || root.recordsErrorText); return; }
@@ -363,14 +399,16 @@ Singleton {
             }
             if (unnamed) _saveState();
             _rebuild();
-        }
+        } else if (wasFailed) _rebuild();
         calendar.loaded = true;
         _checkReady();
     }
 
     /** Write text for a stored document. The result carries text only, never the stored document. */
     function prepareCalendarWrite(path: string): var {
-        var calendar = _calendars[_idOfPath(path)];
+        var id = _idOfPath(path);
+        if (!canWriteCalendar(id)) return null;
+        var calendar = _calendars[id];
         return { nextText: Format.writeCalendar(calendar.document, _localZone),
             previousText: calendar.text, failurePrefix: "Could not save " + calendar.name };
     }
@@ -614,6 +652,7 @@ Singleton {
         folder: root.dir
         onListed: paths => root._reconcile(paths)
         onRead: (path, text, failed) => root.acceptCalendarRead(path, text, failed)
+        onMissing: path => root.acceptCalendarMissing(path)
         onDownloaded: (request, code, jsonPath) => links.downloaded(request, code, jsonPath)
         onConvertFailed: jsonPath => {
             var id = root._idOfPath(jsonPath);

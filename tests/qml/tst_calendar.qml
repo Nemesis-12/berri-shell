@@ -14,9 +14,9 @@ TestCase {
 
     // Build one stored item for a service action.
     function item(fields) { return Items.makeItem(Object.assign({ uid: "edited", title: "Before", date: "2026-10-05" }, fields)); }
-    // Build calendar metadata for the stored items.
+    // Build calendar metadata for items that have already been read.
     function calendar(items, fields) {
-        return Object.assign({ id: "berri", name: "berri", kind: "local", color: "accent", hidden: false, document: { items: items } }, fields || {});
+        return Object.assign({ id: "berri", name: "berri", kind: "local", color: "accent", hidden: false, loaded: true, document: { items: items } }, fields || {});
     }
     // Seed the actual service while disk and network access stay in memory.
     function service(items, extras) {
@@ -27,7 +27,14 @@ TestCase {
         local.text = Format.writeCalendar(local.document);
         var list = [local].concat(extras || []);
         var stored = {};
-        list.forEach(function (entry) { stored[entry.id] = entry; });
+        list.forEach(function (entry) {
+            stored[entry.id] = entry;
+            if (entry.kind !== "link") {
+                entry.document = Object.assign(Format.emptyCalendar(), entry.document);
+                entry.text = Format.writeCalendar(entry.document);
+                TestIo.texts[entry.path] = entry.text;
+            }
+        });
         Calendar.ready = false;
         Calendar._stateRead = false;
         Calendar.lastError = "";
@@ -210,7 +217,7 @@ TestCase {
         same(shell.itemsInMonth(2026, 10), october);
         same(shell.itemsInMonth(2026, 11), november);
         compare(shell.getItem(Items.itemKey("berri", "edited")).title, "Before");
-        compare(failureSpy.signalArguments[0][0], "Could not save berri: Permission denied");
+        compare(failureSpy.signalArguments[0][0], "Could not save berri backup: Permission denied");
         compare(shell.lastError, failureSpy.signalArguments[0][0]);
     }
 

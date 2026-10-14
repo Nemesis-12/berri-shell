@@ -28,7 +28,7 @@ only its test copy. The runner removes the copy after the test.
 
 The call-order check (`tst_calendar_order.qml`) reads `TestIo.events`. The fake file
 view logs each write there, and the check logs each `revisionChanged` and `saveFailed`
-signal with the titles the views read at that moment. It proves the order: save,
+signal with the titles the views read at that moment. It proves the order: backup, save,
 rebuild, signal. A failed save is undone and rebuilt before `saveFailed`.
 
 The helper interface check (`tst_calendar_interface.qml`) calls Calendar's named
@@ -36,5 +36,16 @@ read, write preparation, import, and link result operations. It checks the file
 text prepared for a save, import identity and duplicate counts, and the items
 shown after failed and successful refreshes. The helpers receive file access
 separately and never receive a stored calendar entry. `canWriteCalendar(id)`
-keeps the existing failed-read retry decision in Calendar; it does not add the
-unread-file protection planned in issue #124.
+refuses edits before the first read and retries failed reads. Write preparation
+uses the same decision, so helpers cannot save unread or broken files.
+
+The read safety check (`tst_calendar_read_safety.qml`) covers first-read ordering,
+whole-calendar color saves, broken text, missing known files, recovery, and one
+backup before each replacement. A confirmed missing local file absent from saved
+state can start a new calendar. A missing known calendar stays an error.
+
+`cd scripts && python3 -m unittest test-calendar-writes.py` runs the real calendar
+service and native Quickshell FileView in isolated offscreen test processes. Its
+home, XDG folders, config and files are all inside this worktree's `scratchpad/`.
+It checks the exact previous backup bytes, one backup across saves, backup failure,
+the first local save, the color save, and backup exclusion from listing and import.
