@@ -149,9 +149,15 @@ def cache_is_fresh(entry: dict, now: dt.datetime) -> bool:
     return bool(fetched_at and now - fetched_at < dt.timedelta(seconds=CACHE_FRESH_S))
 
 
+def cache_entry(cache: dict, key: str) -> dict:
+    """The cached entry of one provider; anything that is not an object counts as no entry."""
+    entry = cache.get(key)
+    return entry if isinstance(entry, dict) else {}
+
+
 def claude_usage(cache: dict) -> dict:
     """Session (5-hour) and weekly (7-day) usage, falling back to cache on any failure."""
-    entry = cache.get("claude") or {}
+    entry = cache_entry(cache, "claude")
     now = now_utc()
     if cache_is_fresh(entry, now):
         return cached_buckets(entry)
@@ -162,7 +168,7 @@ def claude_usage(cache: dict) -> dict:
     if token is None:
         return cached_buckets(entry)
     payload = request_claude_usage(token, cache, entry, now)
-    if payload is None:
+    if not isinstance(payload, dict):
         return cached_buckets(entry)
     buckets = merge_buckets(entry, claude_bucket(payload.get("five_hour")),
                             claude_bucket(payload.get("seven_day_oauth_apps") or payload.get("seven_day")))
@@ -218,11 +224,11 @@ def codex_window(window) -> dict | None:
     if used is None or resets_in is None:
         return None
     try:
-        reset_epoch = float(resets_in)
-    except Exception:
+        percent = float(used)
+        resets_at = dt.datetime.fromtimestamp(float(resets_in), dt.timezone.utc).isoformat()
+    except (TypeError, ValueError, OverflowError, OSError):
         return None
-    resets_at = dt.datetime.fromtimestamp(reset_epoch, dt.timezone.utc).isoformat()
-    return {"percent": max(0.0, min(100.0, float(used))), "resetsAt": resets_at}
+    return {"percent": max(0.0, min(100.0, percent)), "resetsAt": resets_at}
 
 
 def stop_codex(proc) -> None:
@@ -267,7 +273,7 @@ def read_codex_limits(codex: str) -> dict:
 
 def codex_usage(cache: dict) -> dict:
     """Primary (5-hour) and secondary (weekly) usage from `codex app-server`, falling back to cache on any failure."""
-    entry = cache.get("codex") or {}
+    entry = cache_entry(cache, "codex")
     now = now_utc()
     if cache_is_fresh(entry, now):
         return cached_buckets(entry)
@@ -276,11 +282,20 @@ def codex_usage(cache: dict) -> dict:
         return cached_buckets(entry)
     try:
         limits = read_codex_limits(codex)
+        primary, secondary = limits.get("primary"), limits.get("secondary")
     except Exception:
         return cached_buckets(entry)
-    buckets = merge_buckets(entry, codex_window(limits.get("primary")), codex_window(limits.get("secondary")))
+    buckets = merge_buckets(entry, codex_window(primary), codex_window(secondary))
     cache["codex"] = {**buckets, "fetchedAt": now.isoformat()}
     return buckets
+
+
+def provider_usage(read_usage, cache: dict) -> dict:
+    """One provider's usage; a failure in it must not stop the other provider's output."""
+    try:
+        return read_usage(cache)
+    except Exception:
+        return {"session": None, "weekly": None}
 
 
 def main() -> None:
@@ -288,7 +303,9 @@ def main() -> None:
         cache = json.loads(read_recent_answer(CACHE_PATH) or "{}")
     except ValueError:
         cache = {}
-    result = {"claude": claude_usage(cache), "codex": codex_usage(cache)}
+    if not isinstance(cache, dict):
+        cache = {}
+    result = {"claude": provider_usage(claude_usage, cache), "codex": provider_usage(codex_usage, cache)}
     save_answer(CACHE_PATH, json.dumps(cache))
     print(json.dumps(result))
 
