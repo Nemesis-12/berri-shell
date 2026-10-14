@@ -75,7 +75,13 @@ QtObject {
     /** Writes the prepared text and lets Calendar apply the result. */
     function saveAndRebuild(path: string, uids): bool {
         var prepared = store.prepareCalendarWrite(path);
-        if (!prepared || !checkCurrent(path, prepared, uids)) return false;
+        if (!prepared) return false;
+        // Text that cannot be made fails like a refused write: the edit is undone.
+        if (prepared.error) {
+            var refused = Save.writeOutcome(false, prepared.error, prepared.failurePrefix, prepared.previousText, "");
+            return store.acceptCalendarWrite(path, refused, uids);
+        }
+        if (!checkCurrent(path, prepared, uids)) return false;
         // One atomic backup must finish before the calendar is replaced. A new
         // local calendar has null previous text because no file exists yet.
         if (prepared.previousText !== null) {

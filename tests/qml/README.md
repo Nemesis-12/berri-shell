@@ -41,7 +41,7 @@ uses the same decision, so helpers cannot save unread or broken files.
 
 The read safety check (`tst_calendar_read_safety.qml`) covers first-read ordering,
 whole-calendar color saves, broken text, missing known files, recovery, and one
-backup before each replacement. A confirmed missing local file absent from saved
+backup before each replacement. An edit whose text cannot be made (a repeat end in an unknown time zone) is undone and reported as a failed save; later saves still work. A confirmed missing local file absent from saved
 state can start a new calendar. A missing known calendar stays an error.
 
 `cd scripts && python3 -m unittest test-calendar-writes.py` runs the real calendar

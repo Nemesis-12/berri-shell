@@ -404,13 +404,22 @@ Singleton {
         _checkReady();
     }
 
-    /** Write text for a stored document. The result carries text only, never the stored document. */
+    /**
+     * Write text for a stored document. The result carries text only, never the
+     * stored document. A document that cannot become text has `error` instead
+     * of `nextText`; the caller reports it as a failed write.
+     */
     function prepareCalendarWrite(path: string): var {
         var id = _idOfPath(path);
         if (!canWriteCalendar(id)) return null;
         var calendar = _calendars[id];
-        return { nextText: Format.writeCalendar(calendar.document, _localZone),
-            previousText: calendar.text, failurePrefix: "Could not save " + calendar.name };
+        var prepared = { nextText: null, previousText: calendar.text, failurePrefix: "Could not save " + calendar.name };
+        try {
+            prepared.nextText = Format.writeCalendar(calendar.document, _localZone);
+        } catch (e) {
+            prepared.error = e.message;
+        }
+        return prepared;
     }
 
     /** Accepts a write result, restores a failed edit, then updates views before reporting failure. */
