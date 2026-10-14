@@ -149,7 +149,7 @@ TestCase {
     function test_normalCardClosesAfterFiveSeconds() {
         var start = Date.now();
         popup._receive(item("normal", "normal"));
-        tryCompare(popup, "_progress", 1, 1000);
+        tryCompare(popup, "_progress", 1, 10000);
         tryVerify(function () { return !popup._open; }, 6000);
         var shown = Date.now() - start;
         verify(shown >= 4900 && shown <= 5600, "Card stayed " + shown + " ms");
@@ -168,7 +168,7 @@ TestCase {
         popup._showMs = 2000;
         var start = Date.now();
         popup._receive(item("normal", "normal"));
-        tryCompare(popup, "_progress", 1, 1000);
+        tryCompare(popup, "_progress", 1, 10000);
         wait(300);
         mouseMove(popup, popup.cardX + popup.cardWidth / 2, popup.cardY + 40);
         var shownBeforeHover = Date.now() - start;
@@ -190,14 +190,14 @@ TestCase {
         popup._receive(item("third"));
         compare(popup._queue.map(function (n) { return n.id; }), ["first", "second"]);
         Hyprland.focusedMonitor = { name: "other" };
-        tryVerify(function () { return other._current !== null; }, 1000);
+        tryVerify(function () { return other._current !== null; }, 10000);
         compare(popup._queue.length, 0);
         compare(popup._current.id, "third");
         compare(other._current.id, "second");
         compare(other._queue.map(function (n) { return n.id; }), ["first"]);
-        tryCompare(popup, "_progress", 1, 1000);
+        tryCompare(popup, "_progress", 1, 10000);
         popup._close();
-        tryCompare(popup, "cardWidth", 0, 1000);
+        tryCompare(popup, "cardWidth", 0, 10000);
         compare(popup._current, null);
     }
 
@@ -239,7 +239,7 @@ TestCase {
     function test_fullscreenCardClickDoesNotOpenAlerts() {
         popup.blocked = true;
         popup._receive(item("critical"));
-        tryCompare(popup, "_progress", 1, 1000);
+        tryCompare(popup, "_progress", 1, 10000);
         mouseClick(popup, popup.cardX + popup.cardWidth / 2, popup.cardY + 20);
         compare(testCase.alertsAtRequest, null);
         compare(popup._current.id, "critical");

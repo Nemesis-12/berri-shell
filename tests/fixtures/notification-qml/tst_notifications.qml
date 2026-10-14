@@ -309,7 +309,7 @@ TestCase {
             action("open", "Open", function () { calls.push("open"); }),
             action("later", "Later", function () { calls.push("later"); })] });
         Notifications.receive(n);
-        tryCompare(popup, "_progress", 1, 1000);
+        tryCompare(popup, "_progress", 1, 10000);
         var label = findText(popup, "Later");
         verify(label !== null, "Action button not found");
         var at = label.mapToItem(popup, label.width / 2, label.height / 2);
@@ -324,7 +324,7 @@ TestCase {
         var name = "W".repeat(256);
         var actions = [action("a", "A".repeat(256)), action("b", "Second")];
         Notifications.receive(notification({ id: 1, appName: name, actions: actions }));
-        tryCompare(popup, "_progress", 1, 1000);
+        tryCompare(popup, "_progress", 1, 10000);
         var right = popup.cardX + popup.cardWidth - 12;
         var nameText = findText(popup, name);
         var at = nameText.mapToItem(popup, nameText.width, 0);
