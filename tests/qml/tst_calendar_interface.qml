@@ -136,4 +136,18 @@ TestCase {
         compare(Calendar.itemsOn("2026-10-06"), []);
     }
 
+    function test_read_only_details_show_the_clicked_changed_occurrence() {
+        const form = createTemporaryObject(detailsFormComponent, tests);
+        verify(form !== null);
+        const feed = Calendar._newMeta("feed", "link", "Feed", "feed.ics", "blue");
+        feed.records = [Items.storedItem({ uid: "series", title: "Master", date: "2026-09-01", time: "09:00",
+            end: "10:00", repeat: "daily", count: 4, changedOccurrences: [{ from: "2026-09-02", cancelled: false,
+                title: "Changed", date: "2026-10-09", time: "15:00", end: "16:00", endDate: null }] })];
+        Calendar._calendars = { feed: feed };
+        Calendar._order = ["feed"];
+        Calendar._rebuild();
+        form.openEdit(Items.itemKey("feed", "series"), "2026-09-02", "2026-10-09");
+        compare([form.title, form.date, form.time, form.end], ["Changed", "2026-10-09", "15:00", "16:00"]);
+    }
+
 }
