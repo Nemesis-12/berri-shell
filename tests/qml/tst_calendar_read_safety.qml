@@ -415,4 +415,35 @@ TestCase {
         held.exited(0, 0);
         compare(Calendar.itemsOn("2026-10-05").map(item => item.title), ["New"]);
     }
+
+    // One timed event in a zone this machine does not know.
+    function unknownZoneText(rule) {
+        return "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:test\r\nBEGIN:VEVENT\r\nUID:zoned\r\nDTSTAMP:20260101T000000Z\r\n" +
+            "SUMMARY:Zoned\r\nDTSTART;TZID=Unknown/Zone:20261005T093000\r\n" + rule + "END:VEVENT\r\nEND:VCALENDAR\r\n";
+    }
+
+    // A write that cannot be prepared undoes the edit, reports it, and leaves the calendar usable.
+    function test_edit_that_cannot_be_written_is_undone_and_later_saves_work_data() {
+        return [{ tag: "end date on a repeat", rule: "RRULE:FREQ=DAILY\r\n", changes: { count: null, until: "2026-10-20" }, repeat: "daily" },
+            { tag: "repeat added with an end date", rule: "", changes: { repeat: "daily", until: "2026-10-20" }, repeat: "none" }];
+    }
+
+    function test_edit_that_cannot_be_written_is_undone_and_later_saves_work(data) {
+        const original = unknownZoneText(data.rule);
+        const uid = Items.itemKey("berri", "zoned");
+        TestIo.texts[berriPath] = original;
+        startReading();
+        compare(Calendar.update(uid, data.changes), false);
+        compare(TestIo.writes.length, 0);
+        compare(TestIo.texts[berriPath], original);
+        compare(failureSpy.count, 1);
+        verify(failureSpy.signalArguments[0][0].indexOf("Could not save berri: Cannot convert repeat end in an unknown time zone") === 0);
+        compare(Calendar.lastError, failureSpy.signalArguments[0][0]);
+        compare(Calendar.getItem(uid).repeat, data.repeat);
+        compare(Calendar.getItem(uid).until, null);
+        compare(Calendar.add({ title: "Later", date: "2026-10-06" }), true);
+        compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title).sort(), ["Later", "Zoned"]);
+        compare(Calendar.update(uid, { title: "Renamed" }), true);
+        compare(Format.readCalendar(TestIo.texts[berriPath]).items.map(item => item.title).sort(), ["Later", "Renamed"]);
+    }
 }
