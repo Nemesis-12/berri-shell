@@ -80,6 +80,12 @@ test("a link record expands to a stored item with checked fields", () => {
 
 // ---- edits
 
+test("changing the date of a completed item keeps its done tick", () => {
+  const before = Items.makeItem({ uid: "done", title: "Finished", date: "2026-10-05", doneDates: ["2026-10-05"] });
+  const after = Items.applyChanges(before, { date: "2026-10-06" });
+  assert.deepEqual(plain(after.doneDates), ["2026-10-06"]);
+});
+
 test("an edit keeps the old value of every malformed change and applies the good ones", () => {
   const before = Items.makeItem({ uid: "u", title: "Keep", date: "2026-10-05", time: "09:00", repeat: "daily", interval: 2 });
   const after = Items.applyChanges(before, { title: "New", date: "someday", time: 9, repeat: "hourly", interval: 0,
