@@ -18,7 +18,7 @@ QtObject {
         if (command[1] && command[1].indexOf("backup-saved.sh") >= 0) {
             var file = command[2];
             if (failBackup) return 1;
-            if (files[file] !== undefined) files[file + ".bak"] = files[file];
+            if (files[file] !== undefined) files[command[3] || file + ".bak"] = files[file];
         }
         return 0;
     }

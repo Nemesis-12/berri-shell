@@ -9,7 +9,7 @@ import { spawnSync } from "node:child_process";
 const script = new URL("../scripts/backup-saved.sh", import.meta.url).pathname;
 const mode = (p) => (fs.statSync(p).mode & 0o777).toString(8);
 // Runs under the common creation mask 022 (others may read).
-const run = (file) => spawnSync("sh", ["-c", 'umask 022; exec sh "$@"', "sh", script, file], { encoding: "utf8" });
+const run = (file, ...target) => spawnSync("sh", ["-c", 'umask 022; exec sh "$@"', "sh", script, file, ...target], { encoding: "utf8" });
 const folder = () => fs.mkdtempSync(path.join(os.tmpdir(), "berri-backup-"));
 
 test("the backup holds the exact old bytes and is owner-only", () => {
@@ -45,4 +45,18 @@ test("a file that cannot be copied gives a failure and leaves the old backup", (
   assert.equal(fs.readFileSync(file + ".bak", "utf8"), "older");
   assert.equal(fs.existsSync(file + ".bak.tmp"), false);
   assert.equal(spawnSync("sh", [script], { encoding: "utf8" }).status, 2);
+});
+
+test("a named target gets the exact old bytes, owner-only, and replaces an older copy", () => {
+  const dir = folder();
+  const file = path.join(dir, "a.json");
+  const target = file + ".bad";
+  fs.writeFileSync(target, "older", { mode: 0o644 });
+  fs.chmodSync(target, 0o644);
+  fs.writeFileSync(file, "typo {");
+  assert.equal(run(file, target).status, 0);
+  assert.equal(fs.readFileSync(target, "utf8"), "typo {");
+  assert.equal(mode(target), "600");
+  assert.equal(fs.existsSync(file + ".bak"), false);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ["a.json", "a.json.bad"]);
 });

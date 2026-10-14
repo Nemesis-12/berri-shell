@@ -82,11 +82,26 @@ TestCase {
         tryCompare(successes, "count", 1);
         compare(Disk.files[file + ".bak"], '{"a": 0}');
         compare(Disk.files[file], JSON.stringify({ a: 4 }, null, 2));
-        compare(Disk.events.filter(e => e.kind === "run" && e.value[1].indexOf("backup-saved.sh") >= 0).length, 0);
+        // The bad text goes to .bad, not to .bak.
+        compare(Disk.files[file + ".bad"], '{"a": 1, broken');
         // After a good save, the next save backs up the good file again.
         state.save({ a: 5 });
         tryCompare(successes, "count", 2);
         compare(Disk.files[file + ".bak"], JSON.stringify({ a: 4 }, null, 2));
+    }
+
+    function test_failed_bad_copy_stops_the_save_after_a_bad_read() {
+        Disk.files[file] = '{"a": 1, broken';
+        Disk.files[file + ".bak"] = '{"a": 0}';
+        Disk.failBackup = true;
+        var state = open();
+        state.save({ a: 4 });
+        tryCompare(failures, "count", 1);
+        compare(failures.signalArguments[0][0], "Backup failed");
+        compare(writes().length, 0);
+        compare(Disk.files[file], '{"a": 1, broken');
+        compare(Disk.files[file + ".bak"], '{"a": 0}');
+        compare(state.hasWaitingWrite, true);
     }
 
     function test_save_after_an_unreadable_file_keeps_the_last_good_backup() {

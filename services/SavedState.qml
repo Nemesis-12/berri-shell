@@ -12,10 +12,11 @@ import Quickshell.Io
  * becomes one write. Before each write the old file is copied to
  * <name>.json.bak (owner-only), and the file is replaced atomically, so a
  * crash never leaves a half-written file. After a read that gave "invalid"
- * or "unreadable", the first save skips the backup, so the last good .bak
- * stays. A good save of valid data makes the next backup normal again. A write that fails (or whose
- * backup fails) emits `saveFailed(reason)`, sets `saveError` and keeps the
- * change pending (`hasWaitingWrite`); the next `save()` or `writeWaiting()`
+ * or "unreadable", the first save leaves the last good .bak alone and copies
+ * the bad file to <name>.json.bad (owner-only) instead, so a hand edit with a
+ * typo is not lost. A good save makes the next backup normal again. A write
+ * that fails (or whose backup or .bad copy fails) emits `saveFailed(reason)`,
+ * sets `saveError` and keeps the change pending (`hasWaitingWrite`); the next `save()` or `writeWaiting()`
  * tries again. A good file is never replaced without a backup.
  */
 Scope {
@@ -56,16 +57,14 @@ Scope {
         waitTimer.restart();
     }
 
-    /** Starts the write of the pending change: first the backup (not after a bad read), then the file. */
+    /** Starts the write of the pending change: first the backup (the .bad copy after a bad read), then the file. */
     function writeWaiting(): void {
         if (!root.hasWaitingWrite || !root.folderExists || root.writing) return;
         root.writing = true;
         root.writingText = root.waitingText;
-        if (root.badRead) {
-            file.setText(root.writingText);
-            return;
-        }
-        backup.command = ["sh", Quickshell.shellPath("scripts/backup-saved.sh"), file.path];
+        var command = ["sh", Quickshell.shellPath("scripts/backup-saved.sh"), file.path];
+        if (root.badRead) command.push(file.path + ".bad");
+        backup.command = command;
         backup.running = true;
     }
 
@@ -116,7 +115,7 @@ Scope {
     // A pending save starts when the shared folder process finishes.
     onFolderExistsChanged: if (root.folderExists) root.writeWaiting()
 
-    // Copies the old file to <name>.json.bak. A failed copy stops the write.
+    // Copies the old file to <name>.json.bak (<name>.json.bad after a bad read). A failed copy stops the write.
     Process {
         id: backup
         onExited: exitCode => {
