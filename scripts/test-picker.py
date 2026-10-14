@@ -177,6 +177,51 @@ Scope {
     }
 ''')
 
+    def test_shared_removals_keep_the_other_picker_body_focused(self):
+        library = self.home / ".local/share/berri-shell/wallpapers"
+        library.mkdir(parents=True, exist_ok=True)
+        paths = []
+        for name, color in (("one.png", (190, 80, 30)), ("two.png", (10, 20, 30)),
+                            ("three.png", (30, 160, 60))):
+            path = library / name
+            write_png(path, color)
+            paths.append(str(path))
+        (self.state / "wallpapers.json").write_text(json.dumps({
+            "library": paths,
+            "assignments": {"test": {"second": paths[2]}}
+        }))
+        self.env["PICKER_REMOVE_FIRST"] = paths[0]
+        self.env["PICKER_REMOVE_SECOND"] = paths[1]
+        self.run_qml('''
+    FloatingWindow {
+        implicitWidth: 1800; implicitHeight: 500
+        ThemeNotch { id: first; x: 0; pickerTab: "walls"; screenName: "first" }
+        ThemeNotch { id: second; x: 900; pickerTab: "walls"; screenName: "second" }
+    }
+    property int stage: 0
+    Timer {
+        interval: 20; running: true; repeat: true
+        onTriggered: {
+            if (!Wallpapers.loaded) return;
+            if (stage === 0) {
+                first.openPicker(); second.openPicker();
+                var carousel = find(second, "WallpapersCarousel");
+                if (!check(carousel.focusIndex === 2, "second picker did not focus its assigned wallpaper")) return;
+                Wallpapers.remove(Quickshell.env("PICKER_REMOVE_FIRST"));
+                Wallpapers.remove(Quickshell.env("PICKER_REMOVE_SECOND"));
+                stage = 1;
+            } else if (stage === 1 && Wallpapers.library.length === 1) {
+                var carousel = find(second, "WallpapersCarousel");
+                if (!check(carousel.focusIndex < carousel.count,
+                           "shared library changes left the second picker focused outside its cards")) return;
+                if (!check(carousel.focusIsAdd || carousel.focusedPath !== "",
+                           "second picker has no wallpaper or Add card focused")) return;
+                console.log("TEST PASS"); Qt.quit();
+            }
+        }
+    }
+''')
+
     def test_sticker_watcher_detects_changes_without_loading_bytes(self):
         write_png(self.config / "sticker.png")
         replacement = self.folder / "replacement.png"
