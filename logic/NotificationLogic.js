@@ -9,7 +9,7 @@
  */
 
 // One policy for live senders, history, pop-ups and sender-controlled text.
-var limits = { history: 200, live: 200, queued: 20, id: 128, appName: 256,
+var limits = { history: 200, live: 200, queued: 20, queuedCritical: 1000, id: 128, appName: 256,
     appIcon: 1024, summary: 512, body: 4096, actions: 16, actionId: 128, actionLabel: 256 };
 
 /** Limits text at the sender and saved-state boundaries, in UTF-16 code units. */
@@ -190,12 +190,26 @@ function popupWaits(item) {
     return item.urgency === "critical" || item.transient === true;
 }
 
-/** Bounds every waiting pop-up, dropping oldest non-critical items first. Updates keep their place. */
+var criticalCapLogged = false;
+
+/**
+ * Bounds the waiting pop-ups. Normal items go first, oldest first, once the
+ * queue is longer than `max`. Critical items must be seen, so they only stop
+ * at the much larger memory cap (the oldest goes, one log line). Updates keep their place.
+ */
 function queuePopup(queue, item, max) {
     var next = upsert(queue, item);
     while (next.length > max) {
         var drop = next.findIndex(function (n) { return n.urgency !== "critical"; });
-        next.splice(drop < 0 ? 0 : drop, 1);
+        if (drop < 0) break;
+        next.splice(drop, 1);
+    }
+    if (next.length > limits.queuedCritical) {
+        if (!criticalCapLogged) {
+            criticalCapLogged = true;
+            console.warn("notifications: more than " + limits.queuedCritical + " critical pop-ups wait; dropping the oldest");
+        }
+        next.splice(0, next.length - limits.queuedCritical);
     }
     return next;
 }

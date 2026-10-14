@@ -105,11 +105,19 @@ test("waiting critical pop-ups share a hard limit and take priority over normal 
     ["critical", ...Array.from({ length: 18 }, (_, i) => `normal-${i + 4}`), "critical-2"]);
 });
 
-test("one thousand critical pop-ups keep only the newest twenty", () => {
+test("twenty-five critical pop-ups all wait", () => {
   let queue = [];
-  for (let i = 0; i < 1000; i++)
+  for (let i = 0; i < 25; i++)
     queue = lib.queuePopup(queue, item(`critical-${i}`, "X", i, { urgency: "critical" }), 20);
-  assert.deepEqual(ids(plain(queue)), Array.from({ length: 20 }, (_, i) => `critical-${980 + i}`));
+  assert.deepEqual(ids(plain(queue)), Array.from({ length: 25 }, (_, i) => `critical-${i}`));
+});
+
+test("critical pop-ups are bounded only by a much larger limit", () => {
+  let queue = [];
+  for (let i = 0; i < lib.limits.queuedCritical + 5; i++)
+    queue = lib.queuePopup(queue, item(`critical-${i}`, "X", i, { urgency: "critical" }), 20);
+  assert.equal(queue.length, lib.limits.queuedCritical);
+  assert.equal(queue[queue.length - 1].id, `critical-${lib.limits.queuedCritical + 4}`);
 });
 
 test("readSaved: defaults on bad input (null, text), drops bad items, clears actions", () => {
