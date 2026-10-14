@@ -2,6 +2,7 @@
 import contextlib
 import datetime as dt
 import importlib.util
+import io
 import json
 import subprocess
 import sys
@@ -196,6 +197,49 @@ class CodexRequestTests(unittest.TestCase):
                     proc.wait(timeout=2)
                     proc.stdin.close()
                     proc.stdout.close()
+
+
+class MalformedDataTests(unittest.TestCase):
+    def test_cache_entries_that_are_not_objects_read_as_empty(self):
+        for bad in ("not-an-object", 7, ["x"], None):
+            with self.subTest(bad=bad), patch.object(usage.shutil, "which", return_value=None), \
+                 patch.object(usage, "read_claude_token", return_value=None):
+                empty = {"session": None, "weekly": None}
+                self.assertEqual(usage.claude_usage({"claude": bad}), empty)
+                self.assertEqual(usage.codex_usage({"codex": bad}), empty)
+
+    def test_cached_bucket_with_a_bad_percent_is_dropped(self):
+        for percent in ("x", None, True, float("nan")):
+            with self.subTest(percent=percent):
+                bucket = {"percent": percent, "resetsAt": "2099-01-01T00:00:00Z"}
+                self.assertEqual(usage.cached_buckets({"session": bucket, "weekly": bucket}),
+                                 {"session": None, "weekly": None})
+
+    def test_codex_window_with_bad_numbers_gives_no_reading(self):
+        for window in ({"usedPercent": "bad", "resetsAt": 1893456000},
+                       {"usedPercent": 5, "resetsAt": 1e30},
+                       {"usedPercent": 5, "resetsAt": float("nan")}):
+            with self.subTest(window=window):
+                self.assertIsNone(usage.codex_window(window))
+
+    def test_claude_payload_that_is_not_an_object_keeps_cached_usage(self):
+        bucket = {"percent": 12.5, "resetsAt": "2030-01-01T00:00:00Z"}
+        with patch.object(usage, "read_claude_token", return_value="synthetic"), \
+             patch.object(usage, "request_claude_usage", return_value=["bad"]):
+            self.assertEqual(usage.claude_usage({"claude": {"session": bucket}}),
+                             {"session": bucket, "weekly": None})
+
+    def test_one_failing_provider_does_not_stop_the_other_output(self):
+        with tempfile.TemporaryDirectory() as folder:
+            cache = Path(folder) / "agent-usage.json"
+            cache.write_text('["not", "an", "object"]', encoding="utf-8")
+            reading = {"session": None, "weekly": None}
+            with patch.object(usage, "CACHE_PATH", cache), \
+                 patch.object(usage, "claude_usage", side_effect=ValueError("bad")), \
+                 patch.object(usage, "codex_usage", return_value=reading), \
+                 contextlib.redirect_stdout(io.StringIO()) as out:
+                usage.main()
+            self.assertEqual(json.loads(out.getvalue()), {"claude": reading, "codex": reading})
 
 
 if __name__ == "__main__":

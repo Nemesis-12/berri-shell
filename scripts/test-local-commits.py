@@ -5,11 +5,16 @@ import subprocess
 import sys
 import tempfile
 import time
+import importlib.util
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).with_name("local-commits.py")
+spec = importlib.util.spec_from_file_location("local_commits", SCRIPT)
+commits_script = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(commits_script)
 
 
 class LocalCommitsOutputTests(unittest.TestCase):
@@ -83,6 +88,62 @@ class LocalCommitsOutputTests(unittest.TestCase):
             after = run()
             self.assertEqual(after["commits"], [new])
             self.assertNotEqual(after["version"], before["version"])
+
+
+class SlowRepoTests(unittest.TestCase):
+    def test_slow_or_missing_git_does_not_hide_the_other_repos(self):
+        with tempfile.TemporaryDirectory() as folder:
+            for name in ("slow", "broken", "fast"):
+                (Path(folder) / name / ".git").mkdir(parents=True)
+            sha = "a" * 40
+            line = "\x1f".join([sha, "Fix", "2026-09-30T12:00:00Z"])
+
+            def fake_run(command, **kwargs):
+                if "config" in command:
+                    return subprocess.CompletedProcess(command, 0, "me@example.com\n", "")
+                if command[0] == "gh":
+                    raise FileNotFoundError("gh")
+                if "slow" in command[2]:
+                    raise subprocess.TimeoutExpired(command, 15)
+                if "broken" in command[2]:
+                    raise OSError("cannot start git")
+                return subprocess.CompletedProcess(command, 0, line + "\n", "")
+
+            with patch.object(commits_script, "ROOT", Path(folder)), \
+                 patch.object(commits_script.subprocess, "run", side_effect=fake_run):
+                found = commits_script.local_commits()
+            self.assertEqual(found, [{"sha": sha, "message": "Fix", "repo": "fast",
+                                      "date": "2026-09-30T12:00:00Z"}])
+
+    def test_total_time_budget_stops_new_repos_and_keeps_the_commits_found(self):
+        with tempfile.TemporaryDirectory() as folder:
+            for name in ("a-fast", "b-slow", "c-slow", "d-slow", "e-fast"):
+                (Path(folder) / name / ".git").mkdir(parents=True)
+            sha = "b" * 40
+            line = "\x1f".join([sha, "Fix", "2026-09-30T12:00:00Z"])
+            clock = [0.0]
+            asked = []
+
+            def fake_run(command, **kwargs):
+                if "config" in command:
+                    return subprocess.CompletedProcess(command, 0, "me@example.com\n", "")
+                if command[0] == "gh":
+                    raise FileNotFoundError("gh")
+                asked.append(Path(command[2]).name)
+                if "slow" in command[2]:
+                    clock[0] += 15
+                    raise subprocess.TimeoutExpired(command, 15)
+                return subprocess.CompletedProcess(command, 0, line + "\n", "")
+
+            with patch.object(commits_script, "ROOT", Path(folder)), \
+                 patch.object(commits_script.subprocess, "run", side_effect=fake_run), \
+                 patch.object(commits_script.time, "monotonic", side_effect=lambda: clock[0]), \
+                 patch.object(commits_script, "find_repos", return_value=[Path(folder) / n for n in
+                              ("a-fast", "b-slow", "c-slow", "d-slow", "e-fast")]):
+                found = commits_script.local_commits(budget_s=30)
+            # a-fast answers, b-slow and c-slow use the 30 s, d-slow and e-fast never start.
+            self.assertEqual(asked, ["a-fast", "b-slow", "c-slow"])
+            self.assertEqual([c["repo"] for c in found], ["a-fast"])
 
 
 if __name__ == "__main__":
