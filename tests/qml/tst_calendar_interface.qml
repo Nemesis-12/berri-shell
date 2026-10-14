@@ -2,6 +2,7 @@ import QtQuick
 import QtTest
 import Quickshell.Io
 import qs.services
+import qs.tabs.calendar
 import "../logic/CalendarFormat.js" as Format
 import "../logic/CalendarItems.js" as Items
 
@@ -10,6 +11,11 @@ TestCase {
     name: "CalendarInterface"
 
     SignalSpy { id: failedSaves; target: Calendar; signalName: "saveFailed" }
+
+    Component {
+        id: detailsFormComponent
+        CalendarDetailsForm { width: 600; height: 500 }
+    }
 
     // Set up an unread local calendar without starting saved-state loading.
     function init() {
@@ -112,6 +118,22 @@ TestCase {
         compare(Calendar.lastError, "Disk full");
         compare(failedSaves.count, 1);
         compare(failedSaves.signalArguments[0][0], "Disk full");
+    }
+
+    function test_failed_save_keeps_the_form_open_with_its_draft() {
+        const form = createTemporaryObject(detailsFormComponent, tests);
+        verify(form !== null);
+        const text = Format.writeCalendar(Object.assign(Format.emptyCalendar(), {
+            items: [Items.makeItem({ uid: "kept", title: "Kept", date: "2026-10-05" })] }));
+        TestIo.texts[Calendar.defaultPath] = text;
+        Calendar.acceptCalendarRead(Calendar.defaultPath, text, false);
+        TestIo.failWrite = true;
+        form.openNew(new Date(2026, 9, 6));
+        form.title = "Draft to keep";
+        form.save();
+        compare(form.shown, true);
+        compare([form.title, form.date], ["Draft to keep", "2026-10-06"]);
+        compare(Calendar.itemsOn("2026-10-06"), []);
     }
 
 }
