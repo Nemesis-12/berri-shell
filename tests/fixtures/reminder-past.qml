@@ -135,4 +135,31 @@ TestCase {
         edit(function () {});
         compare(TestIo.downloads.length, ReminderNotifier.maxAlertsPerSweep);
     }
+
+    // Hiding a calendar and showing it again must not make its reminders new.
+    function test_showing_a_hidden_calendar_again_sends_nothing() {
+        seed([reminderAt("seen", 1, { stamp: oldStamp })]);
+        start(Date.now() - 1800000);
+        compare(TestIo.downloads.length, 0);
+        Calendar._calendars.berri.hidden = true;
+        Calendar._rebuild();
+        Calendar._calendars.berri.hidden = false;
+        Calendar._rebuild();
+        compare(TestIo.downloads.length, 0);
+    }
+
+    // Deleting the shown copy of a duplicate reminder must not send its alert again.
+    function test_deleting_the_shown_copy_of_a_duplicate_sends_nothing() {
+        seed([reminderAt("old", -3, { stamp: oldStamp })]);
+        start(Date.now() - 60000);
+        var copy = reminderAt("dup", 1);
+        var other = Format.readCalendar(Format.writeCalendar(Object.assign(Format.emptyCalendar(), { items: [copy] })));
+        Calendar._calendars.second = { id: "second", name: "second", kind: "local", color: "accent",
+            hidden: false, document: other };
+        Calendar._order = ["berri", "second"];
+        edit(function (items) { items.push(copy); });
+        compare(titles(), ["Reminder dup"]);
+        edit(function (items) { items.splice(1, 1); });
+        compare(titles(), ["Reminder dup"]);
+    }
 }

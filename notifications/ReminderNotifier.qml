@@ -39,8 +39,8 @@ Singleton {
     property bool _started: false
     property bool _stateRead: false
     property real _lastCheck: 0
-    property var _alreadyShown: []      // keys like "[calendarId, uid]|dueMs"
-    property var _knownItems: ({})      // item keys the last sweep saw
+    property var _alreadyShown: []      // keys like "uid|dueMs"
+    property var _knownItems: ({})      // file UIDs seen since start, also of calendars now hidden
     property real _nextDueMs: 0  // 0 = no reminder ahead
 
     Connections {
@@ -56,6 +56,7 @@ Singleton {
         // First run: nothing to catch up, so every item counts as seen. Later runs:
         // an item saved after the last check is new.
         var firstRun = _lastCheck <= 0;
+        _knownItems = {};
         var items = Calendar.allItems();
         _rememberItems(items.filter(function (item) {
             var savedAt = Delivery.stampMs(item.stamp);
@@ -71,10 +72,11 @@ Singleton {
         _sweep(Date.now());
     }
 
-    function _itemKey(item: var): string { return Items.itemKey(item.calendarId, item.uid); }
+    // The file UID, without the calendar: a duplicate in another calendar is the same reminder.
+    function _itemKey(item: var): string { return item.uid; }
 
+    // Adds to the known items and never removes: a hidden calendar, or a deleted copy of a duplicate, does not make its reminder new later.
     function _rememberItems(items: var): void {
-        _knownItems = {};
         for (var i = 0; i < items.length; i++) _knownItems[_itemKey(items[i])] = true;
     }
 
@@ -90,9 +92,8 @@ Singleton {
         _rememberItems(items);
         var unshown = [];
         for (var i = 0; i < due.length; i++) {
-            var key = Items.itemKey(due[i].calendarId, due[i].uid) + "|" + due[i].dueMs;
-            var keyWithoutCalendar = due[i].uid + "|" + due[i].dueMs;
-            if (_alreadyShown.indexOf(key) >= 0 || _alreadyShown.indexOf(keyWithoutCalendar) >= 0) continue;
+            var key = due[i].uid + "|" + due[i].dueMs;
+            if (_alreadyShown.indexOf(key) >= 0) continue;
             _alreadyShown.push(key);
             unshown.push({ alert: due[i], key: key });
         }
