@@ -270,6 +270,42 @@ Scope {
     }
 ''')
 
+    def test_wallpaper_body_exposes_selection_and_key_commands_without_its_carousel(self):
+        library = self.home / ".local/share/berri-shell/wallpapers"
+        library.mkdir(parents=True, exist_ok=True)
+        paths = []
+        for name in ("first.png", "second.png"):
+            image = library / name
+            write_png(image)
+            paths.append(str(image))
+        (self.state / "wallpapers.json").write_text(json.dumps({
+            "library": paths,
+            "assignments": {"test": {"test": paths[0]}}
+        }))
+        self.env["PICKER_EXPECTED_FIRST"] = paths[0]
+        self.env["PICKER_EXPECTED_SECOND"] = paths[1]
+        self.run_qml('''
+    FloatingWindow {
+        implicitWidth: 1000; implicitHeight: 400
+        PickerWallpapers { id: body; anchors.fill: parent; screenName: "test"; shown: true }
+    }
+    Timer {
+        interval: 20; running: true; repeat: true
+        onTriggered: {
+            if (!Wallpapers.loaded) return;
+            if (!check(body.carousel === undefined,
+                       "wallpaper body exposes its concrete carousel")) return;
+            body.focusToCurrent();
+            if (!check(body.focusedPath === Quickshell.env("PICKER_EXPECTED_FIRST"),
+                       "wallpaper body did not expose the focused path")) return;
+            if (!check(body.handleKey({ key: Qt.Key_Right, accepted: false })
+                       && body.focusedPath === Quickshell.env("PICKER_EXPECTED_SECOND"),
+                       "wallpaper body did not own keyboard focus movement")) return;
+            console.log("TEST PASS"); Qt.quit();
+        }
+    }
+''')
+
     def test_sticker_watcher_detects_changes_without_loading_bytes(self):
         write_png(self.config / "sticker.png")
         replacement = self.folder / "replacement.png"
