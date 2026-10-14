@@ -11,10 +11,12 @@ import Quickshell.Io
  * `save(values)` writes the object after a short wait, so a burst of saves
  * becomes one write. Before each write the old file is copied to
  * <name>.json.bak (owner-only), and the file is replaced atomically, so a
- * crash never leaves a half-written file. A write that fails (or whose
+ * crash never leaves a half-written file. After a read that gave "invalid"
+ * or "unreadable", the first save skips the backup, so the last good .bak
+ * stays. A good save of valid data makes the next backup normal again. A write that fails (or whose
  * backup fails) emits `saveFailed(reason)`, sets `saveError` and keeps the
  * change pending (`hasWaitingWrite`); the next `save()` or `writeWaiting()`
- * tries again. The old file is never replaced without a backup.
+ * tries again. A good file is never replaced without a backup.
  */
 Scope {
     id: root
@@ -44,6 +46,8 @@ Scope {
     property bool hasWaitingWrite: false
     property bool writing: false
     property string writingText: ""
+    /** True after a bad read until a save succeeds: the file on disk is not worth a backup. */
+    property bool badRead: false
 
     /** Saves `values` (any plain object). */
     function save(values): void {
@@ -52,11 +56,15 @@ Scope {
         waitTimer.restart();
     }
 
-    /** Starts the write of the pending change: first the backup, then the file. */
+    /** Starts the write of the pending change: first the backup (not after a bad read), then the file. */
     function writeWaiting(): void {
         if (!root.hasWaitingWrite || !root.folderExists || root.writing) return;
         root.writing = true;
         root.writingText = root.waitingText;
+        if (root.badRead) {
+            file.setText(root.writingText);
+            return;
+        }
         backup.command = ["sh", Quickshell.shellPath("scripts/backup-saved.sh"), file.path];
         backup.running = true;
     }
@@ -69,6 +77,7 @@ Scope {
             return;
         }
         root.saveError = "";
+        root.badRead = false;
         if (root.waitingText === root.writingText) root.hasWaitingWrite = false;
         root.saved();
         // A newer change came in during the write.
@@ -94,6 +103,7 @@ Scope {
             }
         }
         root.loadResult = result;
+        root.badRead = result === "invalid" || result === "unreadable";
         root.loaded(values);
     }
 

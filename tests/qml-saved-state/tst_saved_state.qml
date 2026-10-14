@@ -73,28 +73,43 @@ TestCase {
         compare(Disk.files[file], JSON.stringify({ a: 3 }, null, 2));
     }
 
-    function test_broken_json_is_backed_up_before_the_first_replacement() {
+    function test_save_after_a_bad_read_keeps_the_last_good_backup() {
         Disk.files[file] = '{"a": 1, broken';
+        Disk.files[file + ".bak"] = '{"a": 0}';
         var state = open();
         compare(state.loadResult, "invalid");
         state.save({ a: 4 });
         tryCompare(successes, "count", 1);
-        compare(Disk.files[file + ".bak"], '{"a": 1, broken');
-        // The backup command ran before the file was written.
-        var order = Disk.events.filter(e => e.kind === "write" || (e.kind === "run" && e.value[1].indexOf("backup-saved.sh") >= 0));
-        compare(order.map(e => e.kind), ["run", "write"]);
-        compare(order[0].value[2], file);
+        compare(Disk.files[file + ".bak"], '{"a": 0}');
+        compare(Disk.files[file], JSON.stringify({ a: 4 }, null, 2));
+        compare(Disk.events.filter(e => e.kind === "run" && e.value[1].indexOf("backup-saved.sh") >= 0).length, 0);
+        // After a good save, the next save backs up the good file again.
+        state.save({ a: 5 });
+        tryCompare(successes, "count", 2);
+        compare(Disk.files[file + ".bak"], JSON.stringify({ a: 4 }, null, 2));
+    }
+
+    function test_save_after_an_unreadable_file_keeps_the_last_good_backup() {
+        Disk.files[file] = "[1";
+        Disk.unreadable[file] = true;
+        Disk.files[file + ".bak"] = '{"a": 0}';
+        var state = open();
+        compare(state.loadResult, "unreadable");
+        Disk.unreadable = ({});
+        state.save({ a: 4 });
+        tryCompare(successes, "count", 1);
+        compare(Disk.files[file + ".bak"], '{"a": 0}');
     }
 
     function test_failed_backup_stops_the_replacement_and_keeps_the_change_pending() {
-        Disk.files[file] = "old";
+        Disk.files[file] = '{"a": 1}';
         Disk.failBackup = true;
         var state = open();
         state.save({ a: 5 });
         tryCompare(failures, "count", 1);
         compare(failures.signalArguments[0][0], "Backup failed");
         compare(writes().length, 0);
-        compare(Disk.files[file], "old");
+        compare(Disk.files[file], '{"a": 1}');
         compare(state.hasWaitingWrite, true);
     }
 
