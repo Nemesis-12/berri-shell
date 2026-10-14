@@ -117,21 +117,49 @@ TestCase {
         popup._receive(item("current"));
         popup.dashboardOpen = true;
         compare(popup._current, null);
-        compare(popup._queue.map(function (n) { return n.id; }), ["waiting"]);
+        compare(popup._queue.map(function (n) { return n.id; }), ["waiting", "current"]);
         compare(popup.cardWidth, 0);
         compare(popup.active, false);
         popup._receive(item("critical-during"));
         popup._receive(Object.assign(item("transient-during", "normal"), { transient: true }));
         popup._receive(item("stored-normal", "normal"));
         compare(popup._current, null);
-        compare(popup._queue.map(function (n) { return n.id; }), ["waiting", "critical-during", "transient-during"]);
+        compare(popup._queue.map(function (n) { return n.id; }), ["waiting", "current", "critical-during", "transient-during"]);
         compare(popup.active, false);
         popup.dashboardOpen = false;
         compare(popup._current.id, "transient-during");
-        compare(popup._queue.map(function (n) { return n.id; }), ["waiting", "critical-during"]);
+        compare(popup._queue.map(function (n) { return n.id; }), ["waiting", "current", "critical-during"]);
         verify(popup.active);
         popup._receive(item("after-dashboard"));
         compare(popup._current.id, "after-dashboard");
+    }
+
+    // A transient card is never stored, so a card that is open when the dashboard opens must come back.
+    function test_dashboardKeepsOpenTransientCard() {
+        popup._receive(Object.assign(item("transient", "normal"), { transient: true }));
+        verify(popup._open);
+        popup.dashboardOpen = true;
+        compare(popup._current, null);
+        compare(popup._queue.map(function (n) { return n.id; }), ["transient"]);
+        popup.dashboardOpen = false;
+        compare(popup._current.id, "transient");
+        verify(popup._open);
+    }
+
+    // Fullscreen keeps transient cards, open or waiting, and shows them after it ends.
+    function test_fullscreenKeepsTransientCards() {
+        popup._receive(Object.assign(item("transient-waiting", "normal"), { transient: true }));
+        popup._receive(Object.assign(item("transient-open", "normal"), { transient: true }));
+        popup.blocked = true;
+        compare(popup._current, null);
+        compare(popup._queue.map(function (n) { return n.id; }), ["transient-waiting", "transient-open"]);
+        popup._receive(Object.assign(item("transient-during", "normal"), { transient: true }));
+        compare(popup._current, null);
+        compare(popup._queue.map(function (n) { return n.id; }),
+            ["transient-waiting", "transient-open", "transient-during"]);
+        popup.blocked = false;
+        compare(popup._current.id, "transient-during");
+        compare(popup._queue.length, 2);
     }
 
     // The monitor input keeps arrivals on the focused monitor.

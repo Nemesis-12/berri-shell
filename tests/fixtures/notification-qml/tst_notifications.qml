@@ -88,7 +88,7 @@ TestCase {
             verify(Object.keys(Notifications.live).length <= 200, "Live senders exceed 200");
         }
         compare(Object.keys(Notifications.live).length, 200);
-        compare(popup._queue.length, 20);
+        compare(popup._queue.length, 199);   // the 200 live senders: one open card, the rest wait
         compare(Notifications.all.length, 200);
         compare(Notifications.all[0].body.length, 4096);
         tryCompare(savedState(), "saveCount", 1, 10000);
@@ -103,7 +103,7 @@ TestCase {
             Notifications.receive(notification({ id: i, transient: true, body: "x".repeat(100 * 1024) }));
         compare(Object.keys(Notifications.live).length, 200);
         compare(Object.keys(Notifications.liveIdByServerId).length, 200);
-        compare(popup._queue.length, 20);
+        compare(popup._queue.length, 199);   // the 200 live senders: one open card, the rest wait
         compare(Notifications.all.length, 0);
         compare(first.dismissCount, 1);
         first.summaryChanged.emit();

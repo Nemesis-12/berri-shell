@@ -13,12 +13,16 @@ import qs.services
  * One progress value (0 pill, 1 card) drives width, height, border, content
  * fade and shadow; the curve is the pill-hover curve.
  *
- * Rules: shown only on the focused monitor, never while the dashboard is
- * open or a real fullscreen window (mode 2) covers the monitor. A maximized
- * window (mode 1) does not block; critical items always show. The newest item shows;
- * older ones wait (count "+N") and show one after the other. Normal items
- * close after 5 s (hover pauses the time and keeps what is left; the sender timeout can still end it), critical
- * ones stay until dismissed.
+ * Rules: shown only on the focused monitor. The newest item shows; older
+ * ones wait (count "+N") and show one after the other. Normal items close
+ * after 5 s (hover pauses the time and keeps what is left; the sender timeout
+ * can still end it). Critical ones stay until dismissed.
+ * The dashboard hides the card. A real fullscreen window (mode 2) hides it
+ * too, except for critical items; a maximized window (mode 1) does not block.
+ * Alerts shows normal items later, but a critical item must be seen and a
+ * transient item is never stored. So critical and transient items, open or
+ * waiting, wait for the dashboard to close or fullscreen to end and show
+ * then. Other items that arrive during that time are not shown.
  * A click on the card opens the Alerts tab. Place this item above the Pill
  * in the same window. Pass its anchor in this item's coordinates and add
  * cardX/cardY/cardWidth/cardHeight to the mask.
@@ -88,8 +92,8 @@ Item {
 
     /** Takes a new notification from the store. */
     function _receive(item) {
-        if ((root.blocked && item.urgency !== "critical") || !root._focusedHere) return;
-        if (root.dashboardOpen) {
+        if (!root._focusedHere) return;
+        if (root.dashboardOpen || (root.blocked && item.urgency !== "critical")) {
             if (NotificationLogic.popupWaits(item)) root._queue = NotificationLogic.queuePopup(root._queue, item, root._maxQueued);
         } else if (root._current === null) {
             root._showNow(item);
@@ -127,6 +131,12 @@ Item {
         root._hovered = false;
         dismissTimer.stop();
         root._slideTo(0);
+    }
+
+    /** Puts the open card back at the front of the queue when Alerts cannot show it again (critical or transient). */
+    function _requeueCurrent() {
+        if (root._current === null || !NotificationLogic.popupWaits(root._current)) return;
+        root._queue = NotificationLogic.queuePopup(root._queue, root._current, root._maxQueued);
     }
 
     /** Hides the card at once (dashboard opens, fullscreen starts, card clicked). Waiting critical and transient items stay. */
@@ -212,15 +222,24 @@ Item {
     }
 
     onDashboardOpenChanged: {
-        if (dashboardOpen) _hideNow();
-        else _showNext();
+        if (dashboardOpen) {
+            _requeueCurrent();
+            _hideNow();
+        } else _showNext();
     }
 
-    // Fullscreen starts: only critical cards stay, the current one and the waiting ones.
+    // Fullscreen starts: critical cards stay on screen. Transient cards wait; the rest are dropped.
+    // Fullscreen ends: waiting cards show.
     onBlockedChanged: {
-        if (!blocked) return;
-        if (!_critical) _hideNow();
-        root._queue = root._queue.filter(function (n) { return n.urgency === "critical"; });
+        if (!blocked) {
+            if (_current === null) _showNext();
+            return;
+        }
+        if (!_critical) {
+            _requeueCurrent();
+            _hideNow();
+        }
+        root._queue = root._queue.filter(NotificationLogic.popupWaits);
         if (_current === null) _showNext();
     }
 
@@ -231,10 +250,11 @@ Item {
 
     /** After a shrink: shows the next waiting item, or lets go of the card. */
     function _showNext() {
-        while (root._queue.length > 0) {
-            var next = root._queue[root._queue.length - 1];
-            root._queue = root._queue.slice(0, -1);
+        // While fullscreen blocks, only critical cards may show; the others keep waiting.
+        for (var i = root._queue.length - 1; i >= 0; i--) {
+            var next = root._queue[i];
             if (root.blocked && next.urgency !== "critical") continue;
+            root._queue = root._queue.filter(function (n) { return n.id !== next.id; });
             root._showNow(next);
             return;
         }
