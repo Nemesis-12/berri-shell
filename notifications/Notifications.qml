@@ -25,6 +25,8 @@ import qs.services
  *   still stored and count as unread, silently. A transient notification
  *   arrives too but is never stored in history (its id only works for
  *   invokeAction and dismiss while the sender keeps it open).
+ *   handedOver(item): a waiting pop-up left a monitor that lost focus; the
+ *   focused monitor takes it. Only pop-ups listen to it.
  *   updated(item): replaces an open or waiting pop-up without adding a copy.
  *
  * berri starts the server after saved state loads. Quickshell keeps an
@@ -58,6 +60,7 @@ Singleton {
     property int snoozedCount: 0
 
     signal arrived(var item)
+    signal handedOver(var item)
     signal updated(var item)
     /** An item left the store or its sender closed it; pop-ups drop it. */
     signal removed(string id)
@@ -69,6 +72,11 @@ Singleton {
     property int counter: 0
     property bool pendingCommit: false
     property bool pendingSave: false
+
+    /** Gives waiting pop-ups, oldest first, to the monitor that has focus now. */
+    function handOver(items): void {
+        items.forEach(function (item) { root.handedOver(item); });
+    }
 
     function setDnd(on: bool): void {
         if (root.dnd === on) return;
@@ -110,7 +118,7 @@ Singleton {
         root.commit(root.all.filter(function (n) { return !selected.has(n.id); }));
     }
 
-    /** Runs a sender action, marks the item read and closes it at the sender. */
+    /** Runs a sender action and marks the item read. Quickshell closes a nonresident sender inside invoke(). */
     function invokeAction(id: string, actionId: string): void {
         var n = root.live[id];
         if (n) {
@@ -120,7 +128,6 @@ Singleton {
                     break;
                 }
             }
-            if (!n.resident) n.dismiss();
         }
         if (!n || !n.resident) root.removed(id);
         root.commit(Logic.patch(root.all, id, { read: true }));
@@ -229,7 +236,17 @@ Singleton {
             n.bodyChanged.connect(refreshItem);
             n.appIconChanged.connect(refreshItem);
             n.urgencyChanged.connect(refreshItem);
-            n.actionsChanged.connect(refreshItem);
+            // A retained action object can change its label without a new action list.
+            var watchedActions = new Set();
+            var watchActions = function () {
+                for (var i = 0; i < n.actions.length; i++) {
+                    if (watchedActions.has(n.actions[i])) continue;
+                    watchedActions.add(n.actions[i]);
+                    n.actions[i].textChanged.connect(refreshItem);
+                }
+            };
+            watchActions();
+            n.actionsChanged.connect(function () { watchActions(); refreshItem(); });
             n.appNameChanged.connect(refreshItem);
             n.desktopEntryChanged.connect(refreshItem);
             n.imageChanged.connect(refreshItem);
@@ -244,12 +261,9 @@ Singleton {
     }
 
     function setExpiry(id: string, n, urgency: string): void {
-        if (urgency === "critical" || n.expireTimeout === 0) {
-            delete root.expiresAtById[id];
-        } else {
-            var seconds = n.expireTimeout === -1 ? 5 : n.expireTimeout;
-            root.expiresAtById[id] = Date.now() + seconds * 1000;
-        }
+        var delay = Logic.expireDelayMs(n.expireTimeout, urgency);
+        if (delay === 0) delete root.expiresAtById[id];
+        else root.expiresAtById[id] = Date.now() + delay;
         root.armExpireTimer();
     }
 
@@ -267,8 +281,8 @@ Singleton {
         }
     }
 
-    function expireDue(): void {
-        var now = Date.now();
+    /** Expires every live item whose time is at or before `now`. */
+    function expireDue(now = Date.now()): void {
         Object.keys(root.expiresAtById).forEach(function (id) {
             if (root.expiresAtById[id] > now) return;
             delete root.expiresAtById[id];

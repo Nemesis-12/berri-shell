@@ -82,3 +82,9 @@ test("an imported alarm of 60,000 weeks is ignored and the scan stays fast", () 
   assert.equal(next, new Date(2026, 9, 5, 9, 45).getTime());
   assert.ok(withBig < 20 * withoutBig, `scan took ${withBig} ms, the same scan without the huge alarm takes ${withoutBig} ms (limit 20 times)`);
 });
+
+test("a reminder asks for a 60 s timeout in milliseconds and waits for the close", () => {
+  const argv = plain(Delivery.notifyCommand({ title: "Call", time: "10:00" }));
+  assert.equal(argv[argv.indexOf("-t") + 1], "60000");
+  assert.ok(argv.includes("--wait"));
+});

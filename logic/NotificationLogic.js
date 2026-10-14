@@ -9,7 +9,7 @@
  */
 
 // One policy for live senders, history, pop-ups and sender-controlled text.
-var limits = { history: 200, live: 200, queued: 20, id: 128, appName: 256,
+var limits = { history: 200, live: 200, queued: 20, queuedCritical: 1000, id: 128, appName: 256,
     appIcon: 1024, summary: 512, body: 4096, actions: 16, actionId: 128, actionLabel: 256 };
 
 /** Limits text at the sender and saved-state boundaries, in UTF-16 code units. */
@@ -170,12 +170,46 @@ function shouldAlert(urgency, dnd) {
     return !dnd || urgency === "critical";
 }
 
-/** Bounds every waiting pop-up, dropping oldest non-critical items first. Updates keep their place. */
+/**
+ * Milliseconds until a live notification expires, or 0 for never. The sender
+ * timeout is in milliseconds (freedesktop spec; Quickshell 0.3.1 passes it
+ * on unchanged). -1 asks for the server default of 5 s, 0 means never, and
+ * critical items stay until dismissed.
+ */
+function expireDelayMs(expireTimeout, urgency) {
+    if (urgency === "critical" || expireTimeout === 0) return 0;
+    return expireTimeout === -1 ? 5000 : expireTimeout;
+}
+
+/**
+ * True when a pop-up that cannot show now must wait instead of being dropped.
+ * Other items stay in Alerts. Critical items must be seen, and a transient
+ * item is never stored.
+ */
+function popupWaits(item) {
+    return item.urgency === "critical" || item.transient === true;
+}
+
+var criticalCapLogged = false;
+
+/**
+ * Bounds the waiting pop-ups. Normal items go first, oldest first, once the
+ * queue is longer than `max`. Critical items must be seen, so they only stop
+ * at the much larger memory cap (the oldest goes, one log line). Updates keep their place.
+ */
 function queuePopup(queue, item, max) {
     var next = upsert(queue, item);
     while (next.length > max) {
         var drop = next.findIndex(function (n) { return n.urgency !== "critical"; });
-        next.splice(drop < 0 ? 0 : drop, 1);
+        if (drop < 0) break;
+        next.splice(drop, 1);
+    }
+    if (next.length > limits.queuedCritical) {
+        if (!criticalCapLogged) {
+            criticalCapLogged = true;
+            console.warn("notifications: more than " + limits.queuedCritical + " critical pop-ups wait; dropping the oldest");
+        }
+        next.splice(0, next.length - limits.queuedCritical);
     }
     return next;
 }

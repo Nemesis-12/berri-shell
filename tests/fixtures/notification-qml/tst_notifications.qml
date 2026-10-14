@@ -46,6 +46,18 @@ TestCase {
         return n;
     }
 
+    // A sender action with the change signal of its text.
+    function action(identifier, text, invoke) {
+        var listeners = [];
+        return {
+            identifier: identifier, text: text, invoke: invoke || function () {},
+            textChanged: {
+                connect: function (f) { listeners.push(f); },
+                emit: function () { listeners.slice().forEach(function (f) { f(); }); }
+            }
+        };
+    }
+
     // The saved-state replacement is a direct child of the real store.
     function savedState() {
         for (var i = 0; i < Notifications.children.length; i++)
@@ -56,7 +68,8 @@ TestCase {
     function init() {
         Notifications.flush();
         Notifications.writeSaved();
-        popup.hideNow();
+        popup._hideNow();
+        popup._queue = [];
         alerts.visible = false;
         alerts.filter = "all";
         Notifications.all = [];
@@ -75,7 +88,7 @@ TestCase {
             verify(Object.keys(Notifications.live).length <= 200, "Live senders exceed 200");
         }
         compare(Object.keys(Notifications.live).length, 200);
-        compare(popup.queue.length, 20);
+        compare(popup._queue.length, 199);   // the 200 live senders: one open card, the rest wait
         compare(Notifications.all.length, 200);
         compare(Notifications.all[0].body.length, 4096);
         tryCompare(savedState(), "saveCount", 1, 10000);
@@ -90,13 +103,13 @@ TestCase {
             Notifications.receive(notification({ id: i, transient: true, body: "x".repeat(100 * 1024) }));
         compare(Object.keys(Notifications.live).length, 200);
         compare(Object.keys(Notifications.liveIdByServerId).length, 200);
-        compare(popup.queue.length, 20);
+        compare(popup._queue.length, 199);   // the 200 live senders: one open card, the rest wait
         compare(Notifications.all.length, 0);
         compare(first.dismissCount, 1);
         first.summaryChanged.emit();
         compare(Object.keys(Notifications.live).length, 200);
         compare(Notifications.liveIdByServerId[0], undefined);
-        compare(popup.current.body.length, 4096);
+        compare(popup._current.body.length, 4096);
         compare(savedState().saveCount, 0);
     }
 
@@ -106,26 +119,55 @@ TestCase {
         n.transient = true;
         n.transientChanged.emit();
         compare(Notifications.all.length, 0);
-        compare(popup.current.id, Notifications.liveIdByServerId[1]);
-        verify(popup.open);
+        compare(popup._current.id, Notifications.liveIdByServerId[1]);
+        verify(popup._open);
         compare(n.dismissCount, 0);
     }
 
     function test_transientExpiryEntriesShareLiveLimit() {
         var n;
         for (var i = 0; i <= 200; i++) {
-            n = notification({ id: i, transient: true, urgency: NotificationUrgency.Normal, expireTimeout: 3600 });
+            n = notification({ id: i, transient: true, urgency: NotificationUrgency.Normal, expireTimeout: 3600000 });
             Notifications.receive(n);
         }
         compare(Object.keys(Notifications.live).length, 200);
         compare(Object.keys(Notifications.expiresAtById).length, 200);
-        compare(popup.queue.length, 20);
-        n.expireTimeout = 0.001;
+        compare(popup._queue.length, 20);
+        n.expireTimeout = 1;
         n.expireTimeoutChanged.emit();
         tryVerify(function () { return Notifications.liveIdByServerId[200] === undefined; }, 10000);
         compare(Object.keys(Notifications.live).length, 199);
         compare(Object.keys(Notifications.expiresAtById).length, 199);
         compare(Notifications.all.length, 0);
+    }
+
+    // The sender timeout is in milliseconds (freedesktop spec), as Quickshell passes it on.
+    function test_sixtySecondNotificationExpiresAfterSixtySeconds() {
+        var n = notification({ id: 1, urgency: NotificationUrgency.Normal, expireTimeout: 60000 });
+        var closed = [];
+        n.closed.connect(function (reason) { closed.push(reason); });
+        var start = Date.now();
+        Notifications.receive(n);
+        var id = Notifications.liveIdByServerId[1];
+        var due = Notifications.expiresAtById[id];
+        verify(due >= start + 60000 && due <= Date.now() + 60000, "Expiry is not 60 s ahead: " + (due - start));
+        Notifications.expireDue(start + 59000);
+        compare(closed.length, 0);
+        verify(Notifications.live[id] === n);
+        Notifications.expireDue(start + 60001);
+        compare(closed, [NotificationCloseReason.Expired]);
+        compare(Notifications.live[id], undefined);
+    }
+
+    function test_defaultAndNeverTimeouts() {
+        Notifications.receive(notification({ id: 1, urgency: NotificationUrgency.Normal, expireTimeout: -1 }));
+        var start = Date.now();
+        var due = Notifications.expiresAtById[Notifications.liveIdByServerId[1]];
+        verify(due >= start - 50 + 5000 && due <= start + 5000, "Default is not 5 s: " + (due - start));
+        Notifications.receive(notification({ id: 2, urgency: NotificationUrgency.Normal, expireTimeout: 0 }));
+        compare(Notifications.expiresAtById[Notifications.liveIdByServerId[2]], undefined);
+        Notifications.receive(notification({ id: 3, expireTimeout: 60000 }));
+        compare(Notifications.expiresAtById[Notifications.liveIdByServerId[3]], undefined);
     }
 
     // Median milliseconds for 100 updates plus one flush, with `count` stored items.
@@ -179,53 +221,132 @@ TestCase {
     }
 
     function test_currentAndQueuedUpdates() {
-        var n = notification({ id: 1, actions: [{ identifier: "old", text: "Old action" }] });
+        var n = notification({ id: 1, actions: [action("old", "Old action")] });
         Notifications.receive(n);
         verify(hasText(popup, "Before"));
         n.summary = "After";
-        n.actions = [{ identifier: "new", text: "New action" }];
+        n.actions = [action("new", "New action")];
         n.summaryChanged.emit();
         n.actionsChanged.emit();
-        compare(popup.current.summary, "After");
+        compare(popup._current.summary, "After");
         verify(hasText(popup, "After"));
         verify(hasText(popup, "New action"));
-        compare(popup.current.actions[0].id, "new");
-        compare(popup.queue.length, 0);
+        compare(popup._current.actions[0].id, "new");
+        compare(popup._queue.length, 0);
         Notifications.receive(notification({ id: 2, summary: "Other" }));
-        compare(popup.queue.length, 1);
+        compare(popup._queue.length, 1);
         n.summary = "Queued update";
         n.summaryChanged.emit();
-        compare(popup.current.summary, "Other");
-        compare(popup.queue.length, 1);
-        compare(popup.queue[0].summary, "Queued update");
-        popup.close();
-        popup.showNext();
-        compare(popup.current.summary, "Queued update");
+        compare(popup._current.summary, "Other");
+        compare(popup._queue.length, 1);
+        compare(popup._queue[0].summary, "Queued update");
+        popup._close();
+        popup._showNext();
+        compare(popup._current.summary, "Queued update");
     }
 
     function test_updatedActionsInvokeCurrentSenderOnly() {
         var oldCalls = 0, newCalls = 0;
         var n = notification({ id: 1, resident: true,
-            actions: [{ identifier: "old", text: "Old", invoke: function () { oldCalls++; } }] });
+            actions: [action("old", "Old", function () { oldCalls++; })] });
         Notifications.receive(n);
-        n.actions = [{ identifier: "new", text: "New", invoke: function () { newCalls++; } }];
+        n.actions = [action("new", "New", function () { newCalls++; })];
         n.actionsChanged.emit();
-        Notifications.invokeAction(popup.current.id, popup.current.actions[0].id);
+        Notifications.invokeAction(popup._current.id, popup._current.actions[0].id);
         compare(oldCalls, 0);
         compare(newCalls, 1);
         compare(Notifications.all[0].read, true);
         compare(n.dismissCount, 0);
     }
 
+    // Quickshell closes a nonresident notification inside action.invoke(); the store must not close it again.
+    function test_nonResidentActionClosesOnce() {
+        var n = notification({ id: 1 });
+        n.actions = [action("open", "Open", function () { n.dismiss(); })];
+        Notifications.receive(n);
+        var id = popup._current.id;
+        Notifications.invokeAction(id, "open");
+        compare(n.dismissCount, 1);
+        compare(Notifications.live[id], undefined);
+        compare(Notifications.all.length, 1);
+        compare(Notifications.all[0].read, true);
+        compare(popup._open, false);
+    }
+
+    function test_labelChangeOfSameActionUpdatesPopup() {
+        var open = action("open", "Before");
+        var n = notification({ id: 1, actions: [open] });
+        Notifications.receive(n);
+        verify(hasText(popup, "Before"));
+        open.text = "After";
+        open.textChanged.emit();
+        compare(popup._current.actions[0].label, "After");
+        verify(hasText(popup, "After"));
+        // An action that appears later is watched too.
+        var later = action("later", "Old");
+        n.actions = [open, later];
+        n.actionsChanged.emit();
+        later.text = "New";
+        later.textChanged.emit();
+        compare(popup._current.actions[1].label, "New");
+        compare(popup._queue.length, 0);
+    }
+
+    // Finds the first Text with this string in the pop-up.
+    function findText(item, text) {
+        if (item.text === text) return item;
+        for (var i = 0; i < item.children.length; i++) {
+            var found = findText(item.children[i], text);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    // A click on an action button runs that sender action, marks the item read and closes the card.
+    function test_actionButtonRunsSenderActionAndClosesCard() {
+        var calls = [];
+        var n = notification({ id: 1, resident: true, actions: [
+            action("open", "Open", function () { calls.push("open"); }),
+            action("later", "Later", function () { calls.push("later"); })] });
+        Notifications.receive(n);
+        tryCompare(popup, "_progress", 1, 10000);
+        var label = findText(popup, "Later");
+        verify(label !== null, "Action button not found");
+        var at = label.mapToItem(popup, label.width / 2, label.height / 2);
+        mouseClick(popup, at.x, at.y);
+        compare(calls, ["later"]);
+        compare(Notifications.all[0].read, true);
+        compare(popup._open, false);
+    }
+
+    // Long sender names and action labels stay inside the card and clear of the close button.
+    function test_longTextStaysInsideCard() {
+        var name = "W".repeat(256);
+        var actions = [action("a", "A".repeat(256)), action("b", "Second")];
+        Notifications.receive(notification({ id: 1, appName: name, actions: actions }));
+        tryCompare(popup, "_progress", 1, 10000);
+        var right = popup.cardX + popup.cardWidth - 12;
+        var nameText = findText(popup, name);
+        var at = nameText.mapToItem(popup, nameText.width, 0);
+        verify(at.x <= right - 22 - 8, "App name ends at " + at.x + ", limit " + (right - 30));
+        var first = findText(popup, "A".repeat(256));
+        var second = findText(popup, "Second");
+        var firstEnd = first.mapToItem(popup, first.width, 0).x;
+        var secondEnd = second.mapToItem(popup, second.width, 0).x;
+        verify(firstEnd <= right, "First label ends at " + firstEnd);
+        verify(secondEnd <= right, "Second label ends at " + secondEnd);
+        verify(first.mapToItem(popup, 0, 0).x < second.mapToItem(popup, 0, 0).x);
+    }
+
     function test_actionTextAndCountAreBounded() {
         var actions = [];
-        for (var i = 0; i < 30; i++) actions.push({ identifier: "action" + i, text: "x".repeat(100 * 1024) });
+        for (var i = 0; i < 30; i++) actions.push(action("action" + i, "x".repeat(100 * 1024)));
         actions[0].identifier = "x".repeat(129);
         Notifications.receive(notification({ id: 1, actions: actions }));
-        compare(popup.current.actions.length, 15);
-        compare(popup.current.actions[0].id, "action1");
-        compare(popup.current.actions[0].label.length, 256);
-        compare(popup.current.actions[14].id, "action15");
+        compare(popup._current.actions.length, 15);
+        compare(popup._current.actions[0].id, "action1");
+        compare(popup._current.actions[0].label.length, 256);
+        compare(popup._current.actions[14].id, "action15");
     }
 
     // Finds a real Alerts row so its snooze signal exercises the UI connection.

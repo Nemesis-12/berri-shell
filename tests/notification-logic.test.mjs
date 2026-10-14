@@ -105,11 +105,19 @@ test("waiting critical pop-ups share a hard limit and take priority over normal 
     ["critical", ...Array.from({ length: 18 }, (_, i) => `normal-${i + 4}`), "critical-2"]);
 });
 
-test("one thousand critical pop-ups keep only the newest twenty", () => {
+test("twenty-five critical pop-ups all wait", () => {
   let queue = [];
-  for (let i = 0; i < 1000; i++)
+  for (let i = 0; i < 25; i++)
     queue = lib.queuePopup(queue, item(`critical-${i}`, "X", i, { urgency: "critical" }), 20);
-  assert.deepEqual(ids(plain(queue)), Array.from({ length: 20 }, (_, i) => `critical-${980 + i}`));
+  assert.deepEqual(ids(plain(queue)), Array.from({ length: 25 }, (_, i) => `critical-${i}`));
+});
+
+test("critical pop-ups are bounded only by a much larger limit", () => {
+  let queue = [];
+  for (let i = 0; i < lib.limits.queuedCritical + 5; i++)
+    queue = lib.queuePopup(queue, item(`critical-${i}`, "X", i, { urgency: "critical" }), 20);
+  assert.equal(queue.length, lib.limits.queuedCritical);
+  assert.equal(queue[queue.length - 1].id, `critical-${lib.limits.queuedCritical + 4}`);
 });
 
 test("readSaved: defaults on bad input (null, text), drops bad items, clears actions", () => {
@@ -147,4 +155,19 @@ test("saving bounded history excludes sender actions and stays below eight MiB",
   const history = Array.from({ length: 200 }, (_, i) => ({ ...snapshot, id: `n${i}` }));
   const bytes = Buffer.byteLength(JSON.stringify({ dnd: false, items: lib.savedItems(history) }, null, 2));
   assert.ok(bytes < 8 * 1024 * 1024, `Saved history is ${bytes} bytes`);
+});
+
+test("expireDelayMs reads the sender timeout as milliseconds", () => {
+  assert.equal(lib.expireDelayMs(60000, "normal"), 60000);
+  assert.equal(lib.expireDelayMs(1500, "low"), 1500);
+  assert.equal(lib.expireDelayMs(-1, "normal"), 5000, "server default is 5 s");
+  assert.equal(lib.expireDelayMs(0, "normal"), 0, "0 means never");
+  assert.equal(lib.expireDelayMs(60000, "critical"), 0, "critical items stay until dismissed");
+});
+
+test("popupWaits keeps only the pop-ups that Alerts cannot show again", () => {
+  assert.equal(lib.popupWaits({ urgency: "critical" }), true);
+  assert.equal(lib.popupWaits({ urgency: "normal", transient: true }), true);
+  assert.equal(lib.popupWaits({ urgency: "normal", transient: false }), false);
+  assert.equal(lib.popupWaits({ urgency: "low" }), false);
 });
