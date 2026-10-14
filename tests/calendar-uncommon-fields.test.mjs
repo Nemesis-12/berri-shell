@@ -49,6 +49,13 @@ test("editing a duration end writes DTEND alone and keeps an unchanged end secon
   assert.equal(saved(document).items[0].end, "23:30");
 });
 
+test("a second DURATION line is not lost on save", () => {
+  const document = calendar("DTSTART;VALUE=DATE:20261008", "DURATION:P2D", "DURATION:P3D");
+  document.items[0] = Items.applyChanges(document.items[0], { title: "Edited" });
+  const lines = Format.writeCalendar(document).split("\r\n").filter(line => line.startsWith("DURATION"));
+  assert.deepEqual(lines.sort(), ["DURATION:P2D", "DURATION:P3D"]);
+});
+
 test("an unsupported DURATION stays raw without a generated DTEND", () => {
   const document = calendar("DTSTART;VALUE=DATE:20261008", "DURATION:P1Y");
   const text = Format.writeCalendar(document);
