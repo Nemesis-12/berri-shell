@@ -53,6 +53,7 @@ Item {
     readonly property real cardY: card.visible ? card.y : 0
     readonly property real cardWidth: card.visible ? card.width : 0
     readonly property real cardHeight: card.visible ? card.height : 0
+    readonly property int _dismissInterval: dismissTimer.interval
 
     property var _current: null
     property bool _open: false
@@ -62,6 +63,7 @@ Item {
     /** Time left on the timeout while hover pauses it. */
     property int _remainingMs: 5000
     property real _timeoutStartedAt: 0
+    property var _now: function() { return Date.now(); }
     /** Items that wait, newest last. */
     property var _queue: []
     readonly property int _maxQueued: NotificationLogic.limits.queued
@@ -161,14 +163,14 @@ Item {
         dismissTimer.stop();
         if (!root._open || root._critical || root._hovered) return;
         dismissTimer.interval = Math.max(1, root._remainingMs);
-        root._timeoutStartedAt = Date.now();
+        root._timeoutStartedAt = root._now();
         dismissTimer.start();
     }
 
     /** Sets hover. Hover pauses the timeout; leaving continues with the time that was left. */
     function _setHovered(on: bool): void {
         if (on && dismissTimer.running) {
-            root._remainingMs = Math.max(1, root._remainingMs - (Date.now() - root._timeoutStartedAt));
+            root._remainingMs = Math.max(1, root._remainingMs - (root._now() - root._timeoutStartedAt));
             dismissTimer.stop();
         }
         root._hovered = on;
