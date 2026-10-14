@@ -174,6 +174,20 @@ TestCase {
         compare(saveError.message, Calendar.lastError);
     }
 
+    function test_failed_repeat_move_restores_the_series_and_drops_the_new_item() {
+        const text = Format.writeCalendar(Object.assign(Format.emptyCalendar(), {
+            items: [Items.makeItem({ uid: "repeat", title: "Repeat", date: "2026-10-01", time: "09:00",
+                end: "10:00", repeat: "daily", doneDates: ["2026-10-08"] })] }));
+        TestIo.texts[Calendar.defaultPath] = text;
+        Calendar.acceptCalendarRead(Calendar.defaultPath, text, false);
+        TestIo.failWrite = true;
+        const uid = Items.itemKey("berri", "repeat");
+        compare(Calendar.move(uid, "2026-10-08", "2026-10-09", {}), false);
+        compare(Calendar.getItem(uid).exdates, []);
+        compare(Calendar.itemsOn("2026-10-08").map(item => item.uid), [uid]);
+        compare(Calendar.itemsOn("2026-10-09").map(item => item.uid), [uid]);
+    }
+
     function test_read_only_details_show_the_clicked_changed_occurrence() {
         const form = createTemporaryObject(detailsFormComponent, tests);
         verify(form !== null);

@@ -361,12 +361,30 @@ function moveOccurrence(item, fromDate, toDate, changes) {
     var source = item;
     for (var c = 0; c < item.changedOccurrences.length; c++) {
         var changed = item.changedOccurrences[c];
-        if (changed.from !== fromDate || changed.cancelled || changed.date === null) continue;
+        if (changed.from !== fromDate || changed.cancelled) continue;
+        if (changed.date === null) {
+            source = applyChanges(item, {
+                title: changed.title === null ? item.title : changed.title,
+                date: changed.from
+            });
+            break;
+        }
         source = applyChanges(item, {
             title: changed.title === null ? item.title : changed.title,
             date: changed.date, time: changed.time, end: changed.end, endDate: changed.endDate
         });
         break;
+    }
+    if (source === item && item.zoned) {
+        var occurrences = Repeat.expand(item, Times.addDays(fromDate, -2), Times.addDays(fromDate, 2));
+        for (var o = 0; o < occurrences.length; o++) {
+            if (occurrences[o].occurrenceDate !== fromDate) continue;
+            source = applyChanges(item, {
+                date: occurrences[o].date, time: occurrences[o].time,
+                end: occurrences[o].end, endDate: occurrences[o].endDate
+            });
+            break;
+        }
     }
     var span = source.endDate ? Times.dayNum(source.endDate) - Times.dayNum(source.date) : 0;
     var extra = {};

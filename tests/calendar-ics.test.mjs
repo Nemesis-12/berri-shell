@@ -121,6 +121,44 @@ test("delete and move one occurrence with EXDATE", () => {
   assert.equal(Items.withoutOccurrence(item({ date: "2026-10-01" }), "2026-10-01"), null);
 });
 
+test("moving a changed multi-day occurrence keeps its title, times and end date span", () => {
+  const series = item({ uid: "trip", title: "Series", date: "2026-10-01", time: "09:00", end: "10:00", repeat: "daily",
+    changedOccurrences: [{ from: "2026-10-08", cancelled: false, title: "Changed trip", date: "2026-10-09",
+      time: "15:00", end: "16:00", endDate: "2026-10-11" }] });
+  const { created } = Items.moveOccurrence(series, "2026-10-08", "2026-10-20", {});
+  assert.deepEqual(plain([created.title, created.date, created.time, created.end, created.endDate]),
+    ["Changed trip", "2026-10-20", "15:00", "16:00", "2026-10-22"]);
+});
+
+test("moving a changed occurrence without DTSTART uses its recurrence date and title", () => {
+  const series = Format.readCalendar(["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:series", "SUMMARY:Series title",
+    "DTSTART:20261001T090000", "DTEND:20261001T100000", "RRULE:FREQ=DAILY;COUNT=10", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:series", "RECURRENCE-ID:20261008T090000", "SUMMARY:Changed title", "END:VEVENT",
+    "END:VCALENDAR", ""].join("\r\n")).items[0];
+  assert.equal(series.changedOccurrences[0].date, null);
+  const { created } = Items.moveOccurrence(series, "2026-10-08", "2026-10-20", {});
+  assert.deepEqual(plain([created.title, created.date]), ["Changed title", "2026-10-20"]);
+});
+
+test("moving a zoned occurrence keeps the displayed clock across its zone DST change", () => {
+  const doc = Format.readCalendar(["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:zone-repeat", "SUMMARY:Berlin event",
+    "DTSTART;TZID=Europe/Berlin:20261024T090000", "DTEND;TZID=Europe/Berlin:20261024T100000",
+    "RRULE:FREQ=DAILY;COUNT=4", "END:VEVENT", "END:VCALENDAR", ""].join("\r\n"));
+  const series = doc.items[0];
+  const shown = Repeat.expand(series, "2026-10-25", "2026-10-25")[0];
+  assert.equal(shown.time, "03:00");
+  const { created } = Items.moveOccurrence(series, shown.occurrenceDate, "2026-10-26", {});
+  assert.equal(created.time, shown.time);
+});
+
+test("moving a completed repeat occurrence moves its done tick to the new date", () => {
+  const series = item({ uid: "done-repeat", kind: "task", title: "Done task", date: "2026-10-01", repeat: "daily",
+    doneDates: ["2026-10-08"] });
+  const { item: rest, created } = Items.moveOccurrence(series, "2026-10-08", "2026-10-09", {});
+  assert.deepEqual(plain(rest.doneDates), []);
+  assert.deepEqual(plain(created.doneDates), ["2026-10-09"]);
+});
+
 test("done state and day queries", () => {
   const task = item({ kind: "task", title: "Pay rent", date: "2026-10-01", repeat: "monthly" });
   const ticked = Items.withDone(task, "2026-11-01", true);
