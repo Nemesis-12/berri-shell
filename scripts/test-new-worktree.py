@@ -52,6 +52,13 @@ class WorktreeBaseTests(unittest.TestCase):
         self.assertIn("no-such-base", result.stderr)
         self.assertFalse(target.exists())
 
+    def test_base_that_starts_with_a_dash_is_not_read_as_an_option(self):
+        target = self.folder / "wt"
+        result = self.run_helper("topic", str(target), "--all")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("is not a branch, tag or commit", result.stderr)
+        self.assertFalse(target.exists())
+
     def test_missing_default_base_stops_instead_of_using_head(self):
         target = self.folder / "wt"
         result = self.run_helper("topic", str(target))
