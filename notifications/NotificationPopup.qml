@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import Quickshell.Hyprland
 import "../logic/Times.js" as Times
 import "../logic/PixelGrid.js" as PixelGrid
@@ -331,6 +332,10 @@ Item {
                     x: tile.width + 8
                     anchors.verticalCenter: parent.verticalCenter
                     text: root._current ? root._current.appName : ""
+                    // Leaves room for the age, the "+N" count and the close button.
+                    width: Math.max(0, Math.min(implicitWidth, header.width - x - 8 - timeText.implicitWidth
+                        - (queueCount.visible ? 8 + queueCount.implicitWidth : 0) - 8 - closeButton.width))
+                    elide: Text.ElideRight
                     font.family: Theme.condensed
                     font.weight: Font.Medium
                     font.pixelSize: 12
@@ -352,6 +357,7 @@ Item {
 
                 Text {
                     textFormat: Text.PlainText
+                    id: queueCount
                     anchors.left: timeText.right
                     anchors.leftMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
@@ -365,6 +371,7 @@ Item {
 
                 // Dismiss button, shown while the card is hovered.
                 Rectangle {
+                    id: closeButton
                     width: 22
                     height: 22
                     anchors.right: parent.right
@@ -430,7 +437,9 @@ Item {
                 color: Theme.dim
             }
 
-            Row {
+            // Buttons keep their natural width; a long label shrinks and elides so every button stays in the card.
+            RowLayout {
+                width: parent.width
                 y: 32 + 18 + (bodyText.text !== "" ? 4 + bodyText.implicitHeight : 0) + 10
                 spacing: 6
                 visible: root._actionCount > 0
@@ -441,8 +450,11 @@ Item {
                     Rectangle {
                         id: button
                         required property var modelData
-                        width: label.implicitWidth + 28
-                        height: 30
+                        Layout.preferredWidth: label.implicitWidth + 28
+                        Layout.maximumWidth: label.implicitWidth + 28
+                        Layout.minimumWidth: 40
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 30
                         radius: 5
                         color: buttonArea.containsMouse ? Theme.hover : Theme.raised
                         ColorFade on color {}
@@ -450,7 +462,11 @@ Item {
                         Text {
                             textFormat: Text.PlainText
                             id: label
-                            anchors.centerIn: parent
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: 14
+                            width: parent.width - 28
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideRight
                             text: button.modelData.label
                             font.family: Theme.condensed
                             font.weight: Font.Medium

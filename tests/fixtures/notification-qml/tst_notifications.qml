@@ -319,6 +319,25 @@ TestCase {
         compare(popup._open, false);
     }
 
+    // Long sender names and action labels stay inside the card and clear of the close button.
+    function test_longTextStaysInsideCard() {
+        var name = "W".repeat(256);
+        var actions = [action("a", "A".repeat(256)), action("b", "Second")];
+        Notifications.receive(notification({ id: 1, appName: name, actions: actions }));
+        tryCompare(popup, "_progress", 1, 1000);
+        var right = popup.cardX + popup.cardWidth - 12;
+        var nameText = findText(popup, name);
+        var at = nameText.mapToItem(popup, nameText.width, 0);
+        verify(at.x <= right - 22 - 8, "App name ends at " + at.x + ", limit " + (right - 30));
+        var first = findText(popup, "A".repeat(256));
+        var second = findText(popup, "Second");
+        var firstEnd = first.mapToItem(popup, first.width, 0).x;
+        var secondEnd = second.mapToItem(popup, second.width, 0).x;
+        verify(firstEnd <= right, "First label ends at " + firstEnd);
+        verify(secondEnd <= right, "Second label ends at " + secondEnd);
+        verify(first.mapToItem(popup, 0, 0).x < second.mapToItem(popup, 0, 0).x);
+    }
+
     function test_actionTextAndCountAreBounded() {
         var actions = [];
         for (var i = 0; i < 30; i++) actions.push(action("action" + i, "x".repeat(100 * 1024)));
