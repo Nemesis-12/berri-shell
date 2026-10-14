@@ -93,6 +93,15 @@ Scope {
         for (var i = 0; i < children.length; i++) count += imageCount(children[i]);
         return count;
     }
+    function findImage(item) {
+        if (item.source !== undefined && item.status !== undefined && item.source.toString() !== "") return item;
+        var children = item.children || [];
+        for (var i = 0; i < children.length; i++) {
+            var found = findImage(children[i]);
+            if (found) return found;
+        }
+        return null;
+    }
     Timer { interval: 5000; running: true; onTriggered: { console.error("TEST TIMEOUT"); Qt.quit(); } }
 ''' + body + "\n}")
         result = subprocess.run([QS, "--no-color", "-p", str(qml)], env=self.env,
@@ -246,12 +255,12 @@ Scope {
                 wallpapers.instances[0].show(Quickshell.env("PICKER_SPECIAL_PATH"));
                 started = true;
             }
-            var card = find(notch, "QQuickImage");
+            var card = findImage(notch);
             var layer = wallpapers.instances[0];
             if (card && card.status === Image.Ready && layer.currentPath === Quickshell.env("PICKER_SPECIAL_PATH")) {
-                if (!check(card.source.toString().indexOf("%20") !== -1
+                if (!check(card.source.toString().indexOf("wallpaper space") !== -1
                            && card.source.toString().indexOf("%23") !== -1,
-                           "picker image URL did not encode spaces and #")) return;
+                           "picker image URL lost the space or did not encode #")) return;
                 if (!check(layer.screenImage.status === Image.Ready
                            && layer.screenImage.source.toString().indexOf("%23") !== -1,
                            "desktop image URL did not load the encoded path")) return;

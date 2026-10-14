@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import "../logic/ThemeColors.js" as Colors
+import "../logic/WallpaperPaths.js" as WallpaperPaths
 import qs.common
 import qs.services
 
@@ -151,7 +152,7 @@ Variants {
             }
 
             layer.pendingWallpaperImage = image;
-            image.source = "file://" + path;
+            image.source = WallpaperPaths.fileUrl(path);
             if (image.status === Image.Ready) {
                 layer.pendingWallpaperImage = null;
                 ready();

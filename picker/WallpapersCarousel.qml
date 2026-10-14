@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import Quickshell
+import "../logic/WallpaperPaths.js" as WallpaperPaths
 import qs.common
 import qs.services
 
@@ -214,7 +215,7 @@ CardCarousel {
 
                 Image {
                     anchors.fill: parent
-                    source: card.modelData.length > 0 ? ("file://" + card.modelData) : ""
+                    source: card.modelData.length > 0 ? WallpaperPaths.fileUrl(card.modelData) : ""
                     fillMode: Image.PreserveAspectCrop
                     sourceSize: Qt.size(width * root.dpr, height * root.dpr)
                     smooth: true
