@@ -22,3 +22,11 @@ test("a fractional size rounds to whole pixels and never goes under 1", () => {
   assert.equal(lib.hasSize(0, 10), false);
   assert.equal(lib.hasSize(250, 10), true);
 });
+
+test("each output size has its own sticker display copy", () => {
+  const small = lib.displayPath("/tmp/berri", { width: 250, height: 300 });
+  const sharp = lib.displayPath("/tmp/berri", { width: 500, height: 600 });
+  assert.equal(small, "/tmp/berri/sticker-display-250x300.png");
+  assert.equal(sharp, "/tmp/berri/sticker-display-500x600.png");
+  assert.notEqual(small, sharp);
+});

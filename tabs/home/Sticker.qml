@@ -69,7 +69,7 @@ Item {
             "sh",
             Quickshell.shellPath("scripts/sticker-display-copy.sh"),
             stickerPath,
-            configDirPath + "/sticker-display.png",
+            StickerSize.displayPath(configDirPath, copySize),
             String(copySize.width),
             String(copySize.height)
         ];
@@ -91,7 +91,7 @@ Item {
             if (root.copySize.width !== root.decodeSize.width
                     || root.copySize.height !== root.decodeSize.height) return;
             root.stickerSource = root.fileUrl(exitCode === 0
-                ? root.configDirPath + "/sticker-display.png" : root.stickerPath);
+                ? StickerSize.displayPath(root.configDirPath, root.copySize) : root.stickerPath);
         }
     }
 
@@ -180,6 +180,7 @@ Item {
     // tab is hidden. A large file can finish decoding after the panel has
     // faded in: it fades in then, no pop.
     Loader {
+        objectName: "stickerPicture"
         anchors.fill: parent
         active: root.visible && root.stickerSource.length > 0
         sourceComponent: root.useAnimatedImage ? animatedPicture : stillPicture
