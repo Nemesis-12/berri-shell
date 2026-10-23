@@ -26,8 +26,8 @@ Item {
 
     readonly property color agentTone: root.agent === Fmt.CLAUDE_SOURCE ? Theme.accentLight : Theme.accentSecondary
 
-    readonly property real sessionPercent: root.agent === Fmt.CLAUDE_SOURCE ? AgentUsage.claudeSessionPercent : AgentUsage.codexSessionPercent
-    readonly property real weeklyPercent: root.agent === Fmt.CLAUDE_SOURCE ? AgentUsage.claudeWeeklyPercent : AgentUsage.codexWeeklyPercent
+    readonly property real sessionPercent: root.agent === Fmt.CLAUDE_SOURCE ? AgentUsage.claudeSessionValue : AgentUsage.codexSessionValue
+    readonly property real weeklyPercent: root.agent === Fmt.CLAUDE_SOURCE ? AgentUsage.claudeWeeklyValue : AgentUsage.codexWeeklyValue
     readonly property string sessionResetAt: root.agent === Fmt.CLAUDE_SOURCE ? AgentUsage.claudeSessionResetAt : AgentUsage.codexSessionResetAt
     readonly property string weeklyResetAt: root.agent === Fmt.CLAUDE_SOURCE ? AgentUsage.claudeWeeklyResetAt : AgentUsage.codexWeeklyResetAt
 
@@ -37,7 +37,7 @@ Item {
     // Tokens and estimated cost per period of the picked agent.
     readonly property var agentUsage: Fmt.usageFor(CodeData.usage, root.agent)
     function periodTokens(period) { return agentUsage[period] ? agentUsage[period].tokens : 0; }
-    function periodCost(period) { return agentUsage[period] ? agentUsage[period].cost : 0; }
+    function periodCost(period) { return agentUsage[period] ? agentUsage[period].cost : null; }
 
 
     Rectangle {

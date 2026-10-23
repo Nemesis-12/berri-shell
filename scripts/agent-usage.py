@@ -14,8 +14,9 @@ timestamps for each agent — never a token.
 
 Output shape:
     {"claude": {"session": {"percent": 0-100, "resetsAt": iso8601} | null,
-                "weekly": {...} | null},
-     "codex":  {"session": {...} | null, "weekly": {...} | null}}
+                "weekly": {...} | null, "fetchedAt": iso8601 | ""},
+     "codex":  {"session": {...} | null, "weekly": {...} | null, "fetchedAt": iso8601 | ""},
+     "cacheSeconds": time in seconds that a reading is reused before a new request}
 """
 import contextlib
 import datetime as dt
@@ -31,12 +32,14 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from child_cleanup import stop_children_with_script
 from recent_answers import answer_path, read_recent_answer, save_answer
 
 USAGE_ENDPOINT = "https://api.anthropic.com/api/oauth/usage"
 REQUEST_TIMEOUT_S = 10
 
 CACHE_PATH = answer_path("agent-usage.json")
+# Reported as `cacheSeconds` in the output, so AgentUsage.qml derives its freshness limit from it.
 CACHE_FRESH_S = 5 * 60
 RATE_LIMIT_BACKOFF_S = 10 * 60
 
@@ -140,14 +143,6 @@ def request_claude_usage(token: str, cache: dict, entry: dict, now: dt.datetime)
         return None
 
 
-def merge_buckets(entry: dict, new_session, new_weekly) -> dict:
-    """A new reading wins; otherwise the cached one stays while its reset is ahead."""
-    return {
-        "session": new_session or (entry.get("session") if bucket_still_fresh(entry.get("session")) else None),
-        "weekly": new_weekly or (entry.get("weekly") if bucket_still_fresh(entry.get("weekly")) else None),
-    }
-
-
 def cache_is_fresh(entry: dict, now: dt.datetime) -> bool:
     fetched_at = parse_iso(entry.get("fetchedAt"))
     return bool(fetched_at and now - fetched_at < dt.timedelta(seconds=CACHE_FRESH_S))
@@ -174,8 +169,10 @@ def claude_usage(cache: dict) -> dict:
     payload = request_claude_usage(token, cache, entry, now)
     if not isinstance(payload, dict):
         return cached_buckets(entry)
-    buckets = merge_buckets(entry, claude_bucket(payload.get("five_hour")),
-                            claude_bucket(payload.get("seven_day_oauth_apps") or payload.get("seven_day")))
+    buckets = {
+        "session": claude_bucket(payload.get("five_hour")),
+        "weekly": claude_bucket(payload.get("seven_day_oauth_apps") or payload.get("seven_day")),
+    }
     cache["claude"] = {**buckets, "fetchedAt": now.isoformat()}
     return buckets
 
@@ -289,7 +286,7 @@ def codex_usage(cache: dict) -> dict:
         primary, secondary = limits.get("primary"), limits.get("secondary")
     except Exception:
         return cached_buckets(entry)
-    buckets = merge_buckets(entry, codex_window(primary), codex_window(secondary))
+    buckets = {"session": codex_window(primary), "weekly": codex_window(secondary)}
     cache["codex"] = {**buckets, "fetchedAt": now.isoformat()}
     return buckets
 
@@ -302,6 +299,13 @@ def provider_usage(read_usage, cache: dict) -> dict:
         return {"session": None, "weekly": None}
 
 
+def source_result(cache: dict, name: str, buckets: dict) -> dict:
+    """Attach the last successful fetch time so the view can mark stale data unknown."""
+    entry = cache.get(name)
+    fetched_at = entry.get("fetchedAt", "") if isinstance(entry, dict) else ""
+    return {**buckets, "fetchedAt": str(fetched_at or "")}
+
+
 def main() -> None:
     try:
         cache = json.loads(read_recent_answer(CACHE_PATH) or "{}")
@@ -309,10 +313,15 @@ def main() -> None:
         cache = {}
     if not isinstance(cache, dict):
         cache = {}
-    result = {"claude": provider_usage(claude_usage, cache), "codex": provider_usage(codex_usage, cache)}
+    result = {
+        "claude": source_result(cache, "claude", provider_usage(claude_usage, cache)),
+        "codex": source_result(cache, "codex", provider_usage(codex_usage, cache)),
+        "cacheSeconds": CACHE_FRESH_S,
+    }
     save_answer(CACHE_PATH, json.dumps(cache))
     print(json.dumps(result))
 
 
 if __name__ == "__main__":
+    stop_children_with_script()
     main()

@@ -79,6 +79,21 @@ Item {
             wifi.networks = { values: [] };
         }
 
+        // Runs after every test, also after a failed compare, so one failure does not leave sources held or viewers counted.
+        function cleanup() {
+            ProcessLog.holdScriptProcesses = false;
+            CodeData.viewers = 0;
+            AgentUsage.viewers = 0;
+        }
+
+        // The running state of the code stats script and of the usage script.
+        function statsRunning() {
+            return Array.from(CodeData.data).find(o => o.name === "code stats").running;
+        }
+        function usageRunning() {
+            return Array.from(AgentUsage.data).find(o => o.command !== undefined).running;
+        }
+
         // Finds the first item that has `property` in the tree below `item`.
         function find(item, property) {
             for (const child of item.children) {
@@ -196,6 +211,56 @@ Item {
             compare(started("github-stats.py"), 1);
             compare(started("local-commits.py"), 0);
             CodeData.viewers = 0;
+        }
+
+        function test_last_code_viewer_stops_running_sources() {
+            ProcessLog.holdScriptProcesses = true;
+            CodeData.viewers = 1;
+            AgentUsage.viewers = 1;
+            CodeData.refresh();
+            AgentUsage.refresh();
+            tryVerify(() => statsRunning() && usageRunning());
+            CodeData.viewers = 0;
+            AgentUsage.viewers = 0;
+            compare(statsRunning(), false);
+            compare(usageRunning(), false);
+        }
+
+        // A source writes one failure line per hour. Forget earlier lines so this test sees a new one.
+        function forgetLoggedFailures() {
+            for (const source of Array.from(CodeData.data).filter(o => o.lastLogged !== undefined))
+                source.lastLogged = {};
+            AgentUsage.lastLogged = {};
+        }
+
+        function test_runs_stopped_by_a_hide_write_no_failure_line() {
+            forgetLoggedFailures();
+            ProcessLog.holdScriptProcesses = true;
+            CodeData.viewers = 1;
+            AgentUsage.viewers = 1;
+            CodeData.refresh();
+            AgentUsage.refresh();
+            tryVerify(() => statsRunning() && usageRunning());
+            failOnWarning(/berri-shell:/);
+            CodeData.viewers = 0;
+            AgentUsage.viewers = 0;
+            compare(statsRunning(), false);
+            compare(usageRunning(), false);
+        }
+
+        function test_stats_killed_by_a_hide_run_again_when_the_tab_shows_again() {
+            ProcessLog.holdScriptProcesses = true;
+            CodeData.viewers = 1;
+            CodeData.refresh();
+            tryVerify(statsRunning);
+            CodeData.viewers = 0;
+            compare(statsRunning(), false);
+            ProcessLog.holdScriptProcesses = false;
+            ProcessLog.commands = [];
+            CodeData.viewers = 1;
+            // A kept source starts at once after a run that did not finish, not after its cache time.
+            verify(ProcessLog.commands.some(c => c.some(part => String(part).endsWith("code-stats.py"))),
+                   "Stats did not start again");
         }
 
         function test_shared_requests_stay_until_the_last_owner_releases() {

@@ -1,6 +1,7 @@
 import QtQuick
 
 // Completes fake brightness commands without starting a system process.
+// A command stopped before it finished ends its stream with no text, like a killed program.
 Item {
     id: root
     property var command: []
@@ -10,10 +11,15 @@ Item {
     onRunningChanged: {
         if (running) {
             ProcessLog.commands = ProcessLog.commands.concat([command.slice()]);
-            finish.interval = command.indexOf("set") >= 0 ? 150 : 5;
+            finish.interval = command.indexOf("set") >= 0 ? 150
+                : ProcessLog.holdScriptProcesses && command[0] === "python3" ? 10000 : 5;
             finish.start();
-        } else {
+        } else if (finish.running) {
             finish.stop();
+            if (stdout) {
+                stdout.text = "";
+                stdout.streamFinished();
+            }
         }
     }
     Timer {
@@ -23,6 +29,8 @@ Item {
                 root.stdout.text = "panel";
             } else if (root.command.indexOf("set") >= 0) {
                 ProcessLog.brightness = parseInt(root.command[root.command.length - 1]);
+            } else if (root.command[0] === "python3" && ProcessLog.scriptAnswer !== "") {
+                root.stdout.text = ProcessLog.scriptAnswer;
             } else {
                 root.stdout.text = "panel,backlight," + ProcessLog.brightness + "," + ProcessLog.brightness + "%,100";
             }

@@ -67,20 +67,32 @@ Item {
                     }
                 }
                 CondensedText {
+                    opacity: root.percent >= 0 ? 1 : 0
                     text: "%"
                     color: readout.tone
                     font.pixelSize: 12
+
+                    Fade on opacity { duration: Theme.stateMs }
                 }
             }
 
-            CodeValue {
-                id: leftText
-                value: root.timeLeft + "\nLEFT"
-                color: readout.tone
-                font.family: Theme.mono
-                font.pixelSize: 9
-                font.letterSpacing: 0.36
-                lineHeight: 1.4
+            // CodeValue animates its own opacity when the text changes, so the fade for unknown data is on this wrapper.
+            Item {
+                width: leftText.implicitWidth
+                height: leftText.implicitHeight
+                opacity: root.percent >= 0 && root.timeLeft !== "--" ? 1 : 0
+
+                Fade on opacity { duration: Theme.stateMs }
+
+                CodeValue {
+                    id: leftText
+                    value: root.timeLeft + "\nLEFT"
+                    color: readout.tone
+                    font.family: Theme.mono
+                    font.pixelSize: 9
+                    font.letterSpacing: 0.36
+                    lineHeight: 1.4
+                }
             }
         }
 

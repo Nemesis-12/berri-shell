@@ -63,13 +63,20 @@ function run(...args) {
   return runOutput(...args).split("\n").filter(l => l.includes("berri-shell:"));
 }
 
-const goodUsage = ok(JSON.stringify({ claude: { session: { percent: 42, resetsAt: "2026-10-04T20:00:00Z" } } }));
+const goodUsage = ok(JSON.stringify({ cacheSeconds: 300, claude: { session: { percent: 42, resetsAt: "2026-10-04T20:00:00Z" } } }));
+const usageWithoutCacheTime = ok(JSON.stringify({ claude: { session: { percent: 7, resetsAt: "2026-10-04T20:00:00Z" } } }));
 const emptyStatsUsage = Object.fromEntries(["claude", "codex"].map(agent => [agent,
   Object.fromEntries(["today", "week", "month"].map(period => [period, { tokens: 0, cost: 0 }]))]));
 
 test("usage with malformed output logs one line and a second failure adds none", () => {
   const lines = run("usage", "AgentUsage.qml", [
     { "*": goodUsage }, { "*": ok(SECRET) }, { "*": ok("") }, { "*": ok("null") }]);
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /berri-shell: usage data failed \(bad output\)$/);
+});
+
+test("usage without the cache time of the script keeps the last reading and logs one line", () => {
+  const lines = run("usage", "AgentUsage.qml", [{ "*": goodUsage }, { "*": usageWithoutCacheTime }]);
   assert.equal(lines.length, 1);
   assert.match(lines[0], /berri-shell: usage data failed \(bad output\)$/);
 });
