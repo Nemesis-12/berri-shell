@@ -140,7 +140,9 @@ Item {
     function openEdit(itemUid: string, occurrenceDate: string, displayDate: string) {
         var item = Calendar.getItem(itemUid);
         if (!item) return;
-        var shown = (Calendar.itemsOn(displayDate || occurrenceDate || item.date) || []).filter(function (o) { return o.uid === itemUid; })[0];
+        // One series can show two occurrences on a day (one moved there), so the occurrence date picks the right one.
+        var sameItem = (Calendar.itemsOn(displayDate || occurrenceDate || item.date) || []).filter(function (o) { return o.uid === itemUid; });
+        var shown = sameItem.filter(function (o) { return o.occurrenceDate === occurrenceDate; })[0] || sameItem[0];
         var readOnly = shown ? !!shown.readOnly : !!item.readOnly;
         var details = readOnly && shown ? shown : item;
         var calendarId = shown ? shown.calendarId : item.calendarId;

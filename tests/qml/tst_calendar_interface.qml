@@ -214,4 +214,22 @@ TestCase {
         compare([form.title, form.date, form.time, form.end], ["Changed", "2026-10-09", "15:00", "16:00"]);
     }
 
+    // On 2026-10-09 this series shows its own occurrence (09:00) and the one that moved there from 2026-10-08 (15:00).
+    function test_read_only_details_pick_the_occurrence_by_its_date_when_two_share_a_day() {
+        const feed = Calendar._newMeta("feed", "link", "Feed", "feed.ics", "blue");
+        feed.records = [Items.storedItem({ uid: "series", title: "Master", date: "2026-10-01", time: "09:00",
+            end: "10:00", repeat: "daily", count: 20, changedOccurrences: [{ from: "2026-10-08", cancelled: false,
+                title: "Changed", date: "2026-10-09", time: "15:00", end: "16:00", endDate: null }] })];
+        Calendar._calendars = { feed: feed };
+        Calendar._order = ["feed"];
+        Calendar._rebuild();
+        const form = formOf(createTemporaryObject(tabComponent, tests));
+        verify(form !== null);
+        const uid = Items.itemKey("feed", "series");
+        form.openEdit(uid, "2026-10-08", "2026-10-09");
+        compare([form.title, form.time, form.end], ["Changed", "15:00", "16:00"]);
+        form.openEdit(uid, "2026-10-09", "2026-10-09");
+        compare([form.title, form.time, form.end], ["Master", "09:00", "10:00"]);
+    }
+
 }
