@@ -559,8 +559,12 @@ Singleton {
     function _locate(uid: string, forEdit: bool): var {
         var identity = Items.itemIdentity(uid);
         var meta = identity ? _calendars[identity.calendarId] : null;
-        if (!meta || forEdit && meta.kind === "link") {
-            if (forEdit) _failEdit();
+        if (!meta) {
+            if (forEdit) _failEdit(false);
+            return null;
+        }
+        if (forEdit && meta.kind === "link") {
+            _failEdit(true);
             return null;
         }
         if (forEdit && !canWriteCalendar(meta.id)) return null;
@@ -568,15 +572,17 @@ Singleton {
         var items = doc ? doc.items : meta.records || [];
         var index = Items.itemIndex(items, uid, meta.id);
         if (index < 0) {
-            if (forEdit) _failEdit();
+            if (forEdit) _failEdit(false);
             return null;
         }
         return { path: meta.path, doc: doc, meta: meta, index: index };
     }
 
-    /** Shows an error when an edit target disappeared or became read-only. */
-    function _failEdit(): void {
-        root.lastError = "This calendar item is no longer available to edit";
+    /** Shows why an edit was refused: the item is on a subscribed link (`onLink`), or it is gone. */
+    function _failEdit(onLink: bool): void {
+        root.lastError = onLink
+            ? "Subscribed calendars are read-only. Create a new item in your own calendar instead."
+            : "This calendar item is no longer available to edit";
         root.saveFailed(root.lastError);
     }
 
