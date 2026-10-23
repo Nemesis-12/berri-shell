@@ -377,6 +377,125 @@ Scope {
     }
 ''')
 
+    # Writes two PNG files into the test library and saves them as the library.
+    # With `first_on`, that screen shows the first wallpaper in the test theme.
+    def save_two_wallpapers(self, first_on=None):
+        library = self.home / ".local/share/berri-shell/wallpapers"
+        library.mkdir(parents=True, exist_ok=True)
+        paths = []
+        for name in ("first.png", "second.png"):
+            image = library / name
+            write_png(image)
+            paths.append(str(image))
+        assignments = {"test": {first_on: paths[0]}} if first_on else {}
+        (self.state / "wallpapers.json").write_text(json.dumps(
+            {"library": paths, "assignments": assignments}))
+        self.env["PICKER_FIRST"] = paths[0]
+        self.env["PICKER_SECOND"] = paths[1]
+        return paths
+
+    def test_keys_assign_the_focused_wallpaper_and_the_add_card_ignores_them(self):
+        self.save_two_wallpapers()
+        self.run_qml('''
+    FloatingWindow {
+        implicitWidth: 1000; implicitHeight: 400
+        PickerWallpapers { id: body; anchors.fill: parent; screenName: "test"; shown: true }
+    }
+    property int addRequests: 0
+    function press(key) {
+        var event = { key: key, accepted: false };
+        return body.handleKey(event) && event.accepted;
+    }
+    Timer {
+        interval: 20; running: true
+        onTriggered: {
+            if (!Wallpapers.loaded) { restart(); return; }
+            var first = Quickshell.env("PICKER_FIRST");
+            var second = Quickshell.env("PICKER_SECOND");
+            var screen = Wallpapers.monitors[0].name;
+            body.addRequested.connect(function() { addRequests++; });
+            body.focusToCurrent();
+            if (!check(body.focusedPath === first, "focus did not start on the first card")) return;
+
+            if (!check(press(Qt.Key_1) && Wallpapers.wallpaperFor(screen) === first, "key 1 did not assign monitor 1")) return;
+            if (!check(press(Qt.Key_1) && Wallpapers.wallpaperFor(screen) === "", "key 1 did not clear a monitor that shows the wallpaper")) return;
+            if (!check(press(Qt.Key_9) && Wallpapers.wallpaperFor(screen) === "", "a digit with no monitor changed an assignment")) return;
+            if (!check(press(Qt.Key_Return) && Wallpapers.wallpaperFor(screen) === first, "Enter on a wallpaper did not assign it to all monitors")) return;
+            if (!check(press(Qt.Key_Enter) && Wallpapers.wallpaperFor(screen) === first, "Enter cleared a wallpaper that every monitor shows")) return;
+
+            if (!check(press(Qt.Key_Right) && body.focusedPath === second, "Right did not move to the second card")) return;
+            if (!check(press(Qt.Key_A) && Wallpapers.wallpaperFor(screen) === second, "key A did not assign all monitors")) return;
+            body.assignFocusedToMonitor(1);
+            if (!check(Wallpapers.wallpaperFor(screen) === "", "assignFocusedToMonitor did not clear a shown wallpaper")) return;
+            body.assignFocusedToAll();
+            if (!check(Wallpapers.wallpaperFor(screen) === second, "assignFocusedToAll did not assign all monitors")) return;
+
+            press(Qt.Key_Right);
+            if (!check(body.focusIsAdd && body.focusedPath === "", "Right did not move to the Add card")) return;
+            if (!check(press(Qt.Key_Return) && addRequests === 1, "Enter on the Add card did not ask to add")) return;
+            press(Qt.Key_A); press(Qt.Key_1); body.assignFocusedToAll(); body.assignFocusedToMonitor(1);
+            if (!check(Wallpapers.wallpaperFor(screen) === second && addRequests === 1,
+                       "assign keys on the Add card changed something")) return;
+            console.log("TEST PASS"); Qt.quit();
+        }
+    }
+''')
+
+    def test_add_card_stays_focused_when_another_monitor_adds_a_wallpaper(self):
+        paths = self.save_two_wallpapers()
+        extra = Path(paths[0]).with_name("third.png")
+        write_png(extra)
+        self.env["PICKER_THIRD"] = str(extra)
+        self.run_qml('''
+    FloatingWindow {
+        implicitWidth: 1000; implicitHeight: 400
+        PickerWallpapers { id: body; anchors.fill: parent; screenName: "test"; shown: true }
+    }
+    Timer {
+        interval: 20; running: true
+        onTriggered: {
+            if (!Wallpapers.loaded) { restart(); return; }
+            var carousel = find(body, "WallpapersCarousel");
+            carousel.focusIndex = 2;
+            if (!check(body.focusIsAdd, "the Add card was not focused")) return;
+            Wallpapers.library = Wallpapers.library.concat([Quickshell.env("PICKER_THIRD")]);
+            if (!check(body.focusIsAdd && carousel.focusIndex === 3, "a new card took focus from the Add card")) return;
+            console.log("TEST PASS"); Qt.quit();
+        }
+    }
+''')
+
+    def test_finished_add_reopens_the_picker_on_the_new_wallpaper(self):
+        self.save_two_wallpapers(first_on="test")
+        added = self.folder / "added.png"
+        write_png(added, (200, 40, 40))
+        self.env["PICKER_ADDED"] = str(added)
+        self.run_qml('''
+    FloatingWindow {
+        implicitWidth: 1000; implicitHeight: 500
+        ThemeNotch { id: notch; anchors.centerIn: parent; pickerTab: "walls"; screenName: "test" }
+    }
+    property bool started: false
+    Timer {
+        interval: 20; running: true; repeat: true
+        onTriggered: {
+            if (!Wallpapers.loaded) return;
+            var carousel = find(notch, "WallpapersCarousel");
+            if (!started) {
+                started = true;
+                notch.openPicker(); notch.closeAtOnce();
+                var chooser = find(carousel, "ImagePicker");
+                chooser.chosen(Quickshell.env("PICKER_ADDED"));
+                chooser.finished();
+            } else if (Wallpapers.library.length === 3 && notch.pickerOpen) {
+                if (!check(carousel.focusedPath === Wallpapers.library[2],
+                           "the picker did not reopen on the new wallpaper")) return;
+                console.log("TEST PASS"); Qt.quit();
+            }
+        }
+    }
+''')
+
     def test_sticker_watcher_detects_changes_without_loading_bytes(self):
         write_png(self.config / "sticker.png")
         replacement = self.folder / "replacement.png"

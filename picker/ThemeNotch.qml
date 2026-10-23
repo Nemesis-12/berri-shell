@@ -154,12 +154,23 @@ Item {
     /** Starts the open motion; also while a close is running. */
     function openPicker() {
         if (root.open) return;
+        root.startOpen();
+        if (root.pickerTab === "walls") wallsBody.focusToCurrent();
+        else themesCarousel.focusToCurrent();
+    }
+
+    /** Reopens the picker after the add dialog ends. The wallpaper body keeps its focused card, which is the new wallpaper. */
+    function reopenAfterAdd() {
+        if (root.open) return;
+        root.startOpen();
+    }
+
+    /** The open steps that both ways to open share. */
+    function startOpen() {
         wallBarsReturn.stop();
         root.wallRestOpacity = 1;
         root.motionTab = root.pickerTab;
         slide.openSlide();
-        if (root.pickerTab === "walls") wallsBody.focusToCurrent();
-        else themesCarousel.focusToCurrent();
     }
 
     /** Starts the close motion: the open steps in reversed order, each one easing out into rest. The tab showing now decides the steps (the strip returns only on Themes). No-op unless open. */
@@ -355,7 +366,7 @@ Item {
                         slide.runAfterClose(() => wallsBody.chooseFile());
                         root.closePicker();
                     }
-                    onAddDone: root.openPicker()
+                    onAddDone: root.reopenAfterAdd()
                 }
             }
         }

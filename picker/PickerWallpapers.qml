@@ -11,22 +11,17 @@ Item {
     property bool shown: false
     /** Space between the carousel and the SHOW ON row. */
     property int rowGap: 15
-    property bool keepFocusOnNextOpen: false
 
     readonly property string focusedPath: wallpapersCarousel.focusedPath
     readonly property bool focusIsAdd: wallpapersCarousel.focusIsAdd
 
     /** The user asked to add a wallpaper. The host closes the picker, then calls chooseFile(). */
     signal addRequested
-    /** The add flow ended, with or without a new wallpaper. The host reopens the picker. */
+    /** The add flow ended, with or without a new wallpaper. The host reopens the picker without moving focus. */
     signal addDone
 
     /** Focuses the wallpaper assigned to this monitor, or the first card. */
     function focusToCurrent() {
-        if (root.keepFocusOnNextOpen) {
-            root.keepFocusOnNextOpen = false;
-            return;
-        }
         wallpapersCarousel.focusToCurrent();
     }
 
@@ -91,10 +86,7 @@ Item {
         onAddRequested: root.addRequested()
         onAddDone: path => {
             if (path) wallpapersCarousel.focusPath(path);
-            // The host reopens the picker inside addDone. If it is already open, nothing consumes the flag.
-            root.keepFocusOnNextOpen = true;
             root.addDone();
-            root.keepFocusOnNextOpen = false;
         }
     }
 
