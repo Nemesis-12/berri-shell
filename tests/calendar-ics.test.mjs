@@ -173,6 +173,25 @@ test("moving a completed repeat occurrence moves its done tick to the new date",
   assert.deepEqual(plain(created.doneDates), ["2026-10-09"]);
 });
 
+test("moving a repeat occurrence leaves no repeat rule on the new single item", () => {
+  const series = Format.readCalendar(["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:rule", "SUMMARY:Rule", "DTSTART:20261001T090000",
+    "RRULE:FREQ=DAILY;INTERVAL=2;COUNT=9;WKST=SU", "RRULE:FREQ=WEEKLY", "EXDATE:20261003T090000",
+    "END:VEVENT", "BEGIN:VEVENT", "UID:rule", "RECURRENCE-ID:20261005T090000", "SUMMARY:Changed", "END:VEVENT",
+    "END:VCALENDAR", ""].join("\r\n")).items[0];
+  series.until = "2026-12-31";
+  assert.ok(series.raw.some((line) => /^RRULE[;:]/i.test(line)));
+  assert.notEqual(series.ruleRest, null);
+  assert.equal(series.count, 9);
+  assert.equal(series.changedOccurrences.length, 1);
+  const { created } = Items.moveOccurrence(series, "2026-10-07", "2026-10-20", {});
+  assert.equal(created.repeat, "none");
+  assert.deepEqual(plain([created.count, created.until, created.untilMs, created.interval, created.ruleRest]), [null, null, null, 1, null]);
+  assert.deepEqual(plain([created.exdates, created.changedOccurrences]), [[], []]);
+  assert.equal(created.raw.some((line) => /^RRULE[;:]/i.test(line)), false);
+  assert.doesNotMatch(Format.writeCalendar({ ...Format.emptyCalendar(), items: [created] }), /RRULE/);
+  assert.equal(Repeat.expand(created, "2026-10-01", "2026-12-31").length, 1);
+});
+
 test("done state and day queries", () => {
   const task = item({ kind: "task", title: "Pay rent", date: "2026-10-01", repeat: "monthly" });
   const ticked = Items.withDone(task, "2026-11-01", true);

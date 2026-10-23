@@ -317,7 +317,8 @@ function applyChanges(item, changes) {
     }
     takeCheckedFields(next, allowed);
     for (var extra in allowed) if (!(extra in fieldChecks)) next[extra] = allowed[extra];
-    if (item.repeat === "none" && next.date !== item.date && item.doneDates.indexOf(item.date) >= 0)
+    // A done non-repeat item keeps its tick on the new date, unless the same call sets doneDates itself.
+    if (allowed.doneDates === undefined && item.repeat === "none" && next.date !== item.date && item.doneDates.indexOf(item.date) >= 0)
         next.doneDates = item.doneDates.map(function (day) { return day === item.date ? next.date : day; });
     if (allowed.repeat !== undefined && next.repeat !== item.repeat) {
         next.raw = next.raw.filter(function (l) { return !/^RRULE[;:]/i.test(l); });
@@ -391,10 +392,7 @@ function moveOccurrence(item, fromDate, toDate, changes) {
     for (var k in changes) extra[k] = changes[k];
     extra.date = toDate;
     extra.endDate = source.endDate ? addDays(toDate, span) : null;
-    if (item.repeat === "none") {
-        extra.doneDates = wasDone ? [toDate] : [];
-        return { item: applyChanges(item, extra), created: null };
-    }
+    if (item.repeat === "none") return { item: applyChanges(item, extra), created: null };
     extra.repeat = "none";
     extra.doneDates = wasDone ? [toDate] : [];
     var single = applyChanges(source, extra);
