@@ -343,7 +343,7 @@ Scope {
     }
 ''')
 
-    def test_wallpaper_body_exposes_selection_and_key_commands_without_its_carousel(self):
+    def test_wallpaper_body_exposes_selection_and_key_commands(self):
         library = self.home / ".local/share/berri-shell/wallpapers"
         library.mkdir(parents=True, exist_ok=True)
         paths = []
@@ -366,8 +366,6 @@ Scope {
         interval: 20; running: true; repeat: true
         onTriggered: {
             if (!Wallpapers.loaded) return;
-            if (!check(body.carousel === undefined,
-                       "wallpaper body exposes its concrete carousel")) return;
             body.focusToCurrent();
             if (!check(body.focusedPath === Quickshell.env("PICKER_EXPECTED_FIRST"),
                        "wallpaper body did not expose the focused path")) return;

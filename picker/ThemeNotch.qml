@@ -113,7 +113,7 @@ Item {
 
     readonly property bool hovered: pointerInside && !pickerOpen
 
-    /** Which picker tab is showing: themes or wallpapers. */
+    /** Which picker tab is showing: "themes" (ThemesCarousel) or "walls" (WallpapersCarousel + SHOW ON row). */
     property string pickerTab: "themes"
     /** The tab whose motion runs: the tab showing when the open or the close started. Only the Themes motion shows the palette strip. */
     property string motionTab: "themes"
@@ -177,11 +177,6 @@ Item {
         slide.closeAtOnce();
         root.wallRestOpacity = 1;
     }
-
-    // Add wallpaper: the file dialog is a normal window and would open under
-    // this Overlay panel, so the picker closes first (normal animated close),
-    // the dialog opens once the picker is at rest, and the picker reopens on
-    // the Wallpapers tab when the dialog is done.
 
     // The shadow at rest or under the pointer; the open motion deepens it.
     PanelShadow {
@@ -354,6 +349,8 @@ Item {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: root.wallsBottomExtra
+                    // The file dialog is a normal window and would open under this
+                    // Overlay panel: close first, open the dialog at rest, reopen when done.
                     onAddRequested: {
                         slide.runAfterClose(() => wallsBody.chooseFile());
                         root.closePicker();
