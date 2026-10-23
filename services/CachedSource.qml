@@ -37,6 +37,9 @@ Scope {
     /** Name of the version field in the answer. */
     property string versionKey: ""
 
+    /** Optional source-specific check for fields consumed by its service. */
+    property var answerCheck: null
+
     /** True while at least one view shows this data. Use open() and close(), not a binding: they run in the order the service calls them. */
     property bool active: false
 
@@ -58,7 +61,13 @@ Scope {
     /** Version of the last answer shown. */
     property var version: ""
 
+    /** Time in milliseconds carried by the last accepted answer. */
+    property double answeredAt: 0
+
     readonly property bool running: process.running
+
+    /** True when the source holds an accepted answer. */
+    readonly property bool valid: root.version !== ""
 
     /** A new answer arrived. `data` is the parsed JSON. */
     signal answered(var data)
@@ -66,13 +75,23 @@ Scope {
     /** The script ended, with a good answer or not. */
     signal exited()
 
+    /** True after close() stopped a run. That run ends with no output, which is not a failure to log. */
+    property bool stoppedOnHide: false
+
     /** Last log line time (see SourceFailures.js). */
     property var lastLogged: ({})
+
+    /** True when the last accepted answer is younger than the cache time. It reads the clock at each call, so no timer keeps it current. */
+    function isFresh() {
+        var age = Date.now() - root.answeredAt;
+        return root.valid && age >= 0 && age < root.age;
+    }
 
     /** Run the script now. `force` skips the script's own cache. */
     function start(force) {
         if (process.running) return;
         timer.stop();
+        root.stoppedOnHide = false;
         root.checkedAt = Date.now();
         process.command = ["python3", Quickshell.shellPath("scripts/" + root.script)]
             .concat(root.args).concat(force ? ["--force"] : []);
@@ -90,6 +109,12 @@ Scope {
     function close() {
         root.active = false;
         root.release();
+        if (process.running) {
+            root.stoppedOnHide = true;
+            process.running = false;
+            // The run did not finish. A source with `keepWhenIdle` must run again at the next open(), not after its cache time.
+            root.checkedAt = 0;
+        }
     }
 
     /** Start an old source, or set the timer to the time left in the cache time. */
@@ -105,6 +130,7 @@ Scope {
         if (root.keepWhenIdle) return;
         root.checkedAt = 0;
         root.version = "";
+        root.answeredAt = 0;
     }
 
     /** Set the timer to the time left in the cache time. */
@@ -138,9 +164,18 @@ Scope {
             onStreamFinished: {
                 try {
                     var data = JSON.parse(text);
+                    if (!data || typeof data !== "object" || Array.isArray(data))
+                        throw new Error("Expected an answer object");
                     var version = data[root.versionKey];
+                    var hasVersion = typeof version === "number" ? isFinite(version)
+                        : typeof version === "string" && version.length > 0;
+                    if (!hasVersion) throw new Error("Missing answer version");
+                    if (root.answerCheck && !root.answerCheck(data))
+                        throw new Error("Invalid answer fields");
                     if (root.active || root.keepWhenIdle) {
-                        root.checkedAt = root.cacheAgeStart(typeof version === "number" ? version : Date.parse(version));
+                        var savedAt = typeof version === "number" ? version : Date.parse(version);
+                        root.checkedAt = root.cacheAgeStart(savedAt);
+                        root.answeredAt = isFinite(savedAt) ? savedAt : Date.now();
                         if (version !== root.version) {
                             root.version = version;
                             root.answered(data);
@@ -148,7 +183,7 @@ Scope {
                     }
                 } catch (e) {
                     // Empty or bad output: keep what the tab shows now.
-                    root.logFailure(text);
+                    if (!root.stoppedOnHide) root.logFailure(text);
                 }
                 root.schedule();
             }

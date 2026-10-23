@@ -1,6 +1,7 @@
 pragma Singleton
 import QtQuick
 import Quickshell
+import "../logic/CodeAnswers.js" as CodeAnswers
 
 /**
  * Data of the Code tab. Token totals and estimated costs (tokens times list prices in data/model-prices.json) come from scripts/code-stats.py (local
@@ -78,6 +79,7 @@ Singleton {
         name: "code stats"
         script: "code-stats.py"
         versionKey: "generatedAt"
+        answerCheck: data => CodeAnswers.stats(data)
         age: root.localAge
         keepWhenIdle: true
         onAnswered: data => {
@@ -92,6 +94,7 @@ Singleton {
         name: "code github"
         script: "github-stats.py"
         versionKey: "fetchedAt"
+        answerCheck: data => CodeAnswers.github(data)
         age: root.githubAge
         onAnswered: data => {
             root.calendar = data.days;
@@ -108,6 +111,7 @@ Singleton {
         script: "local-commits.py"
         args: ["--with-version"]
         versionKey: "version"
+        answerCheck: data => CodeAnswers.commits(data)
         age: root.localAge
         blocked: github.running
         onAnswered: data => root.commits = data.commits

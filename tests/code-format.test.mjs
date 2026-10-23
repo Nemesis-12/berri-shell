@@ -37,6 +37,7 @@ test("rounded token and cost text picks the unit of the rounded value", () => {
     ]) {
         assert.equal(format.cost(usd), expected, String(usd));
     }
+    assert.equal(format.cost(null), "--");
 });
 
 test("time left uses the shared duration text", () => {
@@ -52,4 +53,46 @@ test("usage choices reject a misspelled source and keep missing readings distinc
     assert.deepEqual(format.usageFor(usage, "claude"), usage.claude);
     assert.deepEqual(format.usageFor(usage, "codex"), usage.codex);
     assert.throws(() => format.usageFor(usage, "cluade"), /Unknown usage source: cluade/);
+});
+
+test("heatmap hit testing clears the hover on gaps and padding", () => {
+    const calendar = [["2026-10-04", 3]];
+    assert.equal(format.heatmapIndexAt(calendar, 5, 5, 10, 2), 0);
+    assert.equal(format.heatmapIndexAt(calendar, 11, 5, 10, 2), -1);
+    assert.equal(format.heatmapIndexAt(calendar, 5, -1, 10, 2), -1);
+    assert.equal(format.heatmapIndexAt(calendar, -100, 5, 10, 2), -1);
+});
+
+test("heatmap hit testing ignores a padding day and a point below the seventh row", () => {
+    // Two weeks of days. The first day is a padding day with count -1.
+    const calendar = Array.from({ length: 14 }, (_, i) => ["2026-10-0" + (i % 9 + 1), i === 0 ? -1 : 2]);
+    assert.equal(format.heatmapIndexAt(calendar, 5, 5, 10, 2), -1);
+    assert.equal(format.heatmapIndexAt(calendar, 5, 17, 10, 2), 1);
+    assert.equal(format.heatmapIndexAt(calendar, 17, 5, 10, 2), 7);
+    // Row 7 of column 0 would read index 7, which is the first day of column 1.
+    assert.equal(format.heatmapIndexAt(calendar, 5, 7 * 12 + 5, 10, 2), -1);
+});
+
+test("a rate limit becomes unknown at its reset time or without a reset", () => {
+    const now = new Date("2026-10-14T12:00:00Z");
+    assert.equal(format.limitPercent(42, "2026-10-14T12:01:00Z", now, true), 42);
+    assert.equal(format.limitPercent(42, "2026-10-14T12:00:00Z", now, true), -1);
+    assert.equal(format.limitPercent(42, "", now, true), -1);
+    assert.equal(format.limitPercent(-1, "2026-10-14T12:01:00Z", now, true), -1);
+});
+
+test("a rate limit of a source that is not known to be fresh is unknown", () => {
+    const now = new Date("2026-10-14T12:00:00Z");
+    assert.equal(format.limitPercent(42, "2026-10-14T12:01:00Z", now, false), -1);
+    assert.equal(format.limitPercent(42, "2026-10-14T12:01:00Z", now, undefined), -1);
+    assert.equal(format.limitPercent(42, "2026-10-14T12:01:00Z", now), -1);
+});
+
+test("usage source timestamps distinguish fresh, stale, missing and future answers", () => {
+    const now = new Date("2026-10-14T12:00:00Z");
+    assert.equal(format.sourceFresh("2026-10-14T11:59:00Z", now, 300000), true);
+    assert.equal(format.sourceFresh("2026-10-14T11:54:59Z", now, 300000), false);
+    assert.equal(format.sourceFresh("2026-10-14T12:01:00Z", now, 300000), false);
+    assert.equal(format.sourceFresh("bad date", now, 300000), false);
+    assert.equal(format.sourceFresh("", now, 300000), false);
 });

@@ -30,6 +30,7 @@ function tokens(n) {
 
 /** Estimated cost: 12.4 -> "$12.40", 1234 -> "$1.2K", 999.996 -> "$1.0K". */
 function cost(usd) {
+    if (typeof usd !== "number" || !isFinite(usd)) return "--";
     if (Math.round(usd * 100) >= 100000) return "$" + (usd / 1000).toFixed(1) + "K";
     return "$" + usd.toFixed(2);
 }
@@ -48,6 +49,22 @@ function timeLeft(at, now) {
     return Times.duration(ms / 1000);
 }
 
+/** A limit whose reset passed, or whose reset is unknown, has no current value. Only `isFresh` true accepts the reading; a source that is old or not known to be fresh gives -1. */
+function limitPercent(percent, resetAt, now, isFresh) {
+    if (isFresh !== true) return -1;
+    if (typeof percent !== "number" || percent < 0 || !resetAt) return -1;
+    var resetTime = new Date(resetAt).getTime();
+    return isFinite(resetTime) && resetTime > now.getTime() ? percent : -1;
+}
+
+/** Whether a source timestamp is a real time that is not in the future and is younger than `maxAge`. */
+function sourceFresh(at, now, maxAge) {
+    if (!at) return false;
+    var fetchedAt = new Date(at).getTime();
+    var age = now.getTime() - fetchedAt;
+    return isFinite(fetchedAt) && age >= 0 && age < maxAge;
+}
+
 /** "12m ago", "3h ago", "yesterday", "5d ago" or "Sep 14". */
 function ago(date, now) {
     return Times.ageText(date.getTime(), now.getTime(), "agoOrDate");
@@ -56,4 +73,17 @@ function ago(date, now) {
 /** Heat level 0..4 for a day's contribution count. */
 function heatLevel(count) {
     return count === 0 ? 0 : count <= 2 ? 1 : count <= 5 ? 2 : count <= 8 ? 3 : 4;
+}
+
+/** Calendar day under a pointer, or -1 for a gap, padding square, or empty area. */
+function heatmapIndexAt(calendar, x, y, cell, gap) {
+    if (x < 0 || y < 0) return -1;
+    var stride = cell + gap;
+    var column = Math.floor(x / stride);
+    var row = Math.floor(y / stride);
+    var index = column * 7 + row;
+    if (x - column * stride >= cell || y - row * stride >= cell
+            || row < 0 || row >= 7 || index < 0 || index >= calendar.length
+            || calendar[index][CONTRIBUTION_COUNT] < 0) return -1;
+    return index;
 }
