@@ -3,6 +3,7 @@ import Quickshell.Services.UPower
 import qs.common
 import qs.services
 import "../../logic/Times.js" as Times
+import "../../logic/HomeReadings.js" as Readings
 
 /**
  * Battery cell: level, charging state and time left from UPower, a 3px
@@ -18,6 +19,9 @@ Item {
     property Item tooltipLayer: null
 
     readonly property var device: UPower.displayDevice
+
+    /** False on a machine with no battery. The level and the level bar hide then; the power-mode buttons stay. */
+    readonly property bool batteryPresent: Readings.hasBattery(device)
     readonly property int percent: device ? Math.round(device.percentage * 100) : 0
     readonly property int state: device ? device.state : UPowerDeviceState.Unknown
 
@@ -51,10 +55,15 @@ Item {
         // font's natural ascent leading as dead space above it.
         Item {
             id: numberRow
+            objectName: "batteryNumberRow"
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
             height: 29
+            opacity: root.batteryPresent ? 1 : 0
+            visible: opacity > 0
+
+            Fade on opacity { duration: Theme.stateMs }
 
             Text {
                 textFormat: Text.PlainText
@@ -82,12 +91,17 @@ Item {
         // Level bar: track + fill, width animates smoothly with the level.
         Rectangle {
             id: levelTrack
+            objectName: "batteryLevelTrack"
             anchors.top: numberRow.bottom
             anchors.topMargin: 6
             anchors.left: parent.left
             anchors.right: parent.right
             height: 3
             color: Theme.border
+            opacity: root.batteryPresent ? 1 : 0
+            visible: opacity > 0
+
+            Fade on opacity { duration: Theme.stateMs }
 
             Rectangle {
                 height: parent.height
@@ -105,6 +119,7 @@ Item {
         // Power-mode buttons: saver, balanced, performance, auto.
         Item {
             id: modesRow
+            objectName: "powerModes"
             anchors.bottom: parent.bottom
             anchors.left: parent.left
             anchors.right: parent.right
