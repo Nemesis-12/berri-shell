@@ -105,6 +105,7 @@ Singleton {
         root.startNextAdd();
     }
 
+    /** Requested copies that wait for the active copy to exit, as { path, wasEmpty }. */
     property var addQueue: []
 
     /** Starts the next requested copy after the active copy exits. */
@@ -180,6 +181,7 @@ Singleton {
         root.startNextRemoval();
     }
 
+    /** Trusted library-file paths that wait for the active deletion to exit. */
     property var removeQueue: []
 
     /** Starts the next trusted library-file deletion after the active one exits. */
@@ -235,7 +237,7 @@ Singleton {
     property bool loaded: false
 
     function save() {
-        store.save({ library: root.library, assignments: root.assignments });
+        savedWallpapers.save({ library: root.library, assignments: root.assignments });
     }
 
     signal saveFailed(string message)
@@ -243,7 +245,7 @@ Singleton {
     signal saved()
 
     SavedState {
-        id: store
+        id: savedWallpapers
         name: "wallpapers"
         onLoaded: values => {
             if (Array.isArray(values.library)) root.library = values.library;

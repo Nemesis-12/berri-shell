@@ -130,7 +130,8 @@ Singleton {
         }
     }
 
-    // Uses berri's existing desktop notification route for saved-state errors.
+    // A Calendar save failed, for example from a reminder action. The Calendar tab
+    // shows its own save error while it is open (Calendar.saveErrorShown), so notify only when it is not.
     Connections {
         target: Calendar
         function onSaveFailed(message) {
@@ -151,6 +152,7 @@ Singleton {
         function onSaved() { root._wallpaperSaveErrorShown = false; }
     }
 
+    // Sends a desktop notification that says a saved-state file could not be written.
     function _showSaveError(title: string, message: string): void {
         saveErrorComponent.createObject(root, { title: title, message: message });
     }
