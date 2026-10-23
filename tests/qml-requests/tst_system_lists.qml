@@ -410,6 +410,18 @@ Item {
             tryCompare(buttons[1], "opacity", 0);
         }
 
+        // A screen reader must not find the hidden button of an unpaired row.
+        function test_forget_button_is_ignored_by_screen_readers_on_unpaired_rows() {
+            const pad = createTemporaryObject(deviceType, host, { address: "A", name: "Pad", paired: true });
+            const buds = createTemporaryObject(deviceType, host, { address: "B", name: "Buds" });
+            listDevices([buds, pad]);
+            btList.open = true;
+            const buttons = findAll(btList, "forgetButton", []);
+            compare(buttons.length, 2);
+            compare(buttons[0].Accessible.ignored, false);
+            compare(buttons[1].Accessible.ignored, true);
+        }
+
         // A forget needs no wait for the 2 s scan poll: the row goes when the device model changes.
         function test_forget_button_forgets_the_device_and_the_row_goes() {
             const pad = createTemporaryObject(deviceType, host, { address: "A", name: "Pad", paired: true });
