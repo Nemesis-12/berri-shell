@@ -174,12 +174,18 @@ TestCase {
         verify(popup.active);
     }
 
-    // A normal card closes 5 s after it opens.
-    function test_normalCardClosesAfterFiveSeconds() {
+    // A normal card is set to close 5 s after it opens.
+    function test_normalCardTimeoutIsFiveSeconds() {
         popup._receive(item("normal", "normal"));
-        tryCompare(popup, "_progress", 1, 10000);
         compare(popup._dismissInterval, 5000);
-        compare(popup._remainingMs, 5000);
+    }
+
+    // When the timeout ends the card closes. A short timeout keeps the test fast; only an upper bound is awaited.
+    function test_normalCardClosesWhenTimeoutEnds() {
+        popup._showMs = 50;
+        popup._receive(item("normal", "normal"));
+        verify(popup._open);
+        tryVerify(function () { return !popup._open; }, 10000);
     }
 
     // Critical cards stay until the person dismisses them.
@@ -191,20 +197,23 @@ TestCase {
     }
 
     // Hover pauses the timeout and keeps the time that was left.
+    // The real timer never fires here (60 s), so a slow machine cannot close the card before the hover.
     function test_hoverPausesAndKeepsRemainingTime() {
-        popup._showMs = 2000;
+        popup._showMs = 60000;
         var now = 1000;
         popup._now = function() { return now; };
         popup._receive(item("normal", "normal"));
         tryCompare(popup, "_progress", 1, 10000);
         now += 300;
-        popup._setHovered(true);
-        compare(popup._remainingMs, 1700);
-        verify(popup._open, "Hover did not pause the timeout");
+        mouseMove(popup, popup.cardX + popup.cardWidth / 2, popup.cardY + 40);
+        tryVerify(function () { return popup._hovered; }, 10000);
+        compare(popup._remainingMs, 59700);
+        verify(popup._open, "Hover closed the card");
         now += 2500;
-        popup._setHovered(false);
-        compare(popup._remainingMs, 1700);
-        compare(popup._dismissInterval, 1700);
+        mouseMove(popup, 990, 690);
+        tryVerify(function () { return !popup._hovered; }, 10000);
+        compare(popup._remainingMs, 59700);
+        compare(popup._dismissInterval, 59700);
     }
 
     // Waiting cards follow the focus. The card on screen finishes where it is.
