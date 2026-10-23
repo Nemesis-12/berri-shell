@@ -3,8 +3,8 @@ import QtQuick
 import Quickshell
 
 /**
- * Pairing of Bluetooth devices. A device list asks to pair a device. When
- * BlueZ finishes pairing, this service trusts and connects the device, even
+ * Pairing and forgetting of Bluetooth devices. A device list asks to pair or
+ * forget a device. When BlueZ finishes pairing, this service trusts and connects the device, even
  * if the list is closed by then. Each device is tracked on its own. A device
  * leaves the list when it is paired, when its pair call fails, or when it is
  * destroyed. The paired state may arrive after pairing ends, so it is
@@ -40,6 +40,19 @@ Singleton {
     function unwatch(device) {
         root.pending = root.pending.filter(function (item) { return Qt.isQtObject(item) && item !== device; });
         root.ending = root.ending.filter(function (item) { return Qt.isQtObject(item.device) && item.device !== device; });
+    }
+
+    /**
+     * Forgets `device`: BlueZ removes it from the adapter and, if it is
+     * connected, disconnects it first. A pairing that still runs is cancelled.
+     * A device that is found again is a new object, so nothing of this one
+     * stays. Does nothing for a device that is already destroyed.
+     */
+    function forget(device) {
+        if (!Qt.isQtObject(device)) return;
+        root.unwatch(device);
+        if (device.pairing) device.cancelPair();
+        device.forget();
     }
 
     // Pairing ended and the device is not paired: keep it for `graceMs`, then drop it.

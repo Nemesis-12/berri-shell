@@ -10,9 +10,11 @@ import "../../logic/ListSync.js" as ListSync
  * scrolling list of devices - paired devices first (connected first), then
  * nearby devices found while the list is open. Clicking a connected device
  * disconnects it; clicking a paired device connects it; clicking an
- * unpaired device pairs, trusts and connects it (shown as "PAIRING…"). The
- * BluetoothPairing service owns the pairing, so it ends right when the list
- * is closed.
+ * unpaired device pairs, trusts and connects it (shown as "PAIRING…"). A
+ * paired device also has a forget button; BlueZ removes the device, and with
+ * the scan on it shows again as an unpaired device. The BluetoothPairing
+ * service owns the pairing and the forgetting, so a pairing ends right when
+ * the list is closed.
  */
 Item {
     id: root
@@ -59,6 +61,13 @@ Item {
         });
         // The same list again must not rebuild the rows.
         if (!ListSync.sameItems(root.devices, list)) root.devices = list;
+    }
+
+    /** Forgets a paired device. BlueZ answers within a few milliseconds, so the
+     *  row is dropped by a refresh soon after, not by the next scan poll. */
+    function forgetDevice(device) {
+        BluetoothPairing.forget(device);
+        forgetRefresh.restart();
     }
 
     function chooseDevice(device) {
@@ -109,6 +118,12 @@ Item {
         kind: "discovery"
         device: root.adapter
         wanted: root.active && root.adapter !== null && root.adapter.enabled
+    }
+
+    Timer {
+        id: forgetRefresh
+        interval: 400
+        onTriggered: if (root.active) root.refreshDevices()
     }
 
     Timer {
@@ -169,11 +184,28 @@ Item {
 
                     width: listView.width
                     active: modelData.connected
+                    actionWidth: 24
                     tagText: modelData.connected ? "CONNECTED"
                         : modelData.pairing ? "PAIRING…" : root.deviceKind(modelData.icon)
                     tagColor: (modelData.connected || modelData.pairing) ? Theme.accentLight : Theme.dim
 
                     onClicked: root.chooseDevice(row.modelData)
+
+                    // Only a paired device can be forgotten; on other rows the button is hidden.
+                    trailing: HoverButton {
+                        objectName: "forgetButton"
+                        anchors.fill: parent
+                        enabled: !!row.modelData.paired
+                        opacity: enabled ? 1 : 0
+                        icon: "x"
+                        iconSize: 13
+                        iconStrokeWidth: 1.8
+                        textColor: Theme.mute
+
+                        Fade on opacity { duration: Theme.stateMs }
+
+                        onClicked: root.forgetDevice(row.modelData)
+                    }
 
                     Icon {
                         anchors.verticalCenter: parent.verticalCenter
