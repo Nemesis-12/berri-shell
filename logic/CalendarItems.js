@@ -352,40 +352,40 @@ function withoutOccurrence(item, occurrenceDate) {
 }
 
 /**
+ * The fields of one occurrence as the calendar shows them (title, date, time, end, endDate), or null
+ * when it is not shown (cancelled, excluded or not found). `fromDate` is the occurrence date.
+ */
+function shownOccurrence(item, fromDate) {
+    for (var c = 0; c < item.changedOccurrences.length; c++) {
+        var changed = item.changedOccurrences[c];
+        // A moved occurrence can be shown far from its occurrence date, so a scan near that date would miss it.
+        if (changed.from === fromDate && !changed.cancelled && changed.date !== null) {
+            return {
+                title: changed.title === null ? item.title : changed.title,
+                date: changed.date, time: changed.time, end: changed.end, endDate: changed.endDate
+            };
+        }
+    }
+    // Any other occurrence is shown within a day of its occurrence date (a zone's DST change moves it
+    // by hours). The scan reaches 2 days on each side to be safe.
+    var shown = Repeat.expand(item, Times.addDays(fromDate, -2), Times.addDays(fromDate, 2));
+    for (var o = 0; o < shown.length; o++) {
+        if (shown[o].occurrenceDate !== fromDate) continue;
+        return { title: shown[o].title, date: shown[o].date, time: shown[o].time, end: shown[o].end, endDate: shown[o].endDate };
+    }
+    return null;
+}
+
+/**
  * Moves one occurrence to another day (and optionally changes other fields, e.g. time for a snooze).
+ * The moved occurrence keeps the title, time and length it is shown with, also when a feed changed them.
  * Returns { item, created }. Non-recurring: item is the moved item, created is null.
  * Recurring: item is the series without that occurrence, created is a new single item.
  */
 function moveOccurrence(item, fromDate, toDate, changes) {
     var wasDone = item.doneDates.indexOf(item.repeat === "none" ? item.date : fromDate) >= 0;
-    var source = item;
-    for (var c = 0; c < item.changedOccurrences.length; c++) {
-        var changed = item.changedOccurrences[c];
-        if (changed.from !== fromDate || changed.cancelled) continue;
-        if (changed.date === null) {
-            source = applyChanges(item, {
-                title: changed.title === null ? item.title : changed.title,
-                date: changed.from
-            });
-            break;
-        }
-        source = applyChanges(item, {
-            title: changed.title === null ? item.title : changed.title,
-            date: changed.date, time: changed.time, end: changed.end, endDate: changed.endDate
-        });
-        break;
-    }
-    if (source === item && item.zoned) {
-        var occurrences = Repeat.expand(item, Times.addDays(fromDate, -2), Times.addDays(fromDate, 2));
-        for (var o = 0; o < occurrences.length; o++) {
-            if (occurrences[o].occurrenceDate !== fromDate) continue;
-            source = applyChanges(item, {
-                date: occurrences[o].date, time: occurrences[o].time,
-                end: occurrences[o].end, endDate: occurrences[o].endDate
-            });
-            break;
-        }
-    }
+    var shown = shownOccurrence(item, fromDate);
+    var source = shown === null ? item : applyChanges(item, shown);
     var span = source.endDate ? Times.dayNum(source.endDate) - Times.dayNum(source.date) : 0;
     var extra = {};
     for (var k in changes) extra[k] = changes[k];

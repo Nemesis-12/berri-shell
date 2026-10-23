@@ -130,14 +130,28 @@ test("moving a changed multi-day occurrence keeps its title, times and end date 
     ["Changed trip", "2026-10-20", "15:00", "16:00", "2026-10-22"]);
 });
 
-test("moving a changed occurrence without DTSTART uses its recurrence date and title", () => {
-  const series = Format.readCalendar(["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:series", "SUMMARY:Series title",
-    "DTSTART:20261001T090000", "DTEND:20261001T100000", "RRULE:FREQ=DAILY;COUNT=10", "END:VEVENT",
-    "BEGIN:VEVENT", "UID:series", "RECURRENCE-ID:20261008T090000", "SUMMARY:Changed title", "END:VEVENT",
-    "END:VCALENDAR", ""].join("\r\n")).items[0];
+// A feed file whose override for 2026-10-08 has only a SUMMARY; the series has `dtend` as its DTEND.
+const overrideWithoutStart = (dtend) => Format.readCalendar(["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:series", "SUMMARY:Series title",
+  "DTSTART:20261001T090000", `DTEND:${dtend}`, "RRULE:FREQ=WEEKLY;COUNT=10", "END:VEVENT",
+  "BEGIN:VEVENT", "UID:series", "RECURRENCE-ID:20261008T090000", "SUMMARY:Changed title", "END:VEVENT",
+  "END:VCALENDAR", ""].join("\r\n")).items[0];
+
+test("moving a changed occurrence without DTSTART keeps its title, time and end", () => {
+  const series = overrideWithoutStart("20261001T100000");
   assert.equal(series.changedOccurrences[0].date, null);
   const { created } = Items.moveOccurrence(series, "2026-10-08", "2026-10-20", {});
-  assert.deepEqual(plain([created.title, created.date]), ["Changed title", "2026-10-20"]);
+  assert.deepEqual(plain([created.title, created.date, created.time, created.end, created.endDate]),
+    ["Changed title", "2026-10-20", "09:00", "10:00", null]);
+});
+
+test("moving a changed multi-day occurrence without DTSTART keeps the length of the shown occurrence", () => {
+  const series = overrideWithoutStart("20261003T100000");
+  const shown = Repeat.expand(series, "2026-10-08", "2026-10-10").map((o) => [o.title, o.date, o.endDate]);
+  assert.deepEqual(plain(shown), [["Changed title", "2026-10-08", "2026-10-10"], ["Changed title", "2026-10-09", "2026-10-10"],
+    ["Changed title", "2026-10-10", "2026-10-10"]]);
+  const { created } = Items.moveOccurrence(series, "2026-10-08", "2026-10-20", {});
+  assert.deepEqual(plain([created.title, created.date, created.time, created.end, created.endDate]),
+    ["Changed title", "2026-10-20", "09:00", "10:00", "2026-10-22"]);
 });
 
 test("moving a zoned occurrence keeps the displayed clock across its zone DST change", () => {
