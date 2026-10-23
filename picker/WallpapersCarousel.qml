@@ -55,11 +55,14 @@ CardCarousel {
             root.lastFocusedPath = "";
     }
 
-    /** Restores a selected path after a shared library edit, or focuses a valid neighboring card. */
+    /**
+     * Keeps the selected card after a library edit. If that card is gone, focuses
+     * the card that took its place, or the last card; the Add card only if the library is empty.
+     */
     function restoreFocus() {
         var selectedIndex = root.library.indexOf(root.lastFocusedPath);
         root.focusIndex = selectedIndex === -1
-            ? Math.min(root.focusIndex, root.library.length) : selectedIndex;
+            ? Math.min(root.focusIndex, Math.max(0, root.library.length - 1)) : selectedIndex;
         root.rememberFocusedPath();
     }
 
@@ -214,14 +217,8 @@ CardCarousel {
                 hoverTextColor: "white"
                 ColorFade on color {}
 
-                onClicked: {
-                    var removedIndex = card.index;
-                    var focusBefore = root.focusIndex;
-                    Wallpapers.remove(card.modelData);
-                    // Keep focus on the same card, or its nearest remaining neighbor.
-                    if (removedIndex < focusBefore) root.focusIndex = focusBefore - 1;
-                    else root.focusIndex = Math.max(0, Math.min(focusBefore, root.library.length - 1));
-                }
+                // The library change moves focus (see restoreFocus).
+                onClicked: Wallpapers.remove(card.modelData)
             }
 
             Row {

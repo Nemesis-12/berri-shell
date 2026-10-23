@@ -197,10 +197,10 @@ Scope {
             paths.append(str(path))
         (self.state / "wallpapers.json").write_text(json.dumps({
             "library": paths,
-            "assignments": {"test": {"second": paths[2]}}
+            "assignments": {"test": {"second": paths[1]}}
         }))
-        self.env["PICKER_REMOVE_FIRST"] = paths[0]
-        self.env["PICKER_REMOVE_SECOND"] = paths[1]
+        self.env["PICKER_REMOVE"] = paths[0]
+        self.env["PICKER_EXPECTED_FOCUS"] = paths[1]
         self.run_qml('''
     FloatingWindow {
         implicitWidth: 1800; implicitHeight: 500
@@ -215,16 +215,52 @@ Scope {
             if (stage === 0) {
                 first.openPicker(); second.openPicker();
                 var carousel = find(second, "WallpapersCarousel");
-                if (!check(carousel.focusIndex === 2, "second picker did not focus its assigned wallpaper")) return;
-                Wallpapers.remove(Quickshell.env("PICKER_REMOVE_FIRST"));
-                Wallpapers.remove(Quickshell.env("PICKER_REMOVE_SECOND"));
+                if (!check(carousel.focusIndex === 1, "second picker did not focus its assigned wallpaper")) return;
+                Wallpapers.remove(Quickshell.env("PICKER_REMOVE"));
                 stage = 1;
-            } else if (stage === 1 && Wallpapers.library.length === 1) {
+            } else if (stage === 1 && Wallpapers.library.length === 2) {
                 var carousel = find(second, "WallpapersCarousel");
-                if (!check(carousel.focusIndex < carousel.count,
-                           "shared library changes left the second picker focused outside its cards")) return;
-                if (!check(carousel.focusIsAdd || carousel.focusedPath !== "",
-                           "second picker has no wallpaper or Add card focused")) return;
+                if (!check(carousel.focusedPath === Quickshell.env("PICKER_EXPECTED_FOCUS"),
+                           "second picker lost its focused wallpaper after another monitor removed the card before it")) return;
+                console.log("TEST PASS"); Qt.quit();
+            }
+        }
+    }
+''')
+
+    def test_removing_the_focused_last_wallpaper_from_another_monitor_focuses_the_new_last_one(self):
+        library = self.home / ".local/share/berri-shell/wallpapers"
+        library.mkdir(parents=True, exist_ok=True)
+        paths = []
+        for name in ("one.png", "two.png", "three.png"):
+            path = library / name
+            write_png(path)
+            paths.append(str(path))
+        (self.state / "wallpapers.json").write_text(json.dumps({
+            "library": paths,
+            "assignments": {"test": {"second": paths[2]}}
+        }))
+        self.env["PICKER_REMOVE"] = paths[2]
+        self.env["PICKER_EXPECTED_FOCUS"] = paths[1]
+        self.run_qml('''
+    FloatingWindow {
+        implicitWidth: 900; implicitHeight: 500
+        ThemeNotch { id: second; pickerTab: "walls"; screenName: "second" }
+    }
+    property int stage: 0
+    Timer {
+        interval: 20; running: true; repeat: true
+        onTriggered: {
+            if (!Wallpapers.loaded) return;
+            var carousel = find(second, "WallpapersCarousel");
+            if (stage === 0) {
+                second.openPicker();
+                if (!check(carousel.focusIndex === 2, "second picker did not focus its assigned wallpaper")) return;
+                Wallpapers.remove(Quickshell.env("PICKER_REMOVE"));
+                stage = 1;
+            } else if (stage === 1 && Wallpapers.library.length === 2) {
+                if (!check(carousel.focusedPath === Quickshell.env("PICKER_EXPECTED_FOCUS"),
+                           "removing the focused last wallpaper did not focus the new last wallpaper")) return;
                 console.log("TEST PASS"); Qt.quit();
             }
         }
