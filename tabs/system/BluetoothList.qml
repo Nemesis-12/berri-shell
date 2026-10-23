@@ -201,6 +201,7 @@ Item {
                         iconStrokeWidth: 1.8
                         textColor: Theme.mute
 
+                        Accessible.ignored: !enabled
                         Accessible.role: Accessible.Button
                         Accessible.name: "Forget " + (row.modelData.name || row.modelData.deviceName)
 
