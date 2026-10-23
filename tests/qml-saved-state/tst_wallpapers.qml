@@ -13,7 +13,7 @@ TestCase {
     property var addResults: []
     SignalSpy { id: saveFailures; target: Wallpapers; signalName: "saveFailed" }
 
-    function init() { Disk.reset(); addResults = []; }
+    function init() { Disk.reset(); Wallpapers.library = []; addResults = []; }
     function initTestCase() {
         Wallpapers.addFinished.connect(path => tests.addResults = tests.addResults.concat([path]));
     }
@@ -60,6 +60,18 @@ TestCase {
         compare(added.map(command => command[2]), [first, second]);
         compare(addResults, [dir + "/first.png", dir + "/second.png"]);
         compare(Wallpapers.library, [dir + "/first.png", dir + "/second.png"]);
+    }
+
+    function test_a_failed_copy_does_not_stop_the_next_queued_add() {
+        var broken = "/tmp/berri-wallpaper-test/broken.png";
+        var good = "/tmp/berri-wallpaper-test/good.png";
+        Disk.failingCopies = [broken];
+        Wallpapers.add(broken);
+        Wallpapers.add(good);
+
+        tryVerify(() => addResults.length === 2);
+        compare(addResults, ["", dir + "/good.png"]);
+        compare(Wallpapers.library, [dir + "/good.png"]);
     }
 
     function test_saved_wallpaper_state_failures_are_reported() {

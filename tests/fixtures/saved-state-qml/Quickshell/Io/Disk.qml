@@ -8,8 +8,10 @@ QtObject {
     property var unreadable: ({})
     property var unwritable: ({})
     property bool failBackup: false
+    /** Source paths whose copy by the add script exits with an error. */
+    property var failingCopies: []
     property var events: []
-    function reset() { files = ({}); unreadable = ({}); unwritable = ({}); failBackup = false; events = []; }
+    function reset() { files = ({}); unreadable = ({}); unwritable = ({}); failBackup = false; failingCopies = []; events = []; }
     function log(kind, value) { events = events.concat([{ kind: kind, value: value }]); }
     /** Commands that were started, as arrays. */
     function commands() { return events.filter(e => e.kind === "run").map(e => e.value); }
@@ -26,6 +28,8 @@ QtObject {
             if (failBackup) return 1;
             if (files[file] !== undefined) files[command[3] || file + ".bak"] = files[file];
         }
+        if (command[1] && command[1].indexOf("add-wallpaper.sh") >= 0 && failingCopies.indexOf(command[2]) >= 0)
+            return 1;
         return 0;
     }
 }
