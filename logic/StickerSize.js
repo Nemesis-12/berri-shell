@@ -17,3 +17,8 @@ function pixelSize(width, height, scale) {
 function hasSize(width, height) {
     return width > 0 && height > 0;
 }
+
+/** Path for a still-image copy that cannot replace a copy at another size. */
+function displayPath(configDir, size) {
+    return configDir + "/sticker-display-" + size.width + "x" + size.height + ".png";
+}

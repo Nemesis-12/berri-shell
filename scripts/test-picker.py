@@ -543,7 +543,7 @@ Scope {
             with self.subTest(choice=choice.name):
                 self.env["PICKER_CHOICE"] = str(choice)
                 self.env["PICKER_EXPECTED"] = str(self.config / "sticker.png" if choice == valid else old)
-                self.run_qml('''
+                output = self.run_qml('''
     Sticker { id: sticker; visible: false }
     Timer {
         interval: 100; running: true
@@ -561,6 +561,8 @@ Scope {
         }
     }
 ''')
+                if choice != valid:
+                    self.assertIn("berri-shell: sticker copy failed", output)
                 if choice == valid:
                     self.assertEqual((self.config / "sticker.png").read_bytes(), valid.read_bytes())
                     self.assertEqual(sorted(p.name for p in self.config.glob("sticker.*")), ["sticker.png"])

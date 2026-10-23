@@ -69,7 +69,7 @@ Item {
             "sh",
             Quickshell.shellPath("scripts/sticker-display-copy.sh"),
             stickerPath,
-            configDirPath + "/sticker-display.png",
+            StickerSize.displayPath(configDirPath, copySize),
             String(copySize.width),
             String(copySize.height)
         ];
@@ -90,8 +90,9 @@ Item {
             if (root.copySourcePath !== root.stickerPath) return;
             if (root.copySize.width !== root.decodeSize.width
                     || root.copySize.height !== root.decodeSize.height) return;
+            if (exitCode !== 0) console.warn("berri-shell: sticker display copy failed");
             root.stickerSource = root.fileUrl(exitCode === 0
-                ? root.configDirPath + "/sticker-display.png" : root.stickerPath);
+                ? StickerSize.displayPath(root.configDirPath, root.copySize) : root.stickerPath);
         }
     }
 
@@ -122,7 +123,10 @@ Item {
         }
 
         onExited: (exitCode) => {
-            if (exitCode !== 0) return;
+            if (exitCode !== 0) {
+                console.warn("berri-shell: sticker copy failed");
+                return;
+            }
             root.stickerPath = "";
             root.stickerSource = "";
             root.findSticker();
@@ -180,6 +184,7 @@ Item {
     // tab is hidden. A large file can finish decoding after the panel has
     // faded in: it fades in then, no pop.
     Loader {
+        objectName: "stickerPicture"
         anchors.fill: parent
         active: root.visible && root.stickerSource.length > 0
         sourceComponent: root.useAnimatedImage ? animatedPicture : stillPicture

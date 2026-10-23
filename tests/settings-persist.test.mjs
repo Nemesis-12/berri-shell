@@ -1,7 +1,7 @@
 // Runs the real Home picture, night-light, and power-mode code with fake system parts.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -15,14 +15,19 @@ test("saved settings and picture choice survive refreshes and running processes 
   cpSync(path.join(root, "tests/qml-settings/imports"), imports, { recursive: true });
 
   const copy = (from, to) => cpSync(path.join(root, from), path.join(imports, to), { recursive: true });
-  copy("common/WhileVisible.qml", "qs/common/WhileVisible.qml");
+  copy("common", "qs/common");
+  const commonTypes = readdirSync(path.join(imports, "qs/common")).filter(name => name.endsWith(".qml"));
+  writeFileSync(path.join(imports, "qs/common/qmldir"),
+    "module qs.common\n" + commonTypes.map(name => `${name.slice(0, -4)} 1.0 ${name}\n`).join(""));
   copy("logic", "qs/logic");
   for (const name of ["Nightlight", "PowerModes", "FolderRoots"]) copy(`services/${name}.qml`, `qs/services/${name}.qml`);
   const serviceList = path.join(imports, "qs/services/qmldir");
   writeFileSync(serviceList, readFileSync(serviceList, "utf8") + "singleton FolderRoots 1.0 FolderRoots.qml\n");
   mkdirSync(path.join(imports, "qs/tabs/home"), { recursive: true });
   copy("tabs/home/Profile.qml", "qs/tabs/home/Profile.qml");
-  writeFileSync(path.join(imports, "qs/tabs/home/qmldir"), "module qs.tabs.home\nProfile 1.0 Profile.qml\n");
+  copy("tabs/home/Battery.qml", "qs/tabs/home/Battery.qml");
+  writeFileSync(path.join(imports, "qs/tabs/home/qmldir"),
+    "module qs.tabs.home\nProfile 1.0 Profile.qml\nBattery 1.0 Battery.qml\n");
 
   const runner = process.env.QMLTESTRUNNER || "/usr/lib/qt6/bin/qmltestrunner";
   const result = spawnSync(runner, ["-input", path.join(root, "tests/qml-settings"), "-import", imports], {
@@ -38,6 +43,7 @@ test("saved settings and picture choice survive refreshes and running processes 
   });
   assert.equal(result.error, undefined, `Cannot run ${runner}: ${result.error?.message}`);
   assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /berri-shell: profile picture copy failed/);
 });
 
 test("the shell holds the power mode service from the start", () => {

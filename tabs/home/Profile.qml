@@ -66,6 +66,7 @@ Item {
 
         onExited: (exitCode) => {
             if (exitCode === 0) root.reloadFace();
+            else console.warn("berri-shell: profile picture copy failed");
         }
     }
 

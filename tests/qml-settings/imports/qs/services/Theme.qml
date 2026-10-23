@@ -8,6 +8,7 @@ Item {
     property color accent: "#849966"
     property color accentLight: "#b2cc88"
     property color accentLine: "#72885c"
+    property color accentFill: "#2b3322"
     property color fg: "#ffffff"
     property color fg2: "#dddddd"
     property color dim: "#aaaaaa"

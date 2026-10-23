@@ -7,10 +7,25 @@ import Quickshell.Services.UPower
 
 // Checks that a later refresh or a running process never drops the user choice.
 Item {
+    id: testItem
     width: 400
     height: 200
 
     Profile { id: profile; width: 300; height: 80 }
+    // Created inside its test: loading it would start the power-mode service before the test that checks the start.
+    Component { id: batteryCell; Battery { width: 300; height: 100 } }
+
+    // A laptop battery that UPower reports as ready.
+    QtObject {
+        id: laptopBattery
+        property bool ready: true
+        property bool isLaptopBattery: true
+        property bool isPresent: true
+        property real percentage: 0.42
+        property int state: UPowerDeviceState.Discharging
+        property real timeToFull: 0
+        property real timeToEmpty: 3600
+    }
 
     TestCase {
         name: "SettingsPersist"
@@ -48,8 +63,9 @@ Item {
 
         // A request during a running write waits, then the latest one is written.
         function test_request_during_active_write_is_applied_after_it() {
+            const before = ProcessLog.commands.length;
             Nightlight.setOn(true);
-            wait(50);
+            tryVerify(() => ProcessLog.commands.slice(before).some(command => command[0] === "bash"));
             Nightlight.setOn(false);
             Nightlight.setOn(true);
             tryCompare(ProcessLog, "temperature", 4000, 10000);
@@ -57,10 +73,16 @@ Item {
             wait(400);
         }
 
+        // Waits until every command started after `before` has ended and its exit handler has run.
+        function waitForCommands(before) {
+            tryVerify(() => ProcessLog.commands.length > before && ProcessLog.finished === ProcessLog.commands.length);
+        }
+
         function openProfile() {
+            const before = ProcessLog.commands.length;
             profile.visible = false;
             profile.visible = true;
-            wait(50);
+            waitForCommands(before);
         }
 
         // The chosen picture stays after a minute passes and after Home opens again.
@@ -72,12 +94,44 @@ Item {
             profile.openPictureChooser();
             tryVerify(() => profile.pictureSource.indexOf("file://" + facePath) === 0);
             for (let i = 0; i < 3; i++) {
+                const before = ProcessLog.commands.length;
                 Clock.minuteChanged();
-                wait(50);
+                waitForCommands(before);
                 verify(profile.pictureSource.indexOf("file://" + facePath) === 0, "after minute " + (i + 1));
                 openProfile();
                 verify(profile.pictureSource.indexOf("file://" + facePath) === 0, "after reopen " + (i + 1));
             }
+        }
+
+        // A machine with no battery shows no level and no level bar. The power-mode buttons stay.
+        // QtTest runs tests in name order. This name sorts after the power-mode start test, because the Battery cell starts that service.
+        function test_without_a_battery_hides_the_reading_but_keeps_the_power_mode_buttons() {
+            const battery = createTemporaryObject(batteryCell, testItem);
+            const number = findChild(battery, "batteryNumberRow");
+            const track = findChild(battery, "batteryLevelTrack");
+            const modes = findChild(battery, "powerModes");
+            UPower.displayDevice = laptopBattery;
+            tryCompare(number, "visible", true);
+            tryCompare(track, "visible", true);
+            UPower.displayDevice = null;
+            tryCompare(number, "visible", false);
+            tryCompare(track, "visible", false);
+            compare(modes.visible, true);
+            compare(modes.children.length > 0, true);
+            UPower.displayDevice = laptopBattery;
+            tryCompare(number, "visible", true);
+        }
+
+        function test_failed_profile_copy_logs_a_result_and_keeps_the_picture() {
+            ProcessLog.files = [accountsPath];
+            ProcessLog.copySucceeds = false;
+            openProfile();
+            tryCompare(profile, "pictureSource", "file://" + accountsPath);
+            const before = ProcessLog.commands.length;
+            profile.openPictureChooser();
+            waitForCommands(before);
+            compare(profile.pictureSource, "file://" + accountsPath);
+            ProcessLog.copySucceeds = true;
         }
     }
 }
