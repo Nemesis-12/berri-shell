@@ -317,6 +317,9 @@ function applyChanges(item, changes) {
     }
     takeCheckedFields(next, allowed);
     for (var extra in allowed) if (!(extra in fieldChecks)) next[extra] = allowed[extra];
+    // A done non-repeat item keeps its tick on the new date, unless the same call sets doneDates itself.
+    if (allowed.doneDates === undefined && item.repeat === "none" && next.date !== item.date && item.doneDates.indexOf(item.date) >= 0)
+        next.doneDates = item.doneDates.map(function (day) { return day === item.date ? next.date : day; });
     if (allowed.repeat !== undefined && next.repeat !== item.repeat) {
         next.raw = next.raw.filter(function (l) { return !/^RRULE[;:]/i.test(l); });
         next.ruleRest = null;
@@ -349,29 +352,52 @@ function withoutOccurrence(item, occurrenceDate) {
     return applyChanges(item, { exdates: ex, doneDates: done });
 }
 
+/** The title, date, time, end and endDate of an occurrence, from its title and a source of the other four. */
+function shownFieldsOf(title, source) {
+    return { title: title, date: source.date, time: source.time, end: source.end, endDate: source.endDate };
+}
+
+/**
+ * The fields of one occurrence as the calendar shows them (title, date, time, end, endDate), or null
+ * when it is not shown (cancelled, excluded or not found). `fromDate` is the occurrence date.
+ */
+function shownOccurrence(item, fromDate) {
+    for (var c = 0; c < item.changedOccurrences.length; c++) {
+        var changed = item.changedOccurrences[c];
+        // A moved occurrence can be shown far from its occurrence date, so a scan of that date would miss it.
+        if (changed.from === fromDate && !changed.cancelled && changed.date !== null)
+            return shownFieldsOf(changed.title === null ? item.title : changed.title, changed);
+    }
+    // The occurrence date of any other occurrence is its first shown day (CalendarRepeat.occurrenceOf),
+    // also for a zoned series, so expanding that one day finds it.
+    var expanded = Repeat.expand(item, fromDate, fromDate);
+    for (var o = 0; o < expanded.length; o++) {
+        if (expanded[o].occurrenceDate === fromDate) return shownFieldsOf(expanded[o].title, expanded[o]);
+    }
+    return null;
+}
+
 /**
  * Moves one occurrence to another day (and optionally changes other fields, e.g. time for a snooze).
+ * The moved occurrence keeps the title, time and length it is shown with, also when a feed changed them.
  * Returns { item, created }. Non-recurring: item is the moved item, created is null.
  * Recurring: item is the series without that occurrence, created is a new single item.
  */
 function moveOccurrence(item, fromDate, toDate, changes) {
     var wasDone = item.doneDates.indexOf(item.repeat === "none" ? item.date : fromDate) >= 0;
-    var span = item.endDate ? Times.dayNum(item.endDate) - Times.dayNum(item.date) : 0;
+    var shownFields = shownOccurrence(item, fromDate);
+    var shownSeries = shownFields === null ? item : applyChanges(item, shownFields);
+    var span = shownSeries.endDate ? Times.dayNum(shownSeries.endDate) - Times.dayNum(shownSeries.date) : 0;
     var extra = {};
     for (var k in changes) extra[k] = changes[k];
     extra.date = toDate;
-    extra.endDate = item.endDate ? addDays(toDate, span) : null;
-    if (item.repeat === "none") {
-        extra.doneDates = wasDone ? [toDate] : [];
-        return { item: applyChanges(item, extra), created: null };
-    }
-    var single = applyChanges(item, extra);
+    extra.endDate = shownSeries.endDate ? addDays(toDate, span) : null;
+    if (item.repeat === "none") return { item: applyChanges(item, extra), created: null };
+    extra.repeat = "none";
+    extra.doneDates = wasDone ? [toDate] : [];
+    var single = applyChanges(shownSeries, extra);
     single.uid = newUid();
-    single.repeat = "none";
-    single.doneDates = wasDone ? [toDate] : [];
-    single.raw = single.raw.filter(function (l) { return !/^RRULE[;:]/i.test(l); });
-    single.exdates = [];
-    return { item: withoutOccurrence(item, fromDate), created: normalize(single) };
+    return { item: withoutOccurrence(item, fromDate), created: single };
 }
 
 /**

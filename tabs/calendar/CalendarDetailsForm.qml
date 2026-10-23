@@ -136,31 +136,38 @@ Item {
         }, "");
     }
 
-    /** A click on an item: edit the stored item (view it, when it comes from a subscribed link). */
-    function openEdit(itemUid: string, occurrenceDate: string) {
+    /**
+     * A click on an item: edit the stored item. `occurrenceDate` is the clicked occurrence and `displayDate` the
+     * day it is shown on. The form of an item from a subscribed link is read-only, and shows the clicked
+     * occurrence (its title, date, time and end), not the series.
+     */
+    function openEdit(itemUid: string, occurrenceDate: string, displayDate: string) {
         var item = Calendar.getItem(itemUid);
         if (!item) return;
-        var shown = (Calendar.itemsOn(occurrenceDate || item.date) || []).filter(function (o) { return o.uid === itemUid; })[0];
-        var readOnly = shown ? !!shown.readOnly : !!item.readOnly;
-        var calendarId = shown ? shown.calendarId : item.calendarId;
+        // One series can show two occurrences on a day (one moved there), so the occurrence date picks the right one.
+        var occurrencesOnDay = (Calendar.itemsOn(displayDate) || []).filter(function (o) { return o.uid === itemUid; });
+        var clicked = occurrencesOnDay.filter(function (o) { return o.occurrenceDate === occurrenceDate; })[0];
+        var readOnly = clicked ? !!clicked.readOnly : !!item.readOnly;
+        var shownFields = readOnly && clicked ? clicked : item;
+        var calendarId = clicked ? clicked.calendarId : item.calendarId;
         var calendar = (Calendar.calendars || []).filter(function (c) { return c.id === calendarId; })[0];
         root.original = item;
         root.uid = item.uid;
         root.readOnly = readOnly;
         root.calendarName = calendar ? calendar.name : "";
-        root.alsoInNames = shown && shown.alsoIn ? shown.alsoIn.join(" + ") : "";
+        root.alsoInNames = clicked && clicked.alsoIn ? clicked.alsoIn.join(" + ") : "";
         root.calendarId = calendarId || "";
         root.calendarKind = calendar ? calendar.kind : "";
-        root.hasOwnColor = readOnly && !!(shown ? shown.hasOwnColor : item.hasOwnColor);
+        root.hasOwnColor = readOnly && !!(clicked ? clicked.hasOwnColor : item.hasOwnColor);
         root.openDraft({
-            type: item.kind === "event" && item.time === null ? "allday" : item.kind,
-            date: item.date,
-            time: item.time || "",
-            end: item.end || "",
-            color: (shown && shown.color) || item.color || CalendarColors.lastColor,
+            type: item.kind === "event" && shownFields.time === null ? "allday" : item.kind,
+            date: shownFields.date,
+            time: shownFields.time || "",
+            end: shownFields.end || "",
+            color: (clicked && clicked.color) || item.color || CalendarColors.lastColor,
             repeat: item.repeat || "none",
             byDay: item.byDay || []
-        }, item.title);
+        }, shownFields.title);
     }
 
     function close() {
@@ -241,13 +248,13 @@ Item {
         if (ok) {
             CalendarColors.lastColor = root.color;
             root.saved(root.date);
+            root.close();
         }
-        root.close();
     }
 
     function remove() {
-        if (root.isEdit && !root.readOnly) Calendar.remove(root.uid);
-        root.close();
+        if (!root.isEdit || root.readOnly) return;
+        if (Calendar.remove(root.uid)) root.close();
     }
 
     // One reversible reveal per row or action. Each part draws from value.

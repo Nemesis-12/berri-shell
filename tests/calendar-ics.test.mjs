@@ -121,6 +121,87 @@ test("delete and move one occurrence with EXDATE", () => {
   assert.equal(Items.withoutOccurrence(item({ date: "2026-10-01" }), "2026-10-01"), null);
 });
 
+test("moving a changed multi-day occurrence keeps its title, times and end date span", () => {
+  const series = item({ uid: "trip", title: "Series", date: "2026-10-01", time: "09:00", end: "10:00", repeat: "daily",
+    changedOccurrences: [{ from: "2026-10-08", cancelled: false, title: "Changed trip", date: "2026-10-09",
+      time: "15:00", end: "16:00", endDate: "2026-10-11" }] });
+  const { created } = Items.moveOccurrence(series, "2026-10-08", "2026-10-20", {});
+  assert.deepEqual(plain([created.title, created.date, created.time, created.end, created.endDate]),
+    ["Changed trip", "2026-10-20", "15:00", "16:00", "2026-10-22"]);
+});
+
+// A feed file whose override for 2026-10-08 has only a SUMMARY; the series has `dtend` as its DTEND.
+const overrideWithoutStart = (dtend) => Format.readCalendar(["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:series", "SUMMARY:Series title",
+  "DTSTART:20261001T090000", `DTEND:${dtend}`, "RRULE:FREQ=WEEKLY;COUNT=10", "END:VEVENT",
+  "BEGIN:VEVENT", "UID:series", "RECURRENCE-ID:20261008T090000", "SUMMARY:Changed title", "END:VEVENT",
+  "END:VCALENDAR", ""].join("\r\n")).items[0];
+
+test("moving a changed occurrence without DTSTART keeps its title, time and end", () => {
+  const series = overrideWithoutStart("20261001T100000");
+  assert.equal(series.changedOccurrences[0].date, null);
+  const { created } = Items.moveOccurrence(series, "2026-10-08", "2026-10-20", {});
+  assert.deepEqual(plain([created.title, created.date, created.time, created.end, created.endDate]),
+    ["Changed title", "2026-10-20", "09:00", "10:00", null]);
+});
+
+test("moving a changed multi-day occurrence without DTSTART keeps the length of the shown occurrence", () => {
+  const series = overrideWithoutStart("20261003T100000");
+  const shown = Repeat.expand(series, "2026-10-08", "2026-10-10").map((o) => [o.title, o.date, o.endDate]);
+  assert.deepEqual(plain(shown), [["Changed title", "2026-10-08", "2026-10-10"], ["Changed title", "2026-10-09", "2026-10-10"],
+    ["Changed title", "2026-10-10", "2026-10-10"]]);
+  const { created } = Items.moveOccurrence(series, "2026-10-08", "2026-10-20", {});
+  assert.deepEqual(plain([created.title, created.date, created.time, created.end, created.endDate]),
+    ["Changed title", "2026-10-20", "09:00", "10:00", "2026-10-22"]);
+});
+
+test("moving a zoned occurrence keeps the displayed clock across its zone DST change", () => {
+  const doc = Format.readCalendar(["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:zone-repeat", "SUMMARY:Berlin event",
+    "DTSTART;TZID=Europe/Berlin:20261024T090000", "DTEND;TZID=Europe/Berlin:20261024T100000",
+    "RRULE:FREQ=DAILY;COUNT=4", "END:VEVENT", "END:VCALENDAR", ""].join("\r\n"));
+  const series = doc.items[0];
+  const shown = Repeat.expand(series, "2026-10-25", "2026-10-25")[0];
+  assert.equal(shown.time, "03:00");
+  const { created } = Items.moveOccurrence(series, shown.occurrenceDate, "2026-10-26", {});
+  assert.equal(created.time, shown.time);
+});
+
+test("moving a zoned occurrence that shows on another day than its zone date keeps the shown day clock", () => {
+  const series = Format.readCalendar(["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:zone-night", "SUMMARY:Berlin night",
+    "DTSTART;TZID=Europe/Berlin:20261010T010000", "DTEND;TZID=Europe/Berlin:20261010T020000",
+    "RRULE:FREQ=DAILY;COUNT=4", "END:VEVENT", "END:VCALENDAR", ""].join("\r\n")).items[0];
+  const shown = Repeat.expand(series, "2026-10-09", "2026-10-09")[0];
+  assert.deepEqual(plain([shown.date, shown.time]), ["2026-10-09", "18:00"]);
+  const { created } = Items.moveOccurrence(series, shown.occurrenceDate, "2026-10-20", {});
+  assert.deepEqual(plain([created.date, created.time, created.end]), ["2026-10-20", "18:00", "19:00"]);
+});
+
+test("moving a completed repeat occurrence moves its done tick to the new date", () => {
+  const series = item({ uid: "done-repeat", kind: "task", title: "Done task", date: "2026-10-01", repeat: "daily",
+    doneDates: ["2026-10-08"] });
+  const { item: rest, created } = Items.moveOccurrence(series, "2026-10-08", "2026-10-09", {});
+  assert.deepEqual(plain(rest.doneDates), []);
+  assert.deepEqual(plain(created.doneDates), ["2026-10-09"]);
+});
+
+test("moving a repeat occurrence leaves no repeat rule on the new single item", () => {
+  const series = Format.readCalendar(["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:rule", "SUMMARY:Rule", "DTSTART:20261001T090000",
+    "RRULE:FREQ=DAILY;INTERVAL=2;COUNT=9;WKST=SU", "RRULE:FREQ=WEEKLY", "EXDATE:20261003T090000",
+    "END:VEVENT", "BEGIN:VEVENT", "UID:rule", "RECURRENCE-ID:20261005T090000", "SUMMARY:Changed", "END:VEVENT",
+    "END:VCALENDAR", ""].join("\r\n")).items[0];
+  series.until = "2026-12-31";
+  assert.ok(series.raw.some((line) => /^RRULE[;:]/i.test(line)));
+  assert.notEqual(series.ruleRest, null);
+  assert.equal(series.count, 9);
+  assert.equal(series.changedOccurrences.length, 1);
+  const { created } = Items.moveOccurrence(series, "2026-10-07", "2026-10-20", {});
+  assert.equal(created.repeat, "none");
+  assert.deepEqual(plain([created.count, created.until, created.untilMs, created.interval, created.ruleRest]), [null, null, null, 1, null]);
+  assert.deepEqual(plain([created.exdates, created.changedOccurrences]), [[], []]);
+  assert.equal(created.raw.some((line) => /^RRULE[;:]/i.test(line)), false);
+  assert.doesNotMatch(Format.writeCalendar({ ...Format.emptyCalendar(), items: [created] }), /RRULE/);
+  assert.equal(Repeat.expand(created, "2026-10-01", "2026-12-31").length, 1);
+});
+
 test("done state and day queries", () => {
   const task = item({ kind: "task", title: "Pay rent", date: "2026-10-01", repeat: "monthly" });
   const ticked = Items.withDone(task, "2026-11-01", true);
