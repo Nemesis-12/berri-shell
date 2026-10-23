@@ -4,10 +4,10 @@ import Quickshell
 
 /**
  * Pairing and forgetting of Bluetooth devices. A device list asks to pair or
- * forget a device. When BlueZ finishes pairing, this service trusts and connects the device, even
- * if the list is closed by then. Each device is tracked on its own. A device
- * leaves the list when it is paired, when its pair call fails, or when it is
- * destroyed. The paired state may arrive after pairing ends, so it is
+ * forget a device. When BlueZ finishes pairing, this service trusts and
+ * connects the device, even if the list is closed by then. Each device is
+ * tracked on its own. A device leaves the list when it is paired, when its
+ * pair call fails, or when it is destroyed. The paired state may arrive after pairing ends, so it is
  * still watched for a short time (`graceMs`) after that. After this time a
  * device that is not paired is dropped, so a later pairing from another
  * tool does not trust and connect it by surprise.
@@ -36,7 +36,10 @@ Singleton {
         }
     }
 
-    // Stops following the pairing of `device`. Also drops destroyed devices. A destroyed device sends no signal, so they leave at the next call.
+    /**
+     * Stops following the pairing of `device`. Also drops destroyed devices.
+     * A destroyed device sends no signal, so they leave at the next call.
+     */
     function unwatch(device) {
         root.pending = root.pending.filter(function (item) { return Qt.isQtObject(item) && item !== device; });
         root.ending = root.ending.filter(function (item) { return Qt.isQtObject(item.device) && item.device !== device; });
@@ -51,7 +54,13 @@ Singleton {
     function forget(device) {
         if (!Qt.isQtObject(device)) return;
         root.unwatch(device);
-        if (device.pairing) device.cancelPair();
+        if (device.pairing) {
+            try {
+                device.cancelPair();
+            } catch (error) {
+                // The forget below still removes the device.
+            }
+        }
         device.forget();
     }
 

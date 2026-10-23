@@ -14,7 +14,8 @@ Item {
         id: adapter
         property bool enabled: true
         property bool discovering: false
-        property var devices: ({ values: [] })
+        // Like the real device model: setting `values` sends `valuesChanged`.
+        property QtObject devices: QtObject { property var values: [] }
     }
 
     Component {
@@ -47,16 +48,23 @@ Item {
             property bool trusted: false
             property bool connected: false
             property int connectCalls: 0
+            property int disconnectCalls: 0
             property int cancelCalls: 0
             property int forgetCalls: 0
             property bool pairThrows: false
+            property bool cancelThrows: false
             function pair() {
                 if (pairThrows) throw new Error("pair failed");
                 pairing = true;
             }
-            function cancelPair() { cancelCalls += 1; pairing = false; }
+            function cancelPair() {
+                cancelCalls += 1;
+                if (cancelThrows) throw new Error("cancel failed");
+                pairing = false;
+            }
             function forget() { forgetCalls += 1; }
             function connect() { connectCalls += 1; }
+            function disconnect() { disconnectCalls += 1; }
         }
     }
 
@@ -91,7 +99,7 @@ Item {
             btList.open = false;
             adapter.enabled = true;
             btList.adapter = adapter;
-            adapter.devices = ({ values: [] });
+            listDevices([]);
             SystemStats.processes = [];
         }
 
@@ -104,10 +112,19 @@ Item {
             return found;
         }
 
-        // What BlueZ does after a forget: the device object is destroyed and the adapter lists `after`.
+        function listDevices(devices) {
+            adapter.devices.values = devices;
+        }
+
+        // What BlueZ does after a forget: the adapter lists `after`, then the device object is destroyed.
         function bluezRemoves(device, after) {
-            adapter.devices = ({ values: after });
+            listDevices(after);
             device.destroy();
+            waitForDestroyed(device);
+        }
+
+        function waitForDestroyed(object) {
+            tryVerify(() => !Qt.isQtObject(object), 1000);
         }
 
         function find(item, property) {
@@ -283,26 +300,84 @@ Item {
         function test_only_paired_rows_have_a_forget_button() {
             const pad = createTemporaryObject(deviceType, host, { address: "A", name: "Pad", paired: true });
             const buds = createTemporaryObject(deviceType, host, { address: "B", name: "Buds" });
-            adapter.devices = ({ values: [buds, pad] });
+            listDevices([buds, pad]);
             btList.open = true;
             const buttons = findAll(btList, "forgetButton", []);
             compare(buttons.length, 2);
             compare(buttons[0].enabled, true);
             compare(buttons[1].enabled, false);
+            compare(buttons[0].Accessible.name, "Forget Pad");
             tryCompare(buttons[0], "opacity", 1);
             tryCompare(buttons[1], "opacity", 0);
         }
 
+        // A forget needs no wait for the 2 s scan poll: the row goes when the device model changes.
         function test_forget_button_forgets_the_device_and_the_row_goes() {
             const pad = createTemporaryObject(deviceType, host, { address: "A", name: "Pad", paired: true });
-            adapter.devices = ({ values: [pad] });
+            listDevices([pad]);
             btList.open = true;
             tryCompare(findAll(btList, "forgetButton", [])[0], "opacity", 1);
             mouseClick(findAll(btList, "forgetButton", [])[0]);
             compare(pad.forgetCalls, 1);
             bluezRemoves(pad, []);
-            // The 2 s scan poll is too slow to be the cause.
-            tryVerify(() => btList.devices.length === 0, 1000);
+            compare(btList.devices.length, 0);
+        }
+
+        // Paired rows sort connected first, so the first button is the connected device's.
+        function test_forget_button_click_does_not_reach_the_row() {
+            const phone = createTemporaryObject(deviceType, host, { address: "A", name: "Phone", paired: true, connected: true });
+            const pad = createTemporaryObject(deviceType, host, { address: "B", name: "Pad", paired: true });
+            listDevices([pad, phone]);
+            btList.open = true;
+            const buttons = findAll(btList, "forgetButton", []);
+            tryCompare(buttons[0], "opacity", 1);
+            tryCompare(buttons[1], "opacity", 1);
+            mouseClick(buttons[0]);
+            mouseClick(buttons[1]);
+            compare([phone.forgetCalls, phone.disconnectCalls], [1, 0]);
+            compare([pad.forgetCalls, pad.connectCalls], [1, 0]);
+        }
+
+        // The hidden button of an unpaired row must not eat the click.
+        function test_click_at_the_forget_button_of_an_unpaired_row_starts_a_pair() {
+            const buds = createTemporaryObject(deviceType, host, { address: "A", name: "Buds" });
+            listDevices([buds]);
+            btList.open = true;
+            const button = findAll(btList, "forgetButton", [])[0];
+            compare(button.enabled, false);
+            mouseClick(button);
+            compare(buds.pairing, true);
+            compare(BluetoothPairing.pending.length, 1);
+            compare(buds.forgetCalls, 0);
+        }
+
+        // BlueZ destroys the device object a moment before the list refreshes. The row must ignore a click in between.
+        function test_row_clicked_after_its_device_is_destroyed_does_nothing() {
+            failOnWarning(/.*/);
+            const pad = createTemporaryObject(deviceType, host, { address: "A", name: "Pad", paired: true });
+            listDevices([pad]);
+            btList.open = true;
+            const button = findAll(btList, "forgetButton", [])[0];
+            tryCompare(button, "opacity", 1);
+            const row = button.parent.parent;
+            mouseClick(button);
+            compare(pad.forgetCalls, 1);
+            pad.destroy();
+            waitForDestroyed(pad);
+            mouseClick(row, 20, row.height / 2);
+        }
+
+        function test_refresh_skips_a_device_that_is_destroyed() {
+            failOnWarning(/.*/);
+            const gone = createTemporaryObject(deviceType, host, { address: "A", name: "Gone", paired: true });
+            const buds = createTemporaryObject(deviceType, host, { address: "B", name: "Buds" });
+            listDevices([gone, buds]);
+            btList.open = true;
+            compare(btList.devices.length, 2);
+            gone.destroy();
+            waitForDestroyed(gone);
+            btList.refreshDevices();
+            compare(btList.devices, [buds]);
         }
 
         function test_forget_while_pairing_cancels_the_pair() {
@@ -315,6 +390,14 @@ Item {
             compare([pad.trusted, pad.connectCalls], [false, 0]);
         }
 
+        function test_forget_still_runs_when_the_pair_cannot_be_cancelled() {
+            const pad = createTemporaryObject(deviceType, host, { address: "A", name: "Pad", cancelThrows: true });
+            BluetoothPairing.pair(pad);
+            BluetoothPairing.forget(pad);
+            compare([pad.cancelCalls, pad.forgetCalls], [1, 1]);
+            compare(BluetoothPairing.pending.length, 0);
+        }
+
         function test_forget_of_a_paired_device_does_not_cancel_a_pair_that_is_not_running() {
             const pad = createTemporaryObject(deviceType, host, { address: "A", name: "Pad", paired: true });
             BluetoothPairing.forget(pad);
@@ -322,10 +405,12 @@ Item {
         }
 
         function test_forget_of_a_destroyed_device_is_ignored() {
+            failOnWarning(/.*/);
             const pad = createTemporaryObject(deviceType, host, { address: "A", name: "Pad", paired: true });
             pad.destroy();
-            wait(50);
+            waitForDestroyed(pad);
             BluetoothPairing.forget(pad);
+            compare(BluetoothPairing.pending.length, 0);
         }
 
         function test_forgotten_device_found_again_pairs_and_connects_like_a_new_one() {
@@ -336,10 +421,9 @@ Item {
             compare([old.trusted, old.connectCalls], [true, 1]);
             BluetoothPairing.forget(old);
             bluezRemoves(old, []);
-            wait(50);
             // The scan finds the same address as a new, unpaired object.
             const again = createTemporaryObject(deviceType, host, { address: "A", name: "Pad" });
-            adapter.devices = ({ values: [again] });
+            listDevices([again]);
             btList.chooseDevice(again);
             compare(again.pairing, true);
             compare(BluetoothPairing.pending.length, 1);

@@ -7,7 +7,7 @@ import qs.services
  * divider, and a small mono tag on the right. Row-specific content (an
  * icon and a label, or a password field) goes in the default content area
  * on the left, laid out in a Row. A row action (a 24px button) goes in
- * `trailing`. Set `actionWidth` to 24 on every row of the list that has
+ * `trailing`. Set `actionSize` to 24 on every row of the list that has
  * actions, so the tags line up.
  */
 Rectangle {
@@ -18,8 +18,12 @@ Rectangle {
     property string tagText: ""
     property color tagColor: Theme.dim
 
-    /** Width kept free at the right edge for a row action. 0: no action. */
-    property real actionWidth: 0
+    /** Width and height of the square kept free at the right edge for a row action. 0: no action. */
+    property real actionSize: 0
+
+    // Distance from the right edge to the action, and from the tag to the edge or to the action.
+    readonly property real actionMargin: 5
+    readonly property real tagMargin: 6
 
     signal clicked
 
@@ -51,7 +55,7 @@ Rectangle {
     MonoText {
         id: tag
         anchors.right: parent.right
-        anchors.rightMargin: root.actionWidth > 0 ? root.actionWidth + 11 : 6
+        anchors.rightMargin: root.tagMargin + (root.actionSize > 0 ? root.actionMargin + root.actionSize : 0)
         anchors.verticalCenter: parent.verticalCenter
         font.letterSpacing: 0.08 * 9
         text: root.tagText
@@ -71,9 +75,9 @@ Rectangle {
     Item {
         id: trailingSlot
         anchors.right: parent.right
-        anchors.rightMargin: 5
+        anchors.rightMargin: root.actionMargin
         anchors.verticalCenter: parent.verticalCenter
-        width: root.actionWidth
-        height: root.actionWidth
+        width: root.actionSize
+        height: root.actionSize
     }
 }
