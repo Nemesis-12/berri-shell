@@ -4,12 +4,14 @@ import datetime as dt
 import importlib.util
 import io
 import json
+import os
+import signal
 import subprocess
 import sys
 import tempfile
 import textwrap
-import time
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -19,6 +21,14 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location("agent_usage", Path(__file__).with_name("agent-usage.py"))
 usage = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(usage)
+
+
+def process_is_running(pid: int) -> bool:
+    """A zombie that waits for its parent to collect it is not running."""
+    try:
+        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
+    except OSError:
+        return False
 
 
 # Serve synthetic usage and record only the test authorization header.
@@ -52,6 +62,13 @@ def usage_server(status=200, location=None):
 
 
 class PercentageTests(unittest.TestCase):
+    def test_source_result_exposes_its_last_fetch_time(self):
+        buckets = {"session": {"percent": 12.5}, "weekly": None}
+        cache = {"claude": {"fetchedAt": "2030-01-01T00:00:00+00:00"}}
+        self.assertEqual(usage.source_result(cache, "claude", buckets), {
+            **buckets, "fetchedAt": "2030-01-01T00:00:00+00:00",
+        })
+
     def test_usage_percentage_keeps_small_values(self):
         reset = "2030-01-01T00:00:00Z"
         for percent in (0, 0.5, 1, 1.1, 100):
@@ -63,6 +80,18 @@ class PercentageTests(unittest.TestCase):
 
 
 class ClaudeRequestTests(unittest.TestCase):
+    def test_successful_response_without_limits_drops_cached_buckets(self):
+        now = dt.datetime(2030, 1, 1, tzinfo=dt.timezone.utc)
+        bucket = {"percent": 95, "resetsAt": "2030-01-02T00:00:00Z"}
+        cache = {"claude": {"session": bucket, "weekly": bucket,
+                            "fetchedAt": "2029-12-31T00:00:00+00:00"}}
+        with patch.object(usage, "now_utc", return_value=now), \
+             patch.object(usage, "cache_is_fresh", return_value=False), \
+             patch.object(usage, "read_claude_token", return_value="synthetic-token"), \
+             patch.object(usage, "request_claude_usage", return_value={}):
+            result = usage.claude_usage(cache)
+        self.assertEqual(result, {"session": None, "weekly": None})
+
     def test_rate_limit_keeps_cached_usage_and_delays_next_request(self):
         login = json.dumps({"claudeAiOauth": {"accessToken": "synthetic-test-authorization"}})
         bucket = {"percent": 12.5, "resetsAt": "2030-01-01T00:00:00Z"}
@@ -99,6 +128,69 @@ class ClaudeRequestTests(unittest.TestCase):
 
 
 class CodexRequestTests(unittest.TestCase):
+    def test_successful_response_without_limits_drops_cached_buckets(self):
+        now = dt.datetime(2030, 1, 1, tzinfo=dt.timezone.utc)
+        bucket = {"percent": 95, "resetsAt": "2030-01-02T00:00:00Z"}
+        cache = {"codex": {"session": bucket, "weekly": bucket,
+                           "fetchedAt": "2029-12-31T00:00:00+00:00"}}
+        with patch.object(usage, "now_utc", return_value=now), \
+             patch.object(usage, "cache_is_fresh", return_value=False), \
+             patch.object(usage.shutil, "which", return_value="codex"), \
+             patch.object(usage, "read_codex_limits", return_value={}):
+            result = usage.codex_usage(cache)
+        self.assertEqual(result, {"session": None, "weekly": None})
+
+    def test_termination_stops_the_active_codex_child(self):
+        scratch = Path(__file__).resolve().parent.parent / "scratchpad"
+        scratch.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as folder:
+            child = Path(folder) / "codex"
+            pid_file = Path(folder) / "child.pid"
+            child.write_text(f"#!{sys.executable}\n" + textwrap.dedent('''\
+                import json
+                import os
+                import signal
+                import sys
+                import time
+                first = json.loads(sys.stdin.readline())
+                print(json.dumps({"id": first["id"], "result": {}}), flush=True)
+                sys.stdin.readline()
+                sys.stdin.readline()
+                open(os.environ["TEST_CHILD_PID"], "w").write(str(os.getpid()))
+                time.sleep(30)
+            '''), encoding="utf-8")
+            child.chmod(0o755)
+            module = Path(__file__).with_name("agent-usage.py")
+            runner = (
+                "import importlib.util; "
+                f"spec=importlib.util.spec_from_file_location('usage', {str(module)!r}); "
+                "usage=importlib.util.module_from_spec(spec); spec.loader.exec_module(usage); "
+                f"usage.stop_children_with_script(); usage.read_codex_limits({str(child)!r})"
+            )
+            env = {**os.environ, "TEST_CHILD_PID": str(pid_file)}
+            process = subprocess.Popen([sys.executable, "-c", runner], env=env,
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            try:
+                deadline = time.monotonic() + 3
+                while not pid_file.exists() and process.poll() is None and time.monotonic() < deadline:
+                    time.sleep(0.01)
+                if not pid_file.exists():
+                    output, error = process.communicate(timeout=1)
+                    self.fail(f"Codex child did not start: {process.returncode}: {output}{error}")
+                child_pid = int(pid_file.read_text(encoding="utf-8"))
+                process.terminate()
+                process.wait(timeout=3)
+                deadline = time.monotonic() + 3
+                while process_is_running(child_pid) and time.monotonic() < deadline:
+                    time.sleep(0.02)
+                self.assertFalse(process_is_running(child_pid))
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=2)
+                process.stdout.close()
+                process.stderr.close()
+
     def test_child_exit_during_startup_keeps_cached_usage(self):
         scratch = Path(__file__).resolve().parent.parent / "scratchpad"
         scratch.mkdir(exist_ok=True)
@@ -239,7 +331,20 @@ class MalformedDataTests(unittest.TestCase):
                  patch.object(usage, "codex_usage", return_value=reading), \
                  contextlib.redirect_stdout(io.StringIO()) as out:
                 usage.main()
-            self.assertEqual(json.loads(out.getvalue()), {"claude": reading, "codex": reading})
+            answer = json.loads(out.getvalue())
+            self.assertEqual({name: answer[name] for name in ("claude", "codex")},
+                             {"claude": {**reading, "fetchedAt": ""}, "codex": {**reading, "fetchedAt": ""}})
+
+    def test_output_reports_the_cache_time_of_the_script(self):
+        with tempfile.TemporaryDirectory() as folder:
+            reading = {"session": None, "weekly": None}
+            with patch.object(usage, "CACHE_PATH", Path(folder) / "agent-usage.json"), \
+                 patch.object(usage, "CACHE_FRESH_S", 7), \
+                 patch.object(usage, "claude_usage", return_value=reading), \
+                 patch.object(usage, "codex_usage", return_value=reading), \
+                 contextlib.redirect_stdout(io.StringIO()) as out:
+                usage.main()
+            self.assertEqual(json.loads(out.getvalue())["cacheSeconds"], 7)
 
 
 if __name__ == "__main__":

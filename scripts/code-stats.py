@@ -121,9 +121,18 @@ def claude_events(paths: Iterable[Path], first_day: dt.date):
 
 
 def codex_session_events(path: Path, first_day: dt.date):
-    """Yields (day, model, kinds) per growth of the running session totals."""
+    """Yields (day, model, kinds) for growth of the running session total.
+
+    A kind that falls while the combined total grows counts no growth. A reading
+    below the highest total is held back. If the next reading is back at the
+    highest total, the dip was a glitch and nothing counts twice. If the next
+    reading is still below it, the counter was reset: the held reading counts in
+    full and growth continues from it. A held reading at the end of the log is
+    not counted: it can be a glitch, and the total after a reset is small.
+    """
     model = ""
-    prev = {"input": 0, "output": 0, "cache_read": 0}
+    peak = {"input": 0, "output": 0, "cache_read": 0}
+    dip = None  # (day, totals) of the reading that fell below the peak
     with path.open(encoding="utf-8", errors="replace") as f:
         for line in f:
             is_turn = '"turn_context"' in line
@@ -144,11 +153,20 @@ def codex_session_events(path: Path, first_day: dt.date):
                     "output": int(t.get("output_tokens") or 0),
                     "cache_read": cached,
                 }
-                day = local_day(o["timestamp"])
-                delta = {n: max(0, cur[n] - prev[n]) for n in prev}
-                prev = {n: max(prev[n], cur[n]) for n in prev}
-                if day is not None and day >= first_day and any(delta.values()):
-                    yield day, model, {**delta, "cache_write_5m": 0, "cache_write_1h": 0}
+                growth = []  # (day, tokens) counted by this reading
+                if dip is not None and sum(cur.values()) < sum(peak.values()):
+                    growth.append(dip)
+                    peak = dip[1]
+                    dip = None
+                if sum(cur.values()) < sum(peak.values()):
+                    dip = (local_day(o["timestamp"]), cur)
+                else:
+                    dip = None
+                    growth.append((local_day(o["timestamp"]), {n: max(0, cur[n] - peak[n]) for n in peak}))
+                    peak = {n: max(peak[n], cur[n]) for n in peak}
+                for day, delta in growth:
+                    if day is not None and day >= first_day and any(delta.values()):
+                        yield day, model, {**delta, "cache_write_5m": 0, "cache_write_1h": 0}
             except Exception:
                 continue
 
@@ -193,8 +211,9 @@ def add_event(totals: dict, agent: str, day: dt.date, model: str, kinds: dict, p
 
 
 def priced_usage(by_model: dict, prices, aliases, unknown: set) -> dict:
-    """Token and cost totals for one bucket. Models without a price go into `unknown`."""
+    """Token totals and a complete cost, or no cost when any model is unpriced."""
     total_tokens, total_cost = 0, 0.0
+    complete_cost = True
     for model, kinds in by_model.items():
         total_tokens += counted(kinds)
         price = price_for(prices, aliases, model)
@@ -202,7 +221,8 @@ def priced_usage(by_model: dict, prices, aliases, unknown: set) -> dict:
             total_cost += cost_of(kinds, price)
         elif counted(kinds) or kinds["cache_read"]:
             unknown.add(model)
-    return {"tokens": total_tokens, "cost": round(total_cost, 4)}
+            complete_cost = False
+    return {"tokens": total_tokens, "cost": round(total_cost, 4) if complete_cost else None}
 
 
 def collect() -> dict:

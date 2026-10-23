@@ -237,12 +237,8 @@ Rectangle {
             HoverHandler {
                 id: gridHover
                 onPointChanged: {
-                    var col = Math.floor(point.position.x / (root.cell + root.gap));
-                    var row = Math.floor((point.position.y - 12) / (root.cell + root.gap));
-                    var inX = point.position.x - col * (root.cell + root.gap) < root.cell;
-                    var inY = point.position.y - 12 - row * (root.cell + root.gap) < root.cell;
-                    var idx = col * 7 + row;
-                    if (row >= 0 && row < 7 && inX && inY && idx < root.calendar.length && root.calendar[idx][Fmt.CONTRIBUTION_COUNT] >= 0) root.hoveredIndex = idx;
+                    root.hoveredIndex = Fmt.heatmapIndexAt(
+                        root.calendar, point.position.x, point.position.y - 12, root.cell, root.gap);
                 }
                 onHoveredChanged: if (!hovered) root.hoveredIndex = -1
             }

@@ -24,8 +24,8 @@ const forecast = {
 const SECRET = "Bearer sk-SECRET https://api.example.test/?token=TOKEN123 private-message-text";
 const ok = (text) => ({ text, code: 0 });
 
-// Runs a real service file with synthetic answers. Returns the log lines it wrote.
-function run(service, file, rounds) {
+// Runs a real service file with synthetic answers. Returns everything it printed.
+function runOutput(service, file, rounds, expectedStatsDate) {
   fs.mkdirSync(path.join(repo, "scratchpad"), { recursive: true });
   const folder = fs.mkdtempSync(path.join(repo, "scratchpad/failure-log-"));
   try {
@@ -43,7 +43,7 @@ function run(service, file, rounds) {
     // Shared parts the service uses sit next to it, like the real common folder.
     fs.writeFileSync(path.join(folder, "CachedSource.qml"), prepare("services/CachedSource.qml"));
     const runner = fs.readFileSync(path.join(repo, "tests/fixtures/source-failures.qml"), "utf8")
-      .replace("TEST_CONFIG", JSON.stringify({ service, rounds }));
+      .replace("TEST_CONFIG", JSON.stringify({ service, rounds, expectedStatsDate }));
     const entry = path.join(folder, "test.qml");
     fs.writeFileSync(entry, runner);
     const env = { ...process.env, QT_QPA_PLATFORM: "offscreen", QT_FORCE_STDERR_LOGGING: "1" };
@@ -52,17 +52,31 @@ function run(service, file, rounds) {
     assert.ifError(result.error);
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stderr + result.stdout, /Failure log checks passed/);
-    return (result.stderr + result.stdout).split("\n").filter(l => l.includes("berri-shell:"));
+    return result.stderr + result.stdout;
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });
   }
 }
 
-const goodUsage = ok(JSON.stringify({ claude: { session: { percent: 42, resetsAt: "2026-10-04T20:00:00Z" } } }));
+// The log lines the service wrote.
+function run(...args) {
+  return runOutput(...args).split("\n").filter(l => l.includes("berri-shell:"));
+}
+
+const goodUsage = ok(JSON.stringify({ cacheSeconds: 300, claude: { session: { percent: 42, resetsAt: "2026-10-04T20:00:00Z" } } }));
+const usageWithoutCacheTime = ok(JSON.stringify({ claude: { session: { percent: 7, resetsAt: "2026-10-04T20:00:00Z" } } }));
+const emptyStatsUsage = Object.fromEntries(["claude", "codex"].map(agent => [agent,
+  Object.fromEntries(["today", "week", "month"].map(period => [period, { tokens: 0, cost: 0 }]))]));
 
 test("usage with malformed output logs one line and a second failure adds none", () => {
   const lines = run("usage", "AgentUsage.qml", [
     { "*": goodUsage }, { "*": ok(SECRET) }, { "*": ok("") }, { "*": ok("null") }]);
+  assert.equal(lines.length, 1);
+  assert.match(lines[0], /berri-shell: usage data failed \(bad output\)$/);
+});
+
+test("usage without the cache time of the script keeps the last reading and logs one line", () => {
+  const lines = run("usage", "AgentUsage.qml", [{ "*": goodUsage }, { "*": usageWithoutCacheTime }]);
   assert.equal(lines.length, 1);
   assert.match(lines[0], /berri-shell: usage data failed \(bad output\)$/);
 });
@@ -73,7 +87,8 @@ test("usage failure lines hold no response text", () => {
 });
 
 test("each code source logs its own line once", () => {
-  const good = ok(JSON.stringify({ generatedAt: "g1", days: [{ date: "2026-10-01" }], models: { claude: [], codex: [] }, usage: {} }));
+  const good = ok(JSON.stringify({ generatedAt: "g1", days: [{ date: "2026-10-01", claude: 0, codex: 0 }],
+    models: { claude: [], codex: [] }, usage: emptyStatsUsage }));
   const lines = run("code", "CodeData.qml", [
     { "code-stats": good, "*": ok("") },
     { "*": ok(SECRET) }, { "*": ok("") }, { "*": ok("{oops") }]);
@@ -82,6 +97,28 @@ test("each code source logs its own line once", () => {
     "berri-shell: code commits data failed (no output)",
     "berri-shell: code github data failed (no output)",
     "berri-shell: code stats data failed (bad output)"]);
+});
+
+test("a cache answer without its version keeps the last good Code data", () => {
+  const good = ok(JSON.stringify({ generatedAt: new Date().toISOString(),
+    days: [{ date: "2026-10-01", claude: 17, codex: 8 }], models: { claude: [], codex: [] }, usage: emptyStatsUsage }));
+  const output = runOutput("code", "CodeData.qml", [
+    { "code-stats": good, "*": ok("") },
+    { "code-stats": ok("{}"), "*": ok("") },
+    { "code-stats": ok(JSON.stringify({ generatedAt: new Date(Date.now() + 1).toISOString() })), "*": ok("") },
+  ], "2026-10-01");
+  assert.match(output, /berri-shell: code stats data failed \(bad output\)/);
+  assert.match(output, /Code stats valid=true fresh=true/);
+});
+
+test("a stale Code answer stays valid but is not fresh", () => {
+  const stale = ok(JSON.stringify({ generatedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    days: [{ date: "2026-10-01", claude: 17, codex: 8 }], models: { claude: [], codex: [] }, usage: emptyStatsUsage }));
+  const output = runOutput("code", "CodeData.qml", [
+    { "code-stats": stale, "*": ok("") },
+    { "code-stats": ok("{}"), "*": ok("") },
+  ], "2026-10-01");
+  assert.match(output, /Code stats valid=true fresh=false/);
 });
 
 test("weather logs one line for offline and bad data inside the period", () => {

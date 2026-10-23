@@ -3,12 +3,13 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "../logic/SourceFailures.js" as SourceFailures
+import "../logic/CodeFormat.js" as CodeFormat
 
 /**
  * Claude and Codex rate-limit usage: 5-hour and weekly (7-day) percentages
  * and reset times, fetched by scripts/agent-usage.py (stdlib-only; talks to
  * Claude's OAuth usage endpoint and to `codex app-server` directly). One
- * refresh when the first view appears, then every 5 minutes. The script caches the last good
+ * refresh when the first view appears, then every 5 minutes (`refreshAge`). The script caches the last good
  * reading on disk and falls back to it on a failed or rate-limited call, so
  * a percent of -1 only shows up when there is no usable cache either (not
  * logged in, expired token, or reset time already passed); AgentsRings
@@ -33,6 +34,27 @@ Singleton {
     property string codexSessionResetAt: ""
     property real codexWeeklyPercent: -1
     property string codexWeeklyResetAt: ""
+    property string claudeFetchedAt: ""
+    property string codexFetchedAt: ""
+
+    /** Time in milliseconds between two refreshes while a view shows. */
+    readonly property int refreshAge: 5 * 60 * 1000
+
+    /** Time in milliseconds that the script reuses a reading. The script reports it as `cacheSeconds` in each answer. */
+    property int cacheAge: 0
+
+    /**
+     * Time in milliseconds that a reading counts as fresh. A refresh can return a reading that is almost one
+     * cache time old, and the next refresh is one refresh period later, so a good reading reaches that age
+     * before the script fetches a new one. The second refresh period is margin for the run time of the script.
+     */
+    readonly property int sourceAge: cacheAge + 2 * refreshAge
+    readonly property bool claudeFresh: CodeFormat.sourceFresh(claudeFetchedAt, now, sourceAge)
+    readonly property bool codexFresh: CodeFormat.sourceFresh(codexFetchedAt, now, sourceAge)
+    readonly property real claudeSessionValue: CodeFormat.limitPercent(claudeSessionPercent, claudeSessionResetAt, now, claudeFresh)
+    readonly property real claudeWeeklyValue: CodeFormat.limitPercent(claudeWeeklyPercent, claudeWeeklyResetAt, now, claudeFresh)
+    readonly property real codexSessionValue: CodeFormat.limitPercent(codexSessionPercent, codexSessionResetAt, now, codexFresh)
+    readonly property real codexWeeklyValue: CodeFormat.limitPercent(codexWeeklyPercent, codexWeeklyResetAt, now, codexFresh)
 
     /** How many views are visible now (see WhileVisible.qml). */
     property int viewers: 0
@@ -73,6 +95,9 @@ Singleton {
         return d > 0 ? (d + "D") : (h + "H");
     }
 
+    /** True after the last view hid and stopped a run. That run ends with no output, which is not a failure to log. */
+    property bool stoppedOnHide: false
+
     /** Last log line time of each source (see SourceFailures.js). */
     property var lastLogged: ({})
 
@@ -83,8 +108,9 @@ Singleton {
     }
 
     function refresh() {
-        if (!fetchProcess.running)
-            fetchProcess.running = true;
+        if (fetchProcess.running) return;
+        root.stoppedOnHide = false;
+        fetchProcess.running = true;
     }
 
     function applyBucket(bucket, percentSetter, resetSetter) {
@@ -105,24 +131,35 @@ Singleton {
             onStreamFinished: {
                 try {
                     var data = JSON.parse(text);
+                    if (typeof data.cacheSeconds !== "number" || !(data.cacheSeconds > 0))
+                        throw new Error("Missing cache time");
                     var claude = data.claude || {};
                     var codex = data.codex || {};
+                    // The script fetched after the last clock tick, so freshness must be read at the arrival time.
+                    root.now = new Date();
+                    root.cacheAge = data.cacheSeconds * 1000;
+                    root.claudeFetchedAt = String(claude.fetchedAt || "");
+                    root.codexFetchedAt = String(codex.fetchedAt || "");
                     root.applyBucket(claude.session, function (p) { root.claudeSessionPercent = p; }, function (r) { root.claudeSessionResetAt = r; });
                     root.applyBucket(claude.weekly, function (p) { root.claudeWeeklyPercent = p; }, function (r) { root.claudeWeeklyResetAt = r; });
                     root.applyBucket(codex.session, function (p) { root.codexSessionPercent = p; }, function (r) { root.codexSessionResetAt = r; });
                     root.applyBucket(codex.weekly, function (p) { root.codexWeeklyPercent = p; }, function (r) { root.codexWeeklyResetAt = r; });
                 } catch (e) {
                     // Malformed/empty output: keep the previous reading and log once per period.
-                    root.logFailure(SourceFailures.outputReason(text));
+                    if (!root.stoppedOnHide) root.logFailure(SourceFailures.outputReason(text));
                 }
             }
         }
     }
 
     onViewersChanged: {
-        if (viewers !== 1) return;
-        now = new Date();
-        refresh();
+        if (viewers === 1) {
+            now = new Date();
+            refresh();
+        } else if (viewers === 0 && fetchProcess.running) {
+            root.stoppedOnHide = true;
+            fetchProcess.running = false;
+        }
     }
 
     Timer {
@@ -133,7 +170,7 @@ Singleton {
     }
 
     Timer {
-        interval: 5 * 60 * 1000
+        interval: root.refreshAge
         running: root.viewers > 0
         repeat: true
         onTriggered: root.refresh()

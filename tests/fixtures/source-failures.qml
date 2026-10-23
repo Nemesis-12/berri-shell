@@ -67,8 +67,15 @@ Item {
     function checks() {
         if (config.service === "usage")
             return check(service.claudeSessionPercent === 42, "Failed refresh must keep the last reading");
-        if (config.service === "code")
-            return check(service.days.length === 1, "Failed refresh must keep the last days");
+        if (config.service === "code") {
+            if (!check(service.days && service.days.length === 1, "Failed refresh must keep the last days")) return false;
+            if (config.expectedStatsDate) {
+                if (!check(service.days[0].date === config.expectedStatsDate, "Missing source version must keep the last answer")) return false;
+                var stats = Array.from(service.data).find(o => o.name === "code stats");
+                console.log("Code stats valid=" + stats.valid + " fresh=" + stats.isFresh());
+            }
+            return true;
+        }
         return check(service.temperatureC === 18 && service.updatedAt > 0, "Failed refresh must keep the last forecast");
     }
 
