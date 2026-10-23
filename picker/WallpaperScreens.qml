@@ -5,14 +5,18 @@ import qs.services
 /**
  * The SHOW ON row of the wallpaper picker: "All", one button per monitor
  * (from Wallpapers.monitors), and Identify on the right. A button shows the
- * monitors that the focused wallpaper of `carousel` is on; a click puts that
- * wallpaper on the monitor (or on all of them).
+ * monitors that the selected wallpaper is on and emits the requested
+ * assignment.
  */
 Item {
     id: root
 
-    /** The wallpaper carousel whose focused wallpaper this row assigns. */
-    required property WallpapersCarousel carousel
+    required property string focusedPath
+    required property bool focusIsAdd
+
+    signal assignAllRequested
+    signal assignMonitorRequested(int number)
+    signal identifyRequested
 
     implicitHeight: 24
 
@@ -82,10 +86,10 @@ Item {
         // "All": active when the focused wallpaper is on every monitor.
         ScreenButton {
             text: "All"
-            active: !root.carousel.focusIsAdd
-                && Wallpapers.numbersShowing(root.carousel.focusedPath).length === Wallpapers.monitors.length
+            active: !root.focusIsAdd
+                && Wallpapers.numbersShowing(root.focusedPath).length === Wallpapers.monitors.length
                 && Wallpapers.monitors.length > 0
-            onClicked: root.carousel.assignFocusedToAll()
+            onClicked: root.assignAllRequested()
         }
 
         Row {
@@ -98,9 +102,9 @@ Item {
                 delegate: ScreenButton {
                     required property var modelData
                     text: String(modelData.number)
-                    active: !root.carousel.focusIsAdd
-                        && Wallpapers.numbersShowing(root.carousel.focusedPath).indexOf(modelData.number) !== -1
-                    onClicked: root.carousel.assignFocusedToMonitor(modelData.number)
+                    active: !root.focusIsAdd
+                        && Wallpapers.numbersShowing(root.focusedPath).indexOf(modelData.number) !== -1
+                    onClicked: root.assignMonitorRequested(modelData.number)
                 }
             }
         }
@@ -148,7 +152,7 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: Wallpapers.identify()
+            onClicked: root.identifyRequested()
         }
     }
 }

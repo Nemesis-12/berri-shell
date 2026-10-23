@@ -1,6 +1,6 @@
 import QtQuick
 
-// Logs the command, runs it on the fake disk and reports the exit.
+// Logs the command, runs it on the fake disk and reports the exit. A stopped process never exits.
 Item {
     id: root
     property var command: []
@@ -16,8 +16,11 @@ Item {
         id: finish
         interval: 1
         onTriggered: {
+            if (!root.running) return;
+            if (root.stdout) root.stdout.text = Disk.output(root.command);
             var code = Disk.run(root.command);
             root.running = false;
+            Disk.log("done", root.command.slice());
             root.exited(code, 0);
         }
     }

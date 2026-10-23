@@ -1,18 +1,28 @@
 pragma Singleton
 import QtQml
 
-// A disk in memory. `events` lists every command and write in the order they happen.
+// A disk in memory. `events` lists every command start, command exit and write in the order they happen.
 QtObject {
     property var files: ({})
     /** Paths whose read or write fails with a permission error. */
     property var unreadable: ({})
     property var unwritable: ({})
     property bool failBackup: false
+    /** Source paths whose copy by the add script exits with an error. */
+    property var failingCopies: []
     property var events: []
-    function reset() { files = ({}); unreadable = ({}); unwritable = ({}); failBackup = false; events = []; }
+    function reset() { files = ({}); unreadable = ({}); unwritable = ({}); failBackup = false; failingCopies = []; events = []; }
     function log(kind, value) { events = events.concat([{ kind: kind, value: value }]); }
     /** Commands that were started, as arrays. */
     function commands() { return events.filter(e => e.kind === "run").map(e => e.value); }
+    /** Commands that ran to their exit, as arrays. */
+    function finished() { return events.filter(e => e.kind === "done").map(e => e.value); }
+    /** Output returned by the add script in the process test double. */
+    function output(command) {
+        if (command[1] && command[1].indexOf("add-wallpaper.sh") >= 0)
+            return command[3] + "/" + command[2].split("/").pop();
+        return "";
+    }
     /** Does what the real command does and returns its exit code. */
     function run(command) {
         if (command[1] && command[1].indexOf("backup-saved.sh") >= 0) {
@@ -20,6 +30,8 @@ QtObject {
             if (failBackup) return 1;
             if (files[file] !== undefined) files[command[3] || file + ".bak"] = files[file];
         }
+        if (command[1] && command[1].indexOf("add-wallpaper.sh") >= 0 && failingCopies.indexOf(command[2]) >= 0)
+            return 1;
         return 0;
     }
 }

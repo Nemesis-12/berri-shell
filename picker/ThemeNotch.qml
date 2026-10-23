@@ -119,9 +119,8 @@ Item {
     property string motionTab: "themes"
     /** The notch bars return only after a Walls close has finished. */
     property real wallRestOpacity: 1
-    // Refocuses the wallpapers carousel each time the walls tab is switched
-    // into, on the wallpaper shown on this notch's own monitor (or index 0).
-    onPickerTabChanged: if (root.pickerTab === "walls") wallsBody.carousel.focusToCurrent();
+    // Refocuses the wallpaper body on this monitor's assigned image when selected.
+    onPickerTabChanged: if (root.pickerTab === "walls") wallsBody.focusToCurrent();
 
     /** Output scale (2 on eDP-2, 1 on HDMI-A-1); used to snap the notch to whole device pixels. */
     readonly property real dpr: PixelGrid.dpr(Screen.devicePixelRatio)
@@ -155,12 +154,23 @@ Item {
     /** Starts the open motion; also while a close is running. */
     function openPicker() {
         if (root.open) return;
+        root.startOpen();
+        if (root.pickerTab === "walls") wallsBody.focusToCurrent();
+        else themesCarousel.focusToCurrent();
+    }
+
+    /** Reopens the picker after the add dialog ends. The wallpaper body keeps its focused card, which is the new wallpaper. */
+    function reopenAfterAdd() {
+        if (root.open) return;
+        root.startOpen();
+    }
+
+    /** The open steps that both ways to open share. */
+    function startOpen() {
         wallBarsReturn.stop();
         root.wallRestOpacity = 1;
         root.motionTab = root.pickerTab;
         slide.openSlide();
-        if (root.pickerTab === "walls") wallsBody.carousel.focusToCurrent();
-        else themesCarousel.focusToCurrent();
     }
 
     /** Starts the close motion: the open steps in reversed order, each one easing out into rest. The tab showing now decides the steps (the strip returns only on Themes). No-op unless open. */
@@ -178,12 +188,6 @@ Item {
         slide.closeAtOnce();
         root.wallRestOpacity = 1;
     }
-
-    // Add wallpaper: the file dialog is a normal window and would open under
-    // this Overlay panel, so the picker closes first (normal animated close),
-    // the dialog opens once the picker is at rest, and the picker reopens on
-    // the Wallpapers tab when the dialog is done.
-    property int focusBeforeAdd: 0
 
     // The shadow at rest or under the pointer; the open motion deepens it.
     PanelShadow {
@@ -356,16 +360,13 @@ Item {
                     anchors.right: parent.right
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: root.wallsBottomExtra
+                    // The file dialog is a normal window and would open under this
+                    // Overlay panel: close first, open the dialog at rest, reopen when done.
                     onAddRequested: {
-                        root.focusBeforeAdd = wallsBody.carousel.focusIndex;
-                        slide.runAfterClose(() => wallsBody.carousel.chooseFile());
+                        slide.runAfterClose(() => wallsBody.chooseFile());
                         root.closePicker();
                     }
-                    onAddDone: path => {
-                        root.openPicker();
-                        wallsBody.carousel.focusIndex = root.focusBeforeAdd;
-                        wallsBody.carousel.focusPath(path);
-                    }
+                    onAddDone: root.reopenAfterAdd()
                 }
             }
         }
@@ -379,39 +380,17 @@ Item {
             focus: root.pickerOpen
             Keys.onEscapePressed: root.closePicker()
             Keys.onPressed: (event) => {
-                var carousel = root.pickerTab === "themes" ? themesCarousel
-                    : root.pickerTab === "walls" ? wallsBody.carousel : null;
-                if (carousel) {
+                if (root.pickerTab === "themes") {
                     if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
-                        carousel.moveFocus(event.key === Qt.Key_Left ? -1 : 1);
+                        themesCarousel.moveFocus(event.key === Qt.Key_Left ? -1 : 1);
                         event.accepted = true;
                         return;
                     } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                        carousel.applyFocused();
+                        themesCarousel.applyFocused();
                         event.accepted = true;
                         return;
                     }
-                }
-                if (root.pickerTab === "walls") {
-                    if (event.key >= Qt.Key_1 && event.key <= Qt.Key_9) {
-                        var digit = event.key - Qt.Key_0;
-                        var hasMonitor = false;
-                        for (var i = 0; i < Wallpapers.monitors.length; i++) {
-                            if (Wallpapers.monitors[i].number === digit) { hasMonitor = true; break; }
-                        }
-                        if (hasMonitor) wallsBody.carousel.assignFocusedToMonitor(digit);
-                        event.accepted = true;
-                        return;
-                    } else if (event.key === Qt.Key_A) {
-                        wallsBody.carousel.assignFocusedToAll();
-                        event.accepted = true;
-                        return;
-                    } else if (event.key === Qt.Key_I) {
-                        Wallpapers.identify();
-                        event.accepted = true;
-                        return;
-                    }
-                }
+                } else if (root.pickerTab === "walls" && wallsBody.handleKey(event)) return;
                 if (event.key === Qt.Key_Tab) {
                     root.pickerTab = root.pickerTab === "themes" ? "walls" : "themes";
                     event.accepted = true;

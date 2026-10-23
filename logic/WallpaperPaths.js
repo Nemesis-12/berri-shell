@@ -1,5 +1,10 @@
 .pragma library
 
+/** Makes an absolute wallpaper path safe to use as a file URL. */
+function fileUrl(path) {
+    return "file://" + String(path).split("/").map(encodeURIComponent).join("/");
+}
+
 /**
  * True when `path` names a file directly inside the wallpaper folder `dir`.
  * Saved library entries are not trusted: a path outside the folder, the

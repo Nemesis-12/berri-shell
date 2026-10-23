@@ -101,9 +101,22 @@ Singleton {
             Qt.callLater(function() { root.addFinished(""); });
             return;
         }
-        addProc.wasEmpty = root.library.length === 0;
-        addProc.srcPath = path;
-        addProc.command = ["sh", Quickshell.shellPath("scripts/add-wallpaper.sh"), path, root.wallpapersDir];
+        root.addQueue = root.addQueue.concat([{ path: path, wasEmpty: root.library.length === 0 }]);
+        root.startNextAdd();
+    }
+
+    /** Requested copies that wait for the active copy to exit, as { path, wasEmpty }. */
+    property var addQueue: []
+
+    /** Starts the next requested copy after the active copy exits. */
+    function startNextAdd() {
+        if (addProc.running || root.addQueue.length === 0) return;
+        var request = root.addQueue[0];
+        root.addQueue = root.addQueue.slice(1);
+        addProc.wasEmpty = request.wasEmpty;
+        addProc.srcPath = request.path;
+        addProc.command = ["sh", Quickshell.shellPath("scripts/add-wallpaper.sh"),
+                           request.path, root.wallpapersDir];
         addProc.running = true;
     }
 
@@ -118,19 +131,23 @@ Singleton {
             if (exitCode !== 0) {
                 console.warn("Wallpapers.add: copy failed for " + addProc.srcPath);
                 root.addFinished("");
-                return;
-            }
-            var dest = addStdout.text.trim();
-            if (!dest) { root.addFinished(""); return; }
-            root.library = root.library.concat([dest]);
-            if (addProc.wasEmpty && root.currentThemeUnassigned()) {
-                var names = [];
-                for (var i = 0; i < root.monitors.length; i++) names.push(root.monitors[i].name);
-                root.assign(dest, names);
             } else {
-                root.save();
+                var dest = addStdout.text.trim();
+                if (!dest) {
+                    root.addFinished("");
+                } else {
+                    root.library = root.library.concat([dest]);
+                    if (addProc.wasEmpty && root.currentThemeUnassigned()) {
+                        var names = [];
+                        for (var i = 0; i < root.monitors.length; i++) names.push(root.monitors[i].name);
+                        root.assign(dest, names);
+                    } else {
+                        root.save();
+                    }
+                    root.addFinished(dest);
+                }
             }
-            root.addFinished(dest);
+            root.startNextAdd();
         }
     }
 
@@ -160,11 +177,26 @@ Singleton {
             console.warn("Wallpapers.remove: not deleting a file outside the wallpaper folder: " + path);
             return;
         }
+        root.removeQueue = root.removeQueue.concat([path]);
+        root.startNextRemoval();
+    }
+
+    /** Trusted library-file paths that wait for the active deletion to exit. */
+    property var removeQueue: []
+
+    /** Starts the next trusted library-file deletion after the active one exits. */
+    function startNextRemoval() {
+        if (removeProc.running || root.removeQueue.length === 0) return;
+        var path = root.removeQueue[0];
+        root.removeQueue = root.removeQueue.slice(1);
         removeProc.command = ["rm", "-f", "--", path];
         removeProc.running = true;
     }
 
-    Process { id: removeProc }
+    Process {
+        id: removeProc
+        onExited: root.startNextRemoval()
+    }
 
     /** For the current theme, points every screen in screenNames at path. Other screens keep their own wallpaper. */
     function assign(path, screenNames) {
@@ -205,16 +237,22 @@ Singleton {
     property bool loaded: false
 
     function save() {
-        saved.save({ library: root.library, assignments: root.assignments });
+        savedWallpapers.save({ library: root.library, assignments: root.assignments });
     }
 
+    signal saveFailed(string message)
+    /** The last requested change reached the disk. */
+    signal saved()
+
     SavedState {
-        id: saved
+        id: savedWallpapers
         name: "wallpapers"
         onLoaded: values => {
             if (Array.isArray(values.library)) root.library = values.library;
             if (values.assignments) root.assignments = values.assignments;
             root.loaded = true;
         }
+        onSaveFailed: message => root.saveFailed(message)
+        onSaved: root.saved()
     }
 }

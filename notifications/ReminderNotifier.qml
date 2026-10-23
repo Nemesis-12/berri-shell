@@ -130,21 +130,41 @@ Singleton {
         }
     }
 
-    // A failed calendar save (for example from a reminder action) with no Calendar tab open: tell the person.
+    // A Calendar save failed, for example from a reminder action. The Calendar tab
+    // shows its own save error while it is open (Calendar.saveErrorShown), so notify only when it is not.
     Connections {
         target: Calendar
         function onSaveFailed(message) {
-            if (!Calendar.saveErrorShown) saveErrorComponent.createObject(root, { message: message });
+            if (!Calendar.saveErrorShown) root._showSaveError("Calendar not saved", message);
         }
+    }
+
+    // One notification per run of failed saves; a good save re-arms it.
+    property bool _wallpaperSaveErrorShown: false
+
+    Connections {
+        target: Wallpapers
+        function onSaveFailed(message) {
+            if (root._wallpaperSaveErrorShown) return;
+            root._wallpaperSaveErrorShown = true;
+            root._showSaveError("Wallpaper settings not saved", message);
+        }
+        function onSaved() { root._wallpaperSaveErrorShown = false; }
+    }
+
+    // Sends a desktop notification that says a saved-state file could not be written.
+    function _showSaveError(title: string, message: string): void {
+        saveErrorComponent.createObject(root, { title: title, message: message });
     }
 
     Component {
         id: saveErrorComponent
         Process {
             id: errorProc
+            required property string title
             required property string message
             running: true
-            command: ["notify-send", "-a", "berri", "-i", "dialog-error", "-u", "normal", "Calendar not saved", message]
+            command: ["notify-send", "-a", "berri", "-i", "dialog-error", "-u", "normal", title, message]
             onExited: errorProc.destroy()
         }
     }

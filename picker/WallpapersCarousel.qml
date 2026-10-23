@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Shapes
 import Quickshell
+import "../logic/WallpaperPaths.js" as WallpaperPaths
 import qs.common
 import qs.services
 
@@ -10,18 +11,13 @@ import qs.services
  * plus a trailing "Add wallpaper" card. Mirrors the mock's Wallpapers tab
  * body (Berri Desktop v2.dc.html: wcards markup ~103-116, wOff ~419).
  *
- * Hosted by ThemeNotch.qml's picker body, the same way ThemesCarousel is
- * hosted in the Themes body. ThemeNotch owns keyboard input (Left/Right/
- * Enter/1..9/A/I/Tab, gated to while the picker is open on the walls tab)
- * and calls focusToCurrent()/moveFocus()/applyFocused()/
- * assignFocusedToMonitor()/assignFocusedToAll() here; the SHOW ON row
- * itself is built in ThemeNotch.qml, next to this carousel, since it reads
- * Wallpapers.monitors directly.
+ * Hosted by PickerWallpapers, which owns keyboard actions and the SHOW ON
+ * row. This carousel owns card focus and asks the host to open the file dialog.
  */
 CardCarousel {
     id: root
 
-    /** Set by ThemeNotch.qml; the monitor the picker opened on, used by focusToCurrent(). */
+    /** Set by PickerWallpapers; used to focus the image assigned to this monitor. */
     property string screenName: ""
 
     // focusIndex is an index into (library + 1); the last index is the Add card.
@@ -46,6 +42,36 @@ CardCarousel {
     readonly property var library: Wallpapers.library
     readonly property bool focusIsAdd: root.focusIndex >= root.library.length
     readonly property string focusedPath: root.focusIsAdd ? "" : (root.library[root.focusIndex] || "")
+    property string lastFocusedPath: ""
+
+    onFocusIndexChanged: root.rememberFocusedPath()
+    onLibraryChanged: root.restoreFocus()
+
+    /** Remembers the selected path so another monitor's library edits keep the same card selected. */
+    function rememberFocusedPath() {
+        if (root.focusIndex >= 0 && root.focusIndex < root.library.length)
+            root.lastFocusedPath = root.library[root.focusIndex];
+        else if (root.focusIsAdd)
+            root.lastFocusedPath = "";
+    }
+
+    /**
+     * Keeps the selected card after a library edit. The Add card stays focused (it moves to the
+     * end of a longer library). If the selected card is gone, focuses the card that took its
+     * place, or the last card; the Add card only if the library is empty.
+     */
+    function restoreFocus() {
+        if (root.lastFocusedPath === "") {
+            root.focusIndex = root.library.length;
+            return;
+        }
+        var selectedIndex = root.library.indexOf(root.lastFocusedPath);
+        if (selectedIndex !== -1)
+            root.focusIndex = selectedIndex;
+        else
+            root.focusIndex = Math.min(root.focusIndex, Math.max(0, root.library.length - 1));
+        root.rememberFocusedPath();
+    }
 
     /** Sets focus to the wallpaper shown on screenName, else index 0 (also covers the empty-library case: index 0 is then the Add card). */
     function focusToCurrent() {
@@ -55,40 +81,6 @@ CardCarousel {
             if (lib[i] === target) { root.focusIndex = i; return; }
         }
         root.focusIndex = 0;
-    }
-
-    /** Enter key: assigns the focused wallpaper to every monitor, or starts Add on the Add card. */
-    function applyFocused() {
-        if (root.focusIsAdd) { root.openAdd(); return; }
-        root.assignFocusedToAll();
-    }
-
-    /**
-     * Monitor button / key `1`..`9`: puts the focused wallpaper on that
-     * monitor only; if it is already there, removes it (solid color).
-     * Other monitors keep their own wallpaper. No-op on the Add card.
-     */
-    function assignFocusedToMonitor(number) {
-        if (root.focusIsAdd) return;
-        var monitors = Wallpapers.monitors;
-        for (var i = 0; i < monitors.length; i++) {
-            if (monitors[i].number !== number) continue;
-            if (Wallpapers.numbersShowing(root.focusedPath).indexOf(number) !== -1)
-                Wallpapers.unassign(root.focusedPath, [monitors[i].name]);
-            else
-                Wallpapers.assign(root.focusedPath, [monitors[i].name]);
-            return;
-        }
-    }
-
-    /** `All` button / key `A`: puts the focused wallpaper on every monitor. Does nothing if all already show it, or on the Add card. */
-    function assignFocusedToAll() {
-        if (root.focusIsAdd) return;
-        var monitors = Wallpapers.monitors;
-        if (Wallpapers.numbersShowing(root.focusedPath).length === monitors.length) return;
-        var names = [];
-        for (var i = 0; i < monitors.length; i++) names.push(monitors[i].name);
-        Wallpapers.assign(root.focusedPath, names);
     }
 
     /** Asks the host to close the picker first; the dialog would open under the picker's Overlay window. */
@@ -194,7 +186,7 @@ CardCarousel {
 
                 Image {
                     anchors.fill: parent
-                    source: card.modelData.length > 0 ? ("file://" + card.modelData) : ""
+                    source: card.modelData.length > 0 ? WallpaperPaths.fileUrl(card.modelData) : ""
                     fillMode: Image.PreserveAspectCrop
                     sourceSize: Qt.size(width * root.dpr, height * root.dpr)
                     smooth: true
@@ -232,14 +224,8 @@ CardCarousel {
                 hoverTextColor: "white"
                 ColorFade on color {}
 
-                onClicked: {
-                    var removedIndex = card.index;
-                    var focusBefore = root.focusIndex;
-                    Wallpapers.remove(card.modelData);
-                    // Keep focus on the same card, or its nearest remaining neighbor.
-                    if (removedIndex < focusBefore) root.focusIndex = focusBefore - 1;
-                    else root.focusIndex = Math.max(0, Math.min(focusBefore, root.library.length - 1));
-                }
+                // The library change moves focus (see restoreFocus).
+                onClicked: Wallpapers.remove(card.modelData)
             }
 
             Row {

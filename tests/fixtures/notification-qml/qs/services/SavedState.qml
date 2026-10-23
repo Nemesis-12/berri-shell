@@ -3,6 +3,7 @@ import QtQuick
 Item {
     property string name
     property int waitMs
+    property var defaults: ({})
     property int saveCount: 0
     property string text: ""
     signal loaded(var values)
