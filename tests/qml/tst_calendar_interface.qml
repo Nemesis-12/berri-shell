@@ -11,20 +11,26 @@ TestCase {
     name: "CalendarInterface"
 
     SignalSpy { id: failedSaves; target: Calendar; signalName: "saveFailed" }
-    property string failureMessage: ""
-    Connections { target: Calendar; function onSaveFailed(message) { tests.failureMessage = message; } }
-    CalendarSaveError { id: saveError; width: 600; message: tests.failureMessage }
 
+    // The form error tests go through the real tab: its Connections show the error and its form is the one the user sees.
     Component {
-        id: detailsFormComponent
-        CalendarDetailsForm { width: 600; height: 500 }
+        id: tabComponent
+        CalendarTab { width: 868; height: 544; selectedDate: new Date(2026, 9, 5) }
+    }
+
+    function formOf(item) {
+        if (item instanceof CalendarDetailsForm) return item;
+        for (let i = 0; i < item.children.length; i++) {
+            const found = formOf(item.children[i]);
+            if (found) return found;
+        }
+        return null;
     }
 
     // Set up an unread local calendar without starting saved-state loading.
     function init() {
         TestIo.reset();
         failedSaves.clear();
-        failureMessage = "";
         const files = Calendar.children.find(child => child instanceof CalendarFiles);
         files.paths = [];
         Calendar.ready = false;
@@ -126,7 +132,9 @@ TestCase {
     }
 
     function test_failed_save_keeps_the_form_open_with_its_draft() {
-        const form = createTemporaryObject(detailsFormComponent, tests);
+        const tab = createTemporaryObject(tabComponent, tests);
+        verify(tab !== null);
+        const form = formOf(tab);
         verify(form !== null);
         const text = Format.writeCalendar(Object.assign(Format.emptyCalendar(), {
             items: [Items.makeItem({ uid: "kept", title: "Kept", date: "2026-10-05" })] }));
@@ -138,13 +146,15 @@ TestCase {
         form.save();
         compare(form.shown, true);
         compare([form.title, form.date], ["Draft to keep", "2026-10-06"]);
-        verify(saveError.message !== "");
-        compare(saveError.message, Calendar.lastError);
+        verify(tab.saveError !== "");
+        compare(tab.saveError, Calendar.lastError);
         compare(Calendar.itemsOn("2026-10-06"), []);
     }
 
     function test_failed_remove_keeps_the_form_open_and_shows_the_error() {
-        const form = createTemporaryObject(detailsFormComponent, tests);
+        const tab = createTemporaryObject(tabComponent, tests);
+        verify(tab !== null);
+        const form = formOf(tab);
         verify(form !== null);
         const text = Format.writeCalendar(Object.assign(Format.emptyCalendar(), {
             items: [Items.makeItem({ uid: "kept", title: "Kept", date: "2026-10-05" })] }));
@@ -154,13 +164,15 @@ TestCase {
         form.openEdit(Items.itemKey("berri", "kept"), "2026-10-05", "2026-10-05");
         form.remove();
         compare(form.shown, true);
-        verify(saveError.message !== "");
-        compare(saveError.message, Calendar.lastError);
+        verify(tab.saveError !== "");
+        compare(tab.saveError, Calendar.lastError);
         compare(Calendar.itemsOn("2026-10-05").map(item => item.title), ["Kept"]);
     }
 
     function test_missing_item_save_keeps_the_form_open_and_shows_the_error() {
-        const form = createTemporaryObject(detailsFormComponent, tests);
+        const tab = createTemporaryObject(tabComponent, tests);
+        verify(tab !== null);
+        const form = formOf(tab);
         verify(form !== null);
         const text = Format.writeCalendar(Object.assign(Format.emptyCalendar(), {
             items: [Items.makeItem({ uid: "kept", title: "Kept", date: "2026-10-05" })] }));
@@ -170,8 +182,8 @@ TestCase {
         form.title = "Edited after reload";
         form.save();
         compare(form.shown, true);
-        verify(saveError.message !== "");
-        compare(saveError.message, Calendar.lastError);
+        verify(tab.saveError !== "");
+        compare(tab.saveError, Calendar.lastError);
     }
 
     function test_failed_repeat_move_restores_the_series_and_drops_the_new_item() {
@@ -189,8 +201,6 @@ TestCase {
     }
 
     function test_read_only_details_show_the_clicked_changed_occurrence() {
-        const form = createTemporaryObject(detailsFormComponent, tests);
-        verify(form !== null);
         const feed = Calendar._newMeta("feed", "link", "Feed", "feed.ics", "blue");
         feed.records = [Items.storedItem({ uid: "series", title: "Master", date: "2026-09-01", time: "09:00",
             end: "10:00", repeat: "daily", count: 4, changedOccurrences: [{ from: "2026-09-02", cancelled: false,
@@ -198,6 +208,8 @@ TestCase {
         Calendar._calendars = { feed: feed };
         Calendar._order = ["feed"];
         Calendar._rebuild();
+        const form = formOf(createTemporaryObject(tabComponent, tests));
+        verify(form !== null);
         form.openEdit(Items.itemKey("feed", "series"), "2026-09-02", "2026-10-09");
         compare([form.title, form.date, form.time, form.end], ["Changed", "2026-10-09", "15:00", "16:00"]);
     }
