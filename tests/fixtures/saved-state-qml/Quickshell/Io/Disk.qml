@@ -1,7 +1,7 @@
 pragma Singleton
 import QtQml
 
-// A disk in memory. `events` lists every command and write in the order they happen.
+// A disk in memory. `events` lists every command start, command exit and write in the order they happen.
 QtObject {
     property var files: ({})
     /** Paths whose read or write fails with a permission error. */
@@ -15,6 +15,8 @@ QtObject {
     function log(kind, value) { events = events.concat([{ kind: kind, value: value }]); }
     /** Commands that were started, as arrays. */
     function commands() { return events.filter(e => e.kind === "run").map(e => e.value); }
+    /** Commands that ran to their exit, as arrays. */
+    function finished() { return events.filter(e => e.kind === "done").map(e => e.value); }
     /** Output returned by the add script in the process test double. */
     function output(command) {
         if (command[1] && command[1].indexOf("add-wallpaper.sh") >= 0)

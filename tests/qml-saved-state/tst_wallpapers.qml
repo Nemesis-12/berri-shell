@@ -20,6 +20,8 @@ TestCase {
 
     // Delete commands that were started.
     function deletes() { return Disk.commands().filter(c => c[0] === "rm"); }
+    // Delete commands that ran to their exit.
+    function finishedDeletes() { return Disk.finished().filter(c => c[0] === "rm"); }
 
     function test_only_a_file_inside_the_library_folder_is_deleted() {
         var inside = dir + "/a.png";
@@ -33,6 +35,8 @@ TestCase {
         Wallpapers.remove(inside);
         tryCompare(Disk.commands().filter(c => c[0] === "rm"), "length", 1);
         compare(deletes()[0], ["rm", "-f", "--", inside]);
+        // Let the delete exit so it does not leak into the next test.
+        tryVerify(() => finishedDeletes().length === 1);
         // The unsafe entries still leave the saved list when the user removes them.
         compare(Wallpapers.library.length, 0);
     }
@@ -43,8 +47,8 @@ TestCase {
 
         for (var i = 0; i < paths.length; i++) Wallpapers.remove(paths[i]);
 
-        tryVerify(() => deletes().length === paths.length);
-        compare(deletes(), paths.map(path => ["rm", "-f", "--", path]));
+        tryVerify(() => finishedDeletes().length === paths.length);
+        compare(finishedDeletes(), paths.map(path => ["rm", "-f", "--", path]));
     }
 
     function test_adds_requested_during_a_copy_are_both_kept() {
