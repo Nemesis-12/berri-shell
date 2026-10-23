@@ -6,7 +6,9 @@ import qs.services
  * clickable row with a highlighted background while `active`, a bottom
  * divider, and a small mono tag on the right. Row-specific content (an
  * icon and a label, or a password field) goes in the default content area
- * on the left, laid out in a Row.
+ * on the left, laid out in a Row. A row action (a 24px button) goes in
+ * `trailing`. Set `actionSize` to 24 on every row of the list that has
+ * actions, so the tags line up.
  */
 Rectangle {
     id: root
@@ -16,9 +18,17 @@ Rectangle {
     property string tagText: ""
     property color tagColor: Theme.dim
 
+    /** Width and height of the square kept free at the right edge for a row action. 0: no action. */
+    property real actionSize: 0
+
+    // Distance from the right edge to the action, and from the tag to the edge or to the action.
+    readonly property real actionMargin: 5
+    readonly property real tagMargin: 6
+
     signal clicked
 
     default property alias content: contentRow.data
+    property alias trailing: trailingSlot.data
 
     height: 32
     color: active ? Theme.accentFill : (rowMouse.containsMouse ? Theme.raised : "transparent")
@@ -45,7 +55,7 @@ Rectangle {
     MonoText {
         id: tag
         anchors.right: parent.right
-        anchors.rightMargin: 6
+        anchors.rightMargin: root.tagMargin + (root.actionSize > 0 ? root.actionMargin + root.actionSize : 0)
         anchors.verticalCenter: parent.verticalCenter
         font.letterSpacing: 0.08 * 9
         text: root.tagText
@@ -59,5 +69,15 @@ Rectangle {
         cursorShape: Qt.PointingHandCursor
         enabled: root.rowEnabled
         onClicked: root.clicked()
+    }
+
+    // After the row's MouseArea, so an action gets the click first.
+    Item {
+        id: trailingSlot
+        anchors.right: parent.right
+        anchors.rightMargin: root.actionMargin
+        anchors.verticalCenter: parent.verticalCenter
+        width: root.actionSize
+        height: root.actionSize
     }
 }

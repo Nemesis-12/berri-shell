@@ -10,9 +10,12 @@ import "../../logic/ListSync.js" as ListSync
  * scrolling list of devices - paired devices first (connected first), then
  * nearby devices found while the list is open. Clicking a connected device
  * disconnects it; clicking a paired device connects it; clicking an
- * unpaired device pairs, trusts and connects it (shown as "PAIRING…"). The
- * BluetoothPairing service owns the pairing, so it ends right when the list
- * is closed.
+ * unpaired device pairs, trusts and connects it (shown as "PAIRING…"). A
+ * paired device also has a forget button; BlueZ removes the device, and with
+ * the scan on it shows again as an unpaired device. The BluetoothPairing
+ * service owns the pairing and the forgetting, so a pairing ends right when
+ * the list is closed. The list refreshes when the adapter's device model
+ * changes, and every poll.
  */
 Item {
     id: root
@@ -47,6 +50,7 @@ Item {
         var list = root.adapter.devices ? root.adapter.devices.values.slice() : [];
         // Filter out unpaired devices with no name or bare MAC address
         list = list.filter(function (device) {
+            if (!Qt.isQtObject(device)) return false;
             if (device.paired) return true;
             var name = device.name || "";
             if (name === "" || root.isBareMacAddress(name)) return false;
@@ -61,7 +65,9 @@ Item {
         if (!ListSync.sameItems(root.devices, list)) root.devices = list;
     }
 
+    // A row can be clicked after BlueZ destroyed its device and before the list refreshed.
     function chooseDevice(device) {
+        if (!Qt.isQtObject(device)) return;
         if (device.connected) {
             device.disconnect();
         } else if (device.paired) {
@@ -109,6 +115,14 @@ Item {
         kind: "discovery"
         device: root.adapter
         wanted: root.active && root.adapter !== null && root.adapter.enabled
+    }
+
+    // BlueZ adds and removes devices (after a forget, for example) between scan polls.
+    Connections {
+        target: root.adapter ? root.adapter.devices : null
+        function onValuesChanged() {
+            if (root.active) root.refreshDevices();
+        }
     }
 
     Timer {
@@ -169,11 +183,31 @@ Item {
 
                     width: listView.width
                     active: modelData.connected
+                    actionSize: 24
                     tagText: modelData.connected ? "CONNECTED"
                         : modelData.pairing ? "PAIRING…" : root.deviceKind(modelData.icon)
                     tagColor: (modelData.connected || modelData.pairing) ? Theme.accentLight : Theme.dim
 
                     onClicked: root.chooseDevice(row.modelData)
+
+                    // Only a paired device can be forgotten; on other rows the button is hidden.
+                    trailing: HoverButton {
+                        objectName: "forgetButton"
+                        anchors.fill: parent
+                        enabled: !!row.modelData.paired
+                        opacity: enabled ? 1 : 0
+                        icon: "x"
+                        iconSize: 13
+                        iconStrokeWidth: 1.8
+                        textColor: Theme.mute
+
+                        Accessible.role: Accessible.Button
+                        Accessible.name: "Forget " + (row.modelData.name || row.modelData.deviceName)
+
+                        Fade on opacity { duration: Theme.stateMs }
+
+                        onClicked: BluetoothPairing.forget(row.modelData)
+                    }
 
                     Icon {
                         anchors.verticalCenter: parent.verticalCenter

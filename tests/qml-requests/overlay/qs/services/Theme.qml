@@ -15,6 +15,8 @@ Item {
     property color fg: "#ffffff"
     property color fg2: "#dddddd"
     property color dim: "#aaaaaa"
+    property color mute: "#666666"
+    property color hover: "#3a3a3a"
     property color border: "#333333"
     property color onAccentValue: "#111111"
     readonly property color onAccent: onAccentValue
