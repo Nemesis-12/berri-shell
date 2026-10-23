@@ -56,13 +56,20 @@ CardCarousel {
     }
 
     /**
-     * Keeps the selected card after a library edit. If that card is gone, focuses
-     * the card that took its place, or the last card; the Add card only if the library is empty.
+     * Keeps the selected card after a library edit. The Add card stays focused (it moves to the
+     * end of a longer library). If the selected card is gone, focuses the card that took its
+     * place, or the last card; the Add card only if the library is empty.
      */
     function restoreFocus() {
+        if (root.lastFocusedPath === "") {
+            root.focusIndex = root.library.length;
+            return;
+        }
         var selectedIndex = root.library.indexOf(root.lastFocusedPath);
-        root.focusIndex = selectedIndex === -1
-            ? Math.min(root.focusIndex, Math.max(0, root.library.length - 1)) : selectedIndex;
+        if (selectedIndex !== -1)
+            root.focusIndex = selectedIndex;
+        else
+            root.focusIndex = Math.min(root.focusIndex, Math.max(0, root.library.length - 1));
         root.rememberFocusedPath();
     }
 
