@@ -27,6 +27,15 @@ def response(message_id="shared-response", output=20):
 
 
 class CollectedUsageTests(unittest.TestCase):
+    def test_unknown_model_price_makes_period_cost_unknown(self):
+        unknown = set()
+        usage = stats.priced_usage({
+            "known-model": {"input": 100, "output": 0, "cache_write_5m": 0, "cache_write_1h": 0, "cache_read": 0},
+            "new-model": {"input": 100, "output": 0, "cache_write_5m": 0, "cache_write_1h": 0, "cache_read": 0},
+        }, {"known-model": {"input": 10, "output": 20, "cache_write_5m": 10, "cache_write_1h": 20, "cache_read": 0}}, {}, unknown)
+        self.assertEqual(usage, {"tokens": 200, "cost": None})
+        self.assertEqual(unknown, {"new-model"})
+
     def test_shared_response_counts_once_across_session_logs(self):
         scratch = Path(__file__).resolve().parent.parent / "scratchpad"
         scratch.mkdir(exist_ok=True)
@@ -89,10 +98,53 @@ class CollectedUsageTests(unittest.TestCase):
                  patch.object(stats, "load_prices", return_value=({}, {})):
                 result = stats.collect()
             self.assertEqual(result["usage"]["codex"], {
-                period: {"tokens": 74, "cost": 0.0} for period in ("today", "week", "month")
+                period: {"tokens": 74, "cost": None} for period in ("today", "week", "month")
             })
             self.assertEqual(result["models"]["codex"], [{"name": "GPT-Test", "tokens": 74}])
             self.assertEqual(result["unpricedModels"]["codex"], ["gpt-test"])
+
+    def counted_codex_totals(self, input_totals):
+        """Tokens counted for one session log whose running input total follows `input_totals`."""
+        scratch = Path(__file__).resolve().parent.parent / "scratchpad"
+        scratch.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as folder:
+            path = Path(folder) / "session.jsonl"
+            stamp = dt.datetime.now().astimezone().isoformat()
+            turn = {"type": "turn_context", "payload": {"model": "gpt-test"}}
+            totals = [{"timestamp": stamp, "payload": {"type": "token_count", "info": {"total_token_usage": {
+                "input_tokens": value, "cached_input_tokens": 0, "output_tokens": 0}}}} for value in input_totals]
+            path.write_text("\n".join(json.dumps(event) for event in [turn, *totals]) + "\n", encoding="utf-8")
+            readings = stats.codex_session_events(path, dt.date.today() - dt.timedelta(days=1))
+            return [stats.counted(kinds) for _, _, kinds in readings]
+
+    def test_codex_counter_reset_counts_usage_after_the_reset(self):
+        self.assertEqual(self.counted_codex_totals([100, 0, 20]), [100, 20])
+        self.assertEqual(self.counted_codex_totals([100, 0, 20, 35]), [100, 20, 15])
+
+    def test_codex_total_that_dips_and_returns_counts_once(self):
+        self.assertEqual(self.counted_codex_totals([1000, 900, 1000]), [1000])
+        self.assertEqual(self.counted_codex_totals([1000, 900, 1000, 1050]), [1000, 50])
+
+    def test_codex_dip_at_the_end_of_a_log_is_not_counted(self):
+        self.assertEqual(self.counted_codex_totals([1000, 900]), [1000])
+
+    def test_codex_field_that_drops_alone_does_not_count_the_whole_new_total(self):
+        # The cached part drops while the input part grows: the combined total did not fall.
+        scratch = Path(__file__).resolve().parent.parent / "scratchpad"
+        scratch.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as folder:
+            path = Path(folder) / "session.jsonl"
+            stamp = dt.datetime.now().astimezone().isoformat()
+            turn = {"type": "turn_context", "payload": {"model": "gpt-test"}}
+
+            def total(input_tokens, cached):
+                return {"timestamp": stamp, "payload": {"type": "token_count", "info": {"total_token_usage": {
+                    "input_tokens": input_tokens, "cached_input_tokens": cached, "output_tokens": 0}}}}
+
+            path.write_text("\n".join(json.dumps(e) for e in (turn, total(100, 80), total(150, 60))) + "\n",
+                            encoding="utf-8")
+            readings = list(stats.codex_session_events(path, dt.date.today() - dt.timedelta(days=1)))
+        self.assertEqual([(kinds["input"], kinds["cache_read"]) for _, _, kinds in readings], [(20, 80), (70, 0)])
 
     def test_future_entries_are_skipped_in_both_log_formats(self):
         scratch = Path(__file__).resolve().parent.parent / "scratchpad"

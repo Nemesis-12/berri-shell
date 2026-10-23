@@ -5,8 +5,8 @@ local-commits.py merges these commits with the ones from local git folders.
 
 Uses the logged-in GitHub CLI (`gh api`); no token is read or stored here.
 The result is cached in $XDG_CACHE_HOME/berri-shell/github.json and reused for
-30 minutes. Finished years never change, so they stay in the cache for good; only
-the current year is fetched again. If `gh` fails (offline), the old cache is printed instead.
+30 minutes. Finished years are reused until a forced refresh. If `gh` fails
+(offline), the old cache is printed instead.
 
 Output shape:
     {"fetchedAt": iso8601, "total": int,
@@ -42,10 +42,10 @@ def year_days(calendar: dict, year: int) -> list:
     return [[(first - dt.timedelta(days=pad - i)).isoformat(), -1] for i in range(pad)] + days
 
 
-def fetch_years(years: list, cached: dict) -> list:
-    """One entry per year, newest first. Finished years come from `cached` when it has them."""
+def fetch_years(years: list, cached: dict, force: bool = False) -> list:
+    """One entry per year, newest first. A forced read refreshes finished years too."""
     this_year = dt.date.today().year
-    missing = [y for y in years if not (y in cached and cached[y].get("final"))]
+    missing = years if force else [y for y in years if not (y in cached and cached[y].get("final"))]
     fresh = {}
     if missing:
         parts = " ".join(
@@ -59,7 +59,7 @@ def fetch_years(years: list, cached: dict) -> list:
     return [fresh.get(y) or cached[y] for y in sorted(years, reverse=True)]
 
 
-def fetch(cached_years: dict) -> dict:
+def fetch(cached_years: dict, force: bool = False) -> dict:
     viewer = gh("graphql", "-f", f"query={QUERY}")["data"]["viewer"]
     collection = viewer["contributionsCollection"]
     calendar = collection["contributionCalendar"]
@@ -73,10 +73,11 @@ def fetch(cached_years: dict) -> dict:
     } for c in found["items"][:20]]
     return {"fetchedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
             "total": calendar["totalContributions"], "days": days,
-            "years": fetch_years(collection["contributionYears"], cached_years), "commits": commits}
+            "years": fetch_years(collection["contributionYears"], cached_years, force), "commits": commits}
 
 
 def main() -> None:
+    force = "--force" in sys.argv
     cached = None
     cached_years: dict = {}
     try:
@@ -92,7 +93,7 @@ def main() -> None:
     except (OSError, ValueError):
         pass
     try:
-        text = json.dumps(fetch(cached_years))
+        text = json.dumps(fetch(cached_years, force))
     except Exception:
         # Offline or logged out: show the last good data, and wait one interval before retrying.
         if cached:
