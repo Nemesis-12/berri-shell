@@ -138,11 +138,17 @@ Singleton {
         }
     }
 
+    // One notification per run of failed saves; a good save re-arms it.
+    property bool _wallpaperSaveErrorShown: false
+
     Connections {
         target: Wallpapers
         function onSaveFailed(message) {
+            if (root._wallpaperSaveErrorShown) return;
+            root._wallpaperSaveErrorShown = true;
             root._showSaveError("Wallpaper settings not saved", message);
         }
+        function onSaved() { root._wallpaperSaveErrorShown = false; }
     }
 
     function _showSaveError(title: string, message: string): void {

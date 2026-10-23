@@ -235,13 +235,15 @@ Singleton {
     property bool loaded: false
 
     function save() {
-        saved.save({ library: root.library, assignments: root.assignments });
+        store.save({ library: root.library, assignments: root.assignments });
     }
 
     signal saveFailed(string message)
+    /** The last requested change reached the disk. */
+    signal saved()
 
     SavedState {
-        id: saved
+        id: store
         name: "wallpapers"
         onLoaded: values => {
             if (Array.isArray(values.library)) root.library = values.library;
@@ -249,5 +251,6 @@ Singleton {
             root.loaded = true;
         }
         onSaveFailed: message => root.saveFailed(message)
+        onSaved: root.saved()
     }
 }
