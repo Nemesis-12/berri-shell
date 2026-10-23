@@ -37,6 +37,8 @@ Item {
 
     // A Bluetooth device that pairs when the test says so. BlueZ removes a
     // forgotten device: the test does that part (see `bluezRemoves`).
+    // Like Quickshell, connect() on a connected device only logs an error and
+    // sends nothing to BlueZ (`ignoredConnectCalls`).
     Component {
         id: deviceType
         QtObject {
@@ -48,6 +50,7 @@ Item {
             property bool trusted: false
             property bool connected: false
             property int connectCalls: 0
+            property int ignoredConnectCalls: 0
             property int disconnectCalls: 0
             property int cancelCalls: 0
             property int forgetCalls: 0
@@ -63,7 +66,13 @@ Item {
                 pairing = false;
             }
             function forget() { forgetCalls += 1; }
-            function connect() { connectCalls += 1; }
+            function connect() {
+                if (connected) {
+                    ignoredConnectCalls += 1;
+                    return;
+                }
+                connectCalls += 1;
+            }
             function disconnect() { disconnectCalls += 1; }
         }
     }
@@ -91,6 +100,13 @@ Item {
     TestCase {
         name: "SystemLists"
         when: windowShown
+
+        // A test that shortens the follow window gets the real one back after it.
+        property int normalFollowMs: 0
+
+        function initTestCase() { normalFollowMs = BluetoothPairing.followMs; }
+
+        function cleanup() { BluetoothPairing.followMs = normalFollowMs; }
 
         function init() {
             Networking.wifiEnabled = true;
@@ -260,7 +276,90 @@ Item {
             btList.open = false;
             speaker.paired = true;
             compare(speaker.trusted, true);
-            compare(speaker.connectCalls, 1);
+            compare([speaker.connectCalls, speaker.ignoredConnectCalls], [1, 0]);
+            compare(BluetoothPairing.following.length, 0);
+        }
+
+        // The pairing link makes BlueZ report `connected` before `paired`. Quickshell
+        // ignores connect() then, so the service connects when that link drops.
+        function test_pairing_link_that_drops_after_pairing_is_followed_by_a_connect() {
+            const buds = createTemporaryObject(deviceType, host, { address: "A" });
+            btList.open = true;
+            btList.chooseDevice(buds);
+            buds.connected = true;
+            buds.paired = true;
+            compare(buds.trusted, true);
+            compare([buds.connectCalls, buds.ignoredConnectCalls], [0, 0]);
+            compare(BluetoothPairing.following.length, 1);
+            buds.connected = false;
+            compare([buds.connectCalls, buds.ignoredConnectCalls], [1, 0]);
+            compare(BluetoothPairing.following.length, 0);
+            // The device is followed no more: later link changes send nothing.
+            buds.connected = true;
+            buds.connected = false;
+            compare(buds.connectCalls, 1);
+        }
+
+        function test_link_that_stays_up_after_pairing_is_never_connected_again() {
+            const buds = createTemporaryObject(deviceType, host, { address: "A" });
+            BluetoothPairing.pair(buds);
+            buds.connected = true;
+            buds.paired = true;
+            wait(100);
+            compare([buds.connectCalls, buds.ignoredConnectCalls], [0, 0]);
+        }
+
+        function test_link_that_drops_after_the_window_is_not_connected_by_surprise() {
+            BluetoothPairing.followMs = 300;
+            const buds = createTemporaryObject(deviceType, host, { address: "A" });
+            BluetoothPairing.pair(buds);
+            buds.connected = true;
+            buds.paired = true;
+            compare(BluetoothPairing.following.length, 1);
+            wait(500);
+            compare(BluetoothPairing.following.length, 0);
+            buds.connected = false;
+            compare([buds.connectCalls, buds.ignoredConnectCalls], [0, 0]);
+        }
+
+        function test_forget_during_the_window_stops_the_follow() {
+            const buds = createTemporaryObject(deviceType, host, { address: "A" });
+            BluetoothPairing.pair(buds);
+            buds.connected = true;
+            buds.paired = true;
+            compare(BluetoothPairing.following.length, 1);
+            BluetoothPairing.forget(buds);
+            compare(BluetoothPairing.following.length, 0);
+            buds.connected = false;
+            compare([buds.connectCalls, buds.forgetCalls], [0, 1]);
+        }
+
+        function test_pairing_again_during_the_window_restarts_the_follow() {
+            const buds = createTemporaryObject(deviceType, host, { address: "A" });
+            BluetoothPairing.pair(buds);
+            buds.connected = true;
+            buds.paired = true;
+            BluetoothPairing.pair(buds);
+            compare(BluetoothPairing.following.length, 0);
+            buds.connected = false;
+            compare(buds.connectCalls, 0);
+        }
+
+        function test_destroyed_device_during_the_window_is_safe() {
+            failOnWarning(/.*/);
+            const gone = createTemporaryObject(deviceType, host, { address: "A" });
+            const other = createTemporaryObject(deviceType, host, { address: "B" });
+            BluetoothPairing.pair(gone);
+            gone.connected = true;
+            gone.paired = true;
+            compare(BluetoothPairing.following.length, 1);
+            gone.destroy();
+            waitForDestroyed(gone);
+            // The next call drops the destroyed device.
+            BluetoothPairing.pair(other);
+            compare(BluetoothPairing.following.length, 0);
+            other.paired = true;
+            compare(other.connectCalls, 1);
         }
 
         function test_two_pairings_finish_independently() {
