@@ -352,6 +352,11 @@ function withoutOccurrence(item, occurrenceDate) {
     return applyChanges(item, { exdates: ex, doneDates: done });
 }
 
+/** The title, date, time, end and endDate of an occurrence, from its title and a source of the other four. */
+function shownFieldsOf(title, source) {
+    return { title: title, date: source.date, time: source.time, end: source.end, endDate: source.endDate };
+}
+
 /**
  * The fields of one occurrence as the calendar shows them (title, date, time, end, endDate), or null
  * when it is not shown (cancelled, excluded or not found). `fromDate` is the occurrence date.
@@ -359,20 +364,15 @@ function withoutOccurrence(item, occurrenceDate) {
 function shownOccurrence(item, fromDate) {
     for (var c = 0; c < item.changedOccurrences.length; c++) {
         var changed = item.changedOccurrences[c];
-        // A moved occurrence can be shown far from its occurrence date, so a scan near that date would miss it.
-        if (changed.from === fromDate && !changed.cancelled && changed.date !== null) {
-            return {
-                title: changed.title === null ? item.title : changed.title,
-                date: changed.date, time: changed.time, end: changed.end, endDate: changed.endDate
-            };
-        }
+        // A moved occurrence can be shown far from its occurrence date, so a scan of that date would miss it.
+        if (changed.from === fromDate && !changed.cancelled && changed.date !== null)
+            return shownFieldsOf(changed.title === null ? item.title : changed.title, changed);
     }
-    // Any other occurrence is shown within a day of its occurrence date (a zone's DST change moves it
-    // by hours). The scan reaches 2 days on each side to be safe.
-    var shown = Repeat.expand(item, Times.addDays(fromDate, -2), Times.addDays(fromDate, 2));
-    for (var o = 0; o < shown.length; o++) {
-        if (shown[o].occurrenceDate !== fromDate) continue;
-        return { title: shown[o].title, date: shown[o].date, time: shown[o].time, end: shown[o].end, endDate: shown[o].endDate };
+    // The occurrence date of any other occurrence is its first shown day (CalendarRepeat.occurrenceOf),
+    // also for a zoned series, so expanding that one day finds it.
+    var expanded = Repeat.expand(item, fromDate, fromDate);
+    for (var o = 0; o < expanded.length; o++) {
+        if (expanded[o].occurrenceDate === fromDate) return shownFieldsOf(expanded[o].title, expanded[o]);
     }
     return null;
 }
@@ -385,17 +385,17 @@ function shownOccurrence(item, fromDate) {
  */
 function moveOccurrence(item, fromDate, toDate, changes) {
     var wasDone = item.doneDates.indexOf(item.repeat === "none" ? item.date : fromDate) >= 0;
-    var shown = shownOccurrence(item, fromDate);
-    var source = shown === null ? item : applyChanges(item, shown);
-    var span = source.endDate ? Times.dayNum(source.endDate) - Times.dayNum(source.date) : 0;
+    var shownFields = shownOccurrence(item, fromDate);
+    var shownSeries = shownFields === null ? item : applyChanges(item, shownFields);
+    var span = shownSeries.endDate ? Times.dayNum(shownSeries.endDate) - Times.dayNum(shownSeries.date) : 0;
     var extra = {};
     for (var k in changes) extra[k] = changes[k];
     extra.date = toDate;
-    extra.endDate = source.endDate ? addDays(toDate, span) : null;
+    extra.endDate = shownSeries.endDate ? addDays(toDate, span) : null;
     if (item.repeat === "none") return { item: applyChanges(item, extra), created: null };
     extra.repeat = "none";
     extra.doneDates = wasDone ? [toDate] : [];
-    var single = applyChanges(source, extra);
+    var single = applyChanges(shownSeries, extra);
     single.uid = newUid();
     return { item: withoutOccurrence(item, fromDate), created: single };
 }

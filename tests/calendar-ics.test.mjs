@@ -165,6 +165,16 @@ test("moving a zoned occurrence keeps the displayed clock across its zone DST ch
   assert.equal(created.time, shown.time);
 });
 
+test("moving a zoned occurrence that shows on another day than its zone date keeps the shown day clock", () => {
+  const series = Format.readCalendar(["BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:zone-night", "SUMMARY:Berlin night",
+    "DTSTART;TZID=Europe/Berlin:20261010T010000", "DTEND;TZID=Europe/Berlin:20261010T020000",
+    "RRULE:FREQ=DAILY;COUNT=4", "END:VEVENT", "END:VCALENDAR", ""].join("\r\n")).items[0];
+  const shown = Repeat.expand(series, "2026-10-09", "2026-10-09")[0];
+  assert.deepEqual(plain([shown.date, shown.time]), ["2026-10-09", "18:00"]);
+  const { created } = Items.moveOccurrence(series, shown.occurrenceDate, "2026-10-20", {});
+  assert.deepEqual(plain([created.date, created.time, created.end]), ["2026-10-20", "18:00", "19:00"]);
+});
+
 test("moving a completed repeat occurrence moves its done tick to the new date", () => {
   const series = item({ uid: "done-repeat", kind: "task", title: "Done task", date: "2026-10-01", repeat: "daily",
     doneDates: ["2026-10-08"] });
