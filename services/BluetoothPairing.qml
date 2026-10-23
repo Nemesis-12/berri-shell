@@ -27,17 +27,17 @@ Singleton {
 
     /** Starts pairing `device`. Trust and connect follow when pairing succeeds. */
     function pair(device) {
-        root.forget(device);
+        root.unwatch(device);
         root.pending = root.pending.concat([device]);
         try {
             device.pair();
         } catch (error) {
-            root.forget(device);
+            root.unwatch(device);
         }
     }
 
-    // Also drops destroyed devices. A destroyed device sends no signal, so they leave at the next call.
-    function forget(device) {
+    // Stops following the pairing of `device`. Also drops destroyed devices. A destroyed device sends no signal, so they leave at the next call.
+    function unwatch(device) {
         root.pending = root.pending.filter(function (item) { return Qt.isQtObject(item) && item !== device; });
         root.ending = root.ending.filter(function (item) { return Qt.isQtObject(item.device) && item.device !== device; });
     }
@@ -64,10 +64,10 @@ Singleton {
     function finish(device) {
         const waiting = root.ending.find(function (item) { return item.device === device; });
         if (waiting && waiting.at <= Date.now()) {
-            root.forget(device);
+            root.unwatch(device);
             return;
         }
-        root.forget(device);
+        root.unwatch(device);
         device.trusted = true;
         device.connect();
     }
@@ -78,7 +78,7 @@ Singleton {
         onTriggered: {
             const now = Date.now() + 20;
             const late = root.ending.filter(function (item) { return item.at <= now; });
-            late.forEach(function (item) { root.forget(item.device); });
+            late.forEach(function (item) { root.unwatch(item.device); });
             root.scheduleDrop();
         }
     }
