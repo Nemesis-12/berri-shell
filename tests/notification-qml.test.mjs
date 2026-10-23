@@ -16,7 +16,6 @@ test("notifications stay bounded and current in the QML engine", (t) => {
   for (const name of ["logic", "notifications", "tabs/alerts"]) {
     fs.cpSync(path.join(repo, name), path.join(dir, "qs", name), { recursive: true });
   }
-  fs.copyFileSync(path.join(repo, "tests/fixtures/calendar-qml/Wallpapers.qml"), path.join(dir, "qs/services/Wallpapers.qml"));
   const common = ["Icon", "PanelShadow", "ColorFade", "Fade", "HoverButton", "SpringMotion", "StandardMotion", "EmphasizedMotion", "ToggleSwitch"];
   for (const name of common) {
     fs.copyFileSync(path.join(repo, "common", `${name}.qml`), path.join(dir, "qs/common", `${name}.qml`));
