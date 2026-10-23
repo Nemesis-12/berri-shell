@@ -73,40 +73,6 @@ CardCarousel {
         root.focusIndex = 0;
     }
 
-    /** Enter key: assigns the focused wallpaper to every monitor, or starts Add on the Add card. */
-    function applyFocused() {
-        if (root.focusIsAdd) { root.openAdd(); return; }
-        root.assignFocusedToAll();
-    }
-
-    /**
-     * Monitor button / key `1`..`9`: puts the focused wallpaper on that
-     * monitor only; if it is already there, removes it (solid color).
-     * Other monitors keep their own wallpaper. No-op on the Add card.
-     */
-    function assignFocusedToMonitor(number) {
-        if (root.focusIsAdd) return;
-        var monitors = Wallpapers.monitors;
-        for (var i = 0; i < monitors.length; i++) {
-            if (monitors[i].number !== number) continue;
-            if (Wallpapers.numbersShowing(root.focusedPath).indexOf(number) !== -1)
-                Wallpapers.unassign(root.focusedPath, [monitors[i].name]);
-            else
-                Wallpapers.assign(root.focusedPath, [monitors[i].name]);
-            return;
-        }
-    }
-
-    /** `All` button / key `A`: puts the focused wallpaper on every monitor. Does nothing if all already show it, or on the Add card. */
-    function assignFocusedToAll() {
-        if (root.focusIsAdd) return;
-        var monitors = Wallpapers.monitors;
-        if (Wallpapers.numbersShowing(root.focusedPath).length === monitors.length) return;
-        var names = [];
-        for (var i = 0; i < monitors.length; i++) names.push(monitors[i].name);
-        Wallpapers.assign(root.focusedPath, names);
-    }
-
     /** Asks the host to close the picker first; the dialog would open under the picker's Overlay window. */
     signal addRequested()
     /** Emitted when the add flow ends: the new wallpaper's path, or "" if none was added. The host reopens the picker. */
