@@ -186,6 +186,43 @@ Scope {
     }
 ''')
 
+    def test_add_done_while_picker_is_open_does_not_skip_the_next_focus_to_current(self):
+        library = self.home / ".local/share/berri-shell/wallpapers"
+        library.mkdir(parents=True, exist_ok=True)
+        paths = []
+        for name in ("one.png", "two.png"):
+            path = library / name
+            write_png(path)
+            paths.append(str(path))
+        (self.state / "wallpapers.json").write_text(json.dumps({
+            "library": paths,
+            "assignments": {"test": {"test": paths[0]}}
+        }))
+        self.env["PICKER_EXPECTED_FOCUS"] = paths[0]
+        self.run_qml('''
+    FloatingWindow {
+        implicitWidth: 1000; implicitHeight: 500
+        ThemeNotch { id: notch; anchors.centerIn: parent; pickerTab: "walls"; screenName: "test" }
+    }
+    Timer {
+        interval: 20; running: true; repeat: true
+        onTriggered: {
+            if (!Wallpapers.loaded) return;
+            var carousel = find(notch, "WallpapersCarousel");
+            var chooser = find(carousel, "ImagePicker");
+            notch.openPicker();
+            carousel.focusIndex = 1;
+            // The dialog ends while the picker is already open: openPicker() returns early.
+            chooser.finished();
+            notch.closeAtOnce();
+            notch.openPicker();
+            if (!check(carousel.focusedPath === Quickshell.env("PICKER_EXPECTED_FOCUS"),
+                       "a finished add while open made the next open skip focusToCurrent")) return;
+            console.log("TEST PASS"); Qt.quit();
+        }
+    }
+''')
+
     def test_shared_removals_keep_the_other_picker_body_focused(self):
         library = self.home / ".local/share/berri-shell/wallpapers"
         library.mkdir(parents=True, exist_ok=True)

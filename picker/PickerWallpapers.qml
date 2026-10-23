@@ -86,8 +86,10 @@ Item {
         onAddRequested: root.addRequested()
         onAddDone: path => {
             if (path) wallpapersCarousel.focusPath(path);
+            // The host reopens the picker inside addDone. If it is already open, nothing consumes the flag.
             root.keepFocusOnNextOpen = true;
             root.addDone(path);
+            root.keepFocusOnNextOpen = false;
         }
     }
 
