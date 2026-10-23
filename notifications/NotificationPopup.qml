@@ -53,6 +53,7 @@ Item {
     readonly property real cardY: card.visible ? card.y : 0
     readonly property real cardWidth: card.visible ? card.width : 0
     readonly property real cardHeight: card.visible ? card.height : 0
+    /** The timeout the dismiss timer runs with. Only the tests read it. */
     readonly property int _dismissInterval: dismissTimer.interval
 
     property var _current: null
