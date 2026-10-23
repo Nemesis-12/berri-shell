@@ -90,6 +90,7 @@ Item {
             if (root.copySourcePath !== root.stickerPath) return;
             if (root.copySize.width !== root.decodeSize.width
                     || root.copySize.height !== root.decodeSize.height) return;
+            if (exitCode !== 0) console.warn("berri-shell: sticker display copy failed");
             root.stickerSource = root.fileUrl(exitCode === 0
                 ? StickerSize.displayPath(root.configDirPath, root.copySize) : root.stickerPath);
         }
@@ -122,7 +123,10 @@ Item {
         }
 
         onExited: (exitCode) => {
-            if (exitCode !== 0) return;
+            if (exitCode !== 0) {
+                console.warn("berri-shell: sticker copy failed");
+                return;
+            }
             root.stickerPath = "";
             root.stickerSource = "";
             root.findSticker();

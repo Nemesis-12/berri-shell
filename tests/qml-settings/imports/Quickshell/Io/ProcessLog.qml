@@ -4,8 +4,10 @@ import QtQuick
 // Keeps the fake system: started commands, files, and the screen temperature.
 QtObject {
     property var commands: []
+    property int finished: 0
     property var files: []
     property int temperature: 6500
+    property bool copySucceeds: true
     property var saved: ({ "power-modes": { ac: "saver", battery: "saver" } })
 
     // Does what the real command would do and returns its exit code.
@@ -13,7 +15,7 @@ QtObject {
         if (command[0] === "test") return files.indexOf(command[2]) >= 0 ? 0 : 1;
         if (command[0] === "cp") {
             files = files.concat([command[3]]);
-            return 0;
+            return copySucceeds ? 0 : 1;
         }
         if (command[0] === "hyprctl") {
             stdout.text = String(temperature);

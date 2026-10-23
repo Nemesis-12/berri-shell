@@ -63,8 +63,9 @@ Item {
 
         // A request during a running write waits, then the latest one is written.
         function test_request_during_active_write_is_applied_after_it() {
+            const before = ProcessLog.commands.length;
             Nightlight.setOn(true);
-            wait(50);
+            tryVerify(() => ProcessLog.commands.slice(before).some(command => command[0] === "bash"));
             Nightlight.setOn(false);
             Nightlight.setOn(true);
             tryCompare(ProcessLog, "temperature", 4000, 10000);
@@ -72,10 +73,16 @@ Item {
             wait(400);
         }
 
+        // Waits until every command started after `before` has ended and its exit handler has run.
+        function waitForCommands(before) {
+            tryVerify(() => ProcessLog.commands.length > before && ProcessLog.finished === ProcessLog.commands.length);
+        }
+
         function openProfile() {
+            const before = ProcessLog.commands.length;
             profile.visible = false;
             profile.visible = true;
-            wait(50);
+            waitForCommands(before);
         }
 
         // The chosen picture stays after a minute passes and after Home opens again.
@@ -87,8 +94,9 @@ Item {
             profile.openPictureChooser();
             tryVerify(() => profile.pictureSource.indexOf("file://" + facePath) === 0);
             for (let i = 0; i < 3; i++) {
+                const before = ProcessLog.commands.length;
                 Clock.minuteChanged();
-                wait(50);
+                waitForCommands(before);
                 verify(profile.pictureSource.indexOf("file://" + facePath) === 0, "after minute " + (i + 1));
                 openProfile();
                 verify(profile.pictureSource.indexOf("file://" + facePath) === 0, "after reopen " + (i + 1));
@@ -112,6 +120,18 @@ Item {
             compare(modes.children.length > 0, true);
             UPower.displayDevice = laptopBattery;
             tryCompare(number, "visible", true);
+        }
+
+        function test_failed_profile_copy_logs_a_result_and_keeps_the_picture() {
+            ProcessLog.files = [accountsPath];
+            ProcessLog.copySucceeds = false;
+            openProfile();
+            tryCompare(profile, "pictureSource", "file://" + accountsPath);
+            const before = ProcessLog.commands.length;
+            profile.openPictureChooser();
+            waitForCommands(before);
+            compare(profile.pictureSource, "file://" + accountsPath);
+            ProcessLog.copySucceeds = true;
         }
     }
 }

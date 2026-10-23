@@ -23,6 +23,7 @@ Item {
             if (root.stdout) root.stdout.streamFinished();
             root.running = false;
             root.exited(code);
+            ProcessLog.finished += 1;
         }
     }
 }

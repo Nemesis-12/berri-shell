@@ -43,6 +43,7 @@ test("saved settings and picture choice survive refreshes and running processes 
   });
   assert.equal(result.error, undefined, `Cannot run ${runner}: ${result.error?.message}`);
   assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout + result.stderr, /berri-shell: profile picture copy failed/);
 });
 
 test("the shell holds the power mode service from the start", () => {
