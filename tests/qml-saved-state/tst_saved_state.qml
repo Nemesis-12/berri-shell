@@ -2,6 +2,7 @@ import QtQuick
 import QtTest
 import Quickshell.Io
 import qs.services
+import "../logic/CalendarCatalog.js" as Catalog
 
 // SavedState with a fake disk: load results, failed writes and the backup before a write.
 TestCase {
@@ -13,6 +14,39 @@ TestCase {
     Component { id: stateComponent; SavedState { name: "theme"; defaults: ({ a: 0 }); waitMs: 5 } }
     SignalSpy { id: failures; signalName: "saveFailed" }
     SignalSpy { id: successes; signalName: "saved" }
+
+    /**
+     * A receiver like the shell services: it reads the saved values the moment `loaded` fires
+     * and records what it saw. `facts` says whether each list was a real JS array.
+     */
+    Component {
+        id: receiverComponent
+        Item {
+            property var facts: null
+            property var restored: null
+            SavedState {
+                name: "calendars"
+                defaults: ({ calendars: [] })
+                waitMs: 5
+                onLoaded: values => {
+                    parent.facts = {
+                        list: Array.isArray(values.calendars),
+                        listInObject: Array.isArray(values.nested.list),
+                        listInListItem: Array.isArray(values.calendars[0].tags)
+                    };
+                    parent.restored = Catalog.restoreCalendars("/home/tester/calendar", values);
+                }
+            }
+        }
+    }
+
+    readonly property string linkedCalendars: JSON.stringify({
+        calendars: [
+            { id: "l-one", kind: "link", name: "One", file: "subscriptions/l-one.ics", url: "https://invalid.invalid/one.ics", tags: ["x"] },
+            { id: "l-two", kind: "link", name: "Two", file: "subscriptions/l-two.ics", url: "https://invalid.invalid/two.ics" }
+        ],
+        nested: { list: [1, 2] }
+    })
 
     function init() { Disk.reset(); }
 
@@ -136,5 +170,22 @@ TestCase {
         tryCompare(successes, "count", 2);
         compare(Disk.files[file], JSON.stringify({ a: 7 }, null, 2));
         compare(state.hasWaitingWrite, false);
+    }
+
+    function test_saved_lists_reach_the_receiver_as_real_arrays() {
+        Disk.files["/home/tester/.local/state/berri-shell/calendars.json"] = linkedCalendars;
+        var receiver = createTemporaryObject(receiverComponent, tests);
+        tryVerify(() => receiver.facts !== null);
+        compare(receiver.facts.list, true, "a list at the top");
+        compare(receiver.facts.listInObject, true, "a list inside an object");
+        compare(receiver.facts.listInListItem, true, "a list inside a list item");
+    }
+
+    function test_linked_calendars_survive_a_load() {
+        Disk.files["/home/tester/.local/state/berri-shell/calendars.json"] = linkedCalendars;
+        var receiver = createTemporaryObject(receiverComponent, tests);
+        tryVerify(() => receiver.restored !== null);
+        compare(receiver.restored.order, ["berri", "l-one", "l-two"]);
+        compare(receiver.restored.calendars["l-two"].url, "https://invalid.invalid/two.ics");
     }
 }
