@@ -247,7 +247,8 @@ Singleton {
     SavedState {
         id: savedWallpapers
         name: "wallpapers"
-        onLoaded: values => {
+        onLoaded: {
+            var values = savedWallpapers.values;
             if (Array.isArray(values.library)) root.library = values.library;
             if (values.assignments) root.assignments = values.assignments;
             root.loaded = true;

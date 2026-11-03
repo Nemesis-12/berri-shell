@@ -214,7 +214,8 @@ Singleton {
         id: savedReminders
         name: "reminders"
         defaults: ({ lastCheck: 0, shown: [] })
-        onLoaded: values => {
+        onLoaded: {
+            var values = savedReminders.values;
             root._lastCheck = +values.lastCheck || 0;
             root._alreadyShown = Array.isArray(values.shown) ? values.shown : [];
             root._stateRead = true;

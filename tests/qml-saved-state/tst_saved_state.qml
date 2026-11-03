@@ -16,7 +16,7 @@ TestCase {
     SignalSpy { id: successes; signalName: "saved" }
 
     /**
-     * A receiver like the shell services: it reads the saved values the moment `loaded` fires
+     * A receiver like the shell services: it reads `values` the moment `loaded` fires
      * and records what it saw. `facts` says whether each list was a real JS array.
      */
     Component {
@@ -25,10 +25,12 @@ TestCase {
             property var facts: null
             property var restored: null
             SavedState {
+                id: saved
                 name: "calendars"
                 defaults: ({ calendars: [] })
                 waitMs: 5
-                onLoaded: values => {
+                onLoaded: {
+                    var values = saved.values;
                     parent.facts = {
                         list: Array.isArray(values.calendars),
                         listInObject: Array.isArray(values.nested.list),
@@ -76,6 +78,16 @@ TestCase {
         Disk.files[file] = "[1";
         Disk.unreadable[file] = true;
         compare(open().loadResult, "unreadable");
+    }
+
+    function test_values_fill_missing_keys_from_the_defaults() {
+        compare(open().values, { a: 0 });
+        Disk.reset();
+        Disk.files[file] = '{"b": 1}';
+        compare(open().values, { a: 0, b: 1 });
+        Disk.reset();
+        Disk.files[file] = "{broken";
+        compare(open().values, { a: 0 });
     }
 
     function test_missing_file_loads_defaults_and_first_save_needs_no_backup() {

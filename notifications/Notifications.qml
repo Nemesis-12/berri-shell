@@ -317,8 +317,8 @@ Singleton {
         id: saved
         name: "notifications"
         waitMs: 0
-        onLoaded: values => {
-            var restored = Logic.readSaved(values);
+        onLoaded: {
+            var restored = Logic.readSaved(saved.values);
             root.dnd = restored.dnd;
             root.all = Logic.cap(restored.items, root.maxItems);
             root.refresh();

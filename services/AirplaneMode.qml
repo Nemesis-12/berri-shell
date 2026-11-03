@@ -85,7 +85,8 @@ Singleton {
         id: saved
         name: "airplane"
         defaults: ({ on: false, memoValid: false, memoWifi: false, memoBt: false })
-        onLoaded: values => {
+        onLoaded: {
+            var values = saved.values;
             root.on = !!values.on;
             root.memoValid = !!values.memoValid;
             root.memoWifi = !!values.memoWifi;
