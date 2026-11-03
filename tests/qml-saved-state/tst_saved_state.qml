@@ -3,6 +3,7 @@ import QtTest
 import Quickshell.Io
 import qs.services
 import "../logic/CalendarCatalog.js" as Catalog
+import "../logic/NotificationLogic.js" as NotificationLogic
 
 // SavedState with a fake disk: load results, failed writes and the backup before a write.
 TestCase {
@@ -38,6 +39,20 @@ TestCase {
                     };
                     parent.restored = Catalog.restoreCalendars("/home/tester/calendar", values);
                 }
+            }
+        }
+    }
+
+    Component {
+        id: historyComponent
+        Item {
+            property var restored: null
+            SavedState {
+                id: saved
+                name: "notifications"
+                defaults: ({ dnd: false, items: [] })
+                waitMs: 5
+                onLoaded: parent.restored = NotificationLogic.readSaved(saved.values)
             }
         }
     }
@@ -199,5 +214,16 @@ TestCase {
         tryVerify(() => receiver.restored !== null);
         compare(receiver.restored.order, ["berri", "l-one", "l-two"]);
         compare(receiver.restored.calendars["l-two"].url, "https://invalid.invalid/two.ics");
+    }
+
+    function test_saved_notification_history_survives_a_load() {
+        Disk.files["/home/tester/.local/state/berri-shell/notifications.json"] = JSON.stringify({
+            dnd: true,
+            items: [{ id: "n1", time: 1, summary: "One" }, { id: "n2", time: 2, summary: "Two" }]
+        });
+        var receiver = createTemporaryObject(historyComponent, tests);
+        tryVerify(() => receiver.restored !== null);
+        compare(receiver.restored.dnd, true);
+        compare(receiver.restored.items.map(item => item.id), ["n1", "n2"]);
     }
 }
