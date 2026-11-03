@@ -6,7 +6,7 @@ Item {
     property var defaults: ({})
     property int saveCount: 0
     property string text: ""
-    signal loaded(var values)
+    signal loaded()
     function save(values) {
         text = JSON.stringify(values, null, 2);
         saveCount++;

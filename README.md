@@ -7,7 +7,7 @@ berri is a Quickshell desktop shell for Omarchy and Hyprland. A top pill opens a
 You need:
 
 - Linux with Wayland. Hyprland is the current compositor.
-- Quickshell 0.3.1 with Qt 6.11.
+- Quickshell 0.3.2 with Qt 6.12.
 - These fonts: IBM Plex Mono, IBM Plex Sans, IBM Plex Sans Condensed.
 - Rust and `cargo` to build the calendar parser.
 - These programs: `qs`, `curl`, `python3`, `git`, `gh`, `brightnessctl`, `notify-send`, `magick` (ImageMagick), `hyprctl`, `hyprsunset`.

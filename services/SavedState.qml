@@ -4,10 +4,14 @@ import Quickshell.Io
 
 /**
  * One saved settings file in ~/.local/state/berri-shell/<name>.json.
- * Reads it once at start and emits `loaded(values)`: the saved object, with
- * `defaults` filling missing keys, or `defaults` when nothing valid is
- * saved. `loadResult` says which: "ok", "missing" (no file), "unreadable"
- * (the file exists but cannot be read) or "invalid" (not a JSON object).
+ * Reads it once at start, sets `values` to the saved object, with `defaults`
+ * filling missing keys (or to `defaults` when nothing valid is saved), then
+ * emits `loaded()`. A `loaded` handler reads `values` from the object. `values`
+ * is not a signal argument on purpose: Qt 6.12 hands a `var` signal argument to
+ * its handler as a reference wrapper, so `Array.isArray` is false for every
+ * list in it. A property read gives real JS objects and arrays. `loadResult`
+ * says which: "ok", "missing" (no file), "unreadable" (the file exists but
+ * cannot be read) or "invalid" (not a JSON object).
  * `save(values)` writes the object after a short wait, so a burst of saves
  * becomes one write. Before each write the old file is copied to
  * <name>.json.bak (owner-only), and the file is replaced atomically, so a
@@ -29,7 +33,8 @@ Scope {
     /** Wait (ms) that groups a burst of save() calls into one write. */
     property int waitMs: 100
 
-    signal loaded(var values)
+    /** The file was read: `values` and `loadResult` are set. */
+    signal loaded()
     /** The last requested values reached the disk. */
     signal saved()
     /** A write failed. `reason` is short text. The change stays pending. */
@@ -37,6 +42,8 @@ Scope {
 
     readonly property string folder: FolderRoots.state
 
+    /** What the file held (or `defaults`), set just before `loaded` fires. */
+    property var values: ({})
     /** "", then "ok", "missing", "unreadable" or "invalid" once the file is read. */
     property string loadResult: ""
     /** Reason of the last failed write; "" after a write succeeds. */
@@ -88,13 +95,13 @@ Scope {
     }
 
     function readSaved(text: string, failure: string): void {
-        var values = root.defaults;
+        var read = root.defaults;
         var result = failure !== "" ? failure : "invalid";
         if (failure === "") {
             try {
                 var stored = JSON.parse(text);
                 if (stored && typeof stored === "object") {
-                    values = Array.isArray(stored) ? stored : Object.assign({}, root.defaults, stored);
+                    read = Array.isArray(stored) ? stored : Object.assign({}, root.defaults, stored);
                     result = "ok";
                 }
             } catch (e) {
@@ -103,7 +110,8 @@ Scope {
         }
         root.loadResult = result;
         root.badRead = result === "invalid" || result === "unreadable";
-        root.loaded(values);
+        root.values = read;
+        root.loaded();
     }
 
     Timer {

@@ -5,7 +5,11 @@ import Quickshell.Io
 Item {
     property string name: ""
     property var defaults: ({})
-    signal loaded(var values)
+    property var values: ({})
+    signal loaded()
     function save(values) {}
-    Component.onCompleted: loaded(Object.assign({}, defaults, ProcessLog.saved[name] || {}))
+    Component.onCompleted: {
+        values = Object.assign({}, defaults, ProcessLog.saved[name] || {});
+        loaded();
+    }
 }

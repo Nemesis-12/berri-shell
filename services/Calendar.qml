@@ -660,7 +660,7 @@ Singleton {
         id: savedCalendars
         name: "calendars"
         defaults: ({ calendars: [] })
-        onLoaded: values => root._loadState(values)
+        onLoaded: root._loadState(savedCalendars.values)
     }
 
     CalendarDisk {

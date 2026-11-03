@@ -56,7 +56,11 @@ Item {
             return b.signalStrength - a.signalStrength;
         });
         // The same list again must not rebuild the rows.
-        if (!ListSync.sameItems(root.networks, list)) root.networks = list;
+        if (ListSync.sameItems(root.networks, list)) return;
+        // Qt 6.12 keeps the rows when the new list has an object at the address of a destroyed one
+        // from the old list. An empty list between the two makes the rows build again.
+        root.networks = [];
+        root.networks = list;
     }
 
     function cancelEditing() {

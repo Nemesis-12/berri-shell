@@ -62,7 +62,11 @@ Item {
             return a.name.localeCompare(b.name);
         });
         // The same list again must not rebuild the rows.
-        if (!ListSync.sameItems(root.devices, list)) root.devices = list;
+        if (ListSync.sameItems(root.devices, list)) return;
+        // Qt 6.12 keeps the rows when the new list has an object at the address of a destroyed one
+        // from the old list. An empty list between the two makes the rows build again.
+        root.devices = [];
+        root.devices = list;
     }
 
     // A row can be clicked after BlueZ destroyed its device and before the list refreshed.

@@ -92,7 +92,9 @@ TestCase {
     // Two pages three months apart both show during a page change. A revision with the same
     // months must read six months from the cache and build none.
     function test_two_shown_pages_three_months_apart_fit_the_cache() {
-        const tab = createTemporaryObject(tabComponent, tests);
+        // The first page shows the real current month. The selected day must be in that month too, as in the shell.
+        // Otherwise the selected month is one more month than the cache can keep, and the count depends on the date.
+        const tab = createTemporaryObject(tabComponent, tests, { selectedDate: new Date() });
         tab.showMonth(2026, 0);
         wait(400);
         tab.showMonth(2026, 3);

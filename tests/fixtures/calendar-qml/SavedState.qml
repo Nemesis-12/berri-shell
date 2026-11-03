@@ -5,6 +5,6 @@ Item {
     property string name: ""
     property var defaults: ({})
     property var values: ({})
-    signal loaded(var values)
+    signal loaded()
     function save(next) { values = next; }
 }

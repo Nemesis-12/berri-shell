@@ -297,7 +297,8 @@ Singleton {
         id: saved
         name: "theme"
         defaults: ({ key: "" })
-        onLoaded: values => {
+        onLoaded: {
+            var values = saved.values;
             if (values.key) root.savedKey = values.key;
             root.savedStateChecked = true;
             root.tryRestore();

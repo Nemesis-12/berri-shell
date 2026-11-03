@@ -2,6 +2,8 @@ import QtQuick
 import QtTest
 import Quickshell.Io
 import qs.services
+import "../logic/CalendarCatalog.js" as Catalog
+import "../logic/NotificationLogic.js" as NotificationLogic
 
 // SavedState with a fake disk: load results, failed writes and the backup before a write.
 TestCase {
@@ -13,6 +15,55 @@ TestCase {
     Component { id: stateComponent; SavedState { name: "theme"; defaults: ({ a: 0 }); waitMs: 5 } }
     SignalSpy { id: failures; signalName: "saveFailed" }
     SignalSpy { id: successes; signalName: "saved" }
+
+    /**
+     * A receiver like the shell services: it reads `values` the moment `loaded` fires
+     * and records what it saw. `facts` says whether each list was a real JS array.
+     */
+    Component {
+        id: receiverComponent
+        Item {
+            property var facts: null
+            property var restored: null
+            SavedState {
+                id: saved
+                name: "calendars"
+                defaults: ({ calendars: [] })
+                waitMs: 5
+                onLoaded: {
+                    var values = saved.values;
+                    parent.facts = {
+                        list: Array.isArray(values.calendars),
+                        listInObject: Array.isArray(values.nested.list),
+                        listInListItem: Array.isArray(values.calendars[0].tags)
+                    };
+                    parent.restored = Catalog.restoreCalendars("/home/tester/calendar", values);
+                }
+            }
+        }
+    }
+
+    Component {
+        id: historyComponent
+        Item {
+            property var restored: null
+            SavedState {
+                id: saved
+                name: "notifications"
+                defaults: ({ dnd: false, items: [] })
+                waitMs: 5
+                onLoaded: parent.restored = NotificationLogic.readSaved(saved.values)
+            }
+        }
+    }
+
+    readonly property string linkedCalendars: JSON.stringify({
+        calendars: [
+            { id: "l-one", kind: "link", name: "One", file: "subscriptions/l-one.ics", url: "https://invalid.invalid/one.ics", tags: ["x"] },
+            { id: "l-two", kind: "link", name: "Two", file: "subscriptions/l-two.ics", url: "https://invalid.invalid/two.ics" }
+        ],
+        nested: { list: [1, 2] }
+    })
 
     function init() { Disk.reset(); }
 
@@ -42,6 +93,16 @@ TestCase {
         Disk.files[file] = "[1";
         Disk.unreadable[file] = true;
         compare(open().loadResult, "unreadable");
+    }
+
+    function test_values_fill_missing_keys_from_the_defaults() {
+        compare(open().values, { a: 0 });
+        Disk.reset();
+        Disk.files[file] = '{"b": 1}';
+        compare(open().values, { a: 0, b: 1 });
+        Disk.reset();
+        Disk.files[file] = "{broken";
+        compare(open().values, { a: 0 });
     }
 
     function test_missing_file_loads_defaults_and_first_save_needs_no_backup() {
@@ -136,5 +197,33 @@ TestCase {
         tryCompare(successes, "count", 2);
         compare(Disk.files[file], JSON.stringify({ a: 7 }, null, 2));
         compare(state.hasWaitingWrite, false);
+    }
+
+    function test_saved_lists_reach_the_receiver_as_real_arrays() {
+        Disk.files["/home/tester/.local/state/berri-shell/calendars.json"] = linkedCalendars;
+        var receiver = createTemporaryObject(receiverComponent, tests);
+        tryVerify(() => receiver.facts !== null);
+        compare(receiver.facts.list, true, "a list at the top");
+        compare(receiver.facts.listInObject, true, "a list inside an object");
+        compare(receiver.facts.listInListItem, true, "a list inside a list item");
+    }
+
+    function test_linked_calendars_survive_a_load() {
+        Disk.files["/home/tester/.local/state/berri-shell/calendars.json"] = linkedCalendars;
+        var receiver = createTemporaryObject(receiverComponent, tests);
+        tryVerify(() => receiver.restored !== null);
+        compare(receiver.restored.order, ["berri", "l-one", "l-two"]);
+        compare(receiver.restored.calendars["l-two"].url, "https://invalid.invalid/two.ics");
+    }
+
+    function test_saved_notification_history_survives_a_load() {
+        Disk.files["/home/tester/.local/state/berri-shell/notifications.json"] = JSON.stringify({
+            dnd: true,
+            items: [{ id: "n1", time: 1, summary: "One" }, { id: "n2", time: 2, summary: "Two" }]
+        });
+        var receiver = createTemporaryObject(historyComponent, tests);
+        tryVerify(() => receiver.restored !== null);
+        compare(receiver.restored.dnd, true);
+        compare(receiver.restored.items.map(item => item.id), ["n1", "n2"]);
     }
 }

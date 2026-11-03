@@ -59,7 +59,8 @@ Singleton {
         id: saved
         name: "power-modes"
         defaults: ({ ac: root.defaultMode, battery: root.defaultMode })
-        onLoaded: values => {
+        onLoaded: {
+            var values = saved.values;
             if (values.ac) root.acMode = values.ac;
             if (values.battery) root.batteryMode = values.battery;
             root.apply();
