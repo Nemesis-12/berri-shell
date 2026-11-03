@@ -9,8 +9,9 @@ import Quickshell.Io
  * emits `loaded()`. A `loaded` handler reads `values` from the object. `values`
  * is not a signal argument on purpose: Qt 6.12 hands a `var` signal argument to
  * its handler as a reference wrapper, so `Array.isArray` is false for every
- * list in it. A property read gives real JS objects and arrays. `loadResult` says which: "ok", "missing" (no file), "unreadable"
- * (the file exists but cannot be read) or "invalid" (not a JSON object).
+ * list in it. A property read gives real JS objects and arrays. `loadResult`
+ * says which: "ok", "missing" (no file), "unreadable" (the file exists but
+ * cannot be read) or "invalid" (not a JSON object).
  * `save(values)` writes the object after a short wait, so a burst of saves
  * becomes one write. Before each write the old file is copied to
  * <name>.json.bak (owner-only), and the file is replaced atomically, so a
